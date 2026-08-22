@@ -1,0 +1,7 @@
+customer_id,name,age,email,total_spent,city,churn
+1,An,22,an@example.com,1200000,Hanoi,0
+2,Binh,25,binh@example.com,2500000,HCM,0
+3,Chi,27,chi@example.com,1800000,Danang,1
+4,Dung,31,dung@example.com,3000000,Hanoi,0
+5,Ha,29,ha@example.com,2200000,HCM,1
+6,Linh,28,linh@example.com,1700000,Hanoi,0

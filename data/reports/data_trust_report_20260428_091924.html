@@ -1,0 +1,725 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Data Trust Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f8fafc;
+            color: #111827;
+            margin: 0;
+            padding: 0;
+        }
+
+        .page {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 36px 42px;
+            background: #ffffff;
+        }
+
+        .header {
+            border-bottom: 4px solid #2563eb;
+            padding-bottom: 20px;
+            margin-bottom: 28px;
+        }
+
+        .title {
+            font-size: 34px;
+            font-weight: 800;
+            margin: 0;
+            color: #111827;
+        }
+
+        .subtitle {
+            font-size: 15px;
+            color: #6b7280;
+            margin-top: 8px;
+        }
+
+        .section {
+            margin-top: 34px;
+        }
+
+        .section h2 {
+            font-size: 23px;
+            margin-bottom: 14px;
+            color: #111827;
+            border-left: 6px solid #2563eb;
+            padding-left: 12px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .metric-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 18px;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+        }
+
+        .metric-title {
+            font-size: 13px;
+            color: #6b7280;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 28px;
+            font-weight: 800;
+            color: #111827;
+        }
+
+        .metric-desc {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 7px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .badge.low {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge.medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge.high {
+            background: #ffedd5;
+            color: #9a3412;
+        }
+
+        .badge.critical {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge.neutral {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .recommendation {
+            background: #eff6ff;
+            border-left: 6px solid #2563eb;
+            padding: 16px 18px;
+            border-radius: 12px;
+            margin-top: 16px;
+            color: #1e3a8a;
+            line-height: 1.55;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 13px;
+        }
+
+        .data-table th {
+            background: #f3f4f6;
+            color: #374151;
+            text-align: left;
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .data-table td {
+            padding: 9px 10px;
+            border: 1px solid #e5e7eb;
+            vertical-align: top;
+        }
+
+        .muted {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .footer {
+            margin-top: 48px;
+            padding-top: 18px;
+            border-top: 1px solid #e5e7eb;
+            color: #6b7280;
+            font-size: 12px;
+        }
+
+        @media print {
+            body {
+                background: #ffffff;
+            }
+
+            .page {
+                box-shadow: none;
+                padding: 24px;
+            }
+
+            .section {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="header">
+            <h1 class="title">AI Data Trust Report</h1>
+            <div class="subtitle">
+                Báo cáo tự động sinh bởi AI-assisted Data Trust Platform · Generated at 2026-04-28 09:19:24
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>1. Dataset Overview</h2>
+            <div class="grid">
+                
+    <div class="metric-card">
+        <div class="metric-title">File name</div>
+        <div class="metric-value">sample_quality_issues.csv</div>
+        <div class="metric-desc">Type: CSV</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Rows</div>
+        <div class="metric-value">9</div>
+        <div class="metric-desc">Tổng số dòng</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Columns</div>
+        <div class="metric-value">7</div>
+        <div class="metric-desc">Tổng số cột</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Cells</div>
+        <div class="metric-value">63</div>
+        <div class="metric-desc">Tổng số ô dữ liệu</div>
+    </div>
+    
+            </div>
+
+            <div class="grid">
+                
+    <div class="metric-card">
+        <div class="metric-title">Missing rate</div>
+        <div class="metric-value">4.76%</div>
+        <div class="metric-desc">Tỷ lệ ô bị thiếu</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Duplicate rate</div>
+        <div class="metric-value">11.11%</div>
+        <div class="metric-desc">Tỷ lệ dòng trùng</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Total issues</div>
+        <div class="metric-value">9</div>
+        <div class="metric-desc">Số nhóm lỗi phát hiện</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Affected columns</div>
+        <div class="metric-value">5</div>
+        <div class="metric-desc">Số cột bị ảnh hưởng</div>
+    </div>
+    
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>2. Data Trust Score</h2>
+            <div class="grid">
+                
+    <div class="metric-card">
+        <div class="metric-title">Overall Score</div>
+        <div class="metric-value">86.11/100</div>
+        <div class="metric-desc">Điểm tổng hợp</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Risk Level</div>
+        <div class="metric-value"><span class="badge low">Low</span></div>
+        <div class="metric-desc">Mức rủi ro dữ liệu</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">AI Readiness</div>
+        <div class="metric-value">Ready for Analytics and ML</div>
+        <div class="metric-desc">Mức độ sẵn sàng cho AI/ML</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Conclusion</div>
+        <div class="metric-value">Auto</div>
+        <div class="metric-desc">Kết luận tự động</div>
+    </div>
+    
+            </div>
+
+            <div class="recommendation">
+                <b>Kết luận:</b> Dataset có chất lượng tốt, ít lỗi nghiêm trọng và có thể sử dụng cho phân tích hoặc huấn luyện mô hình sau các bước kiểm tra nghiệp vụ bổ sung.
+            </div>
+
+            <h3>Score breakdown</h3>
+            <table class="dataframe data-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>score_key</th>
+      <th>score_name</th>
+      <th>score</th>
+      <th>weight</th>
+      <th>weighted_score</th>
+      <th>raw_value (%)</th>
+      <th>detail</th>
+      <th>interpretation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>completeness_score</td>
+      <td>Completeness</td>
+      <td>95.24</td>
+      <td>0.25</td>
+      <td>23.81</td>
+      <td>4.76</td>
+      <td>Dataset có 3 ô bị thiếu trên tổng 63 ô.</td>
+      <td>Điểm càng cao nghĩa là dữ liệu càng đầy đủ, ít missing value.</td>
+    </tr>
+    <tr>
+      <td>validity_score</td>
+      <td>Validity</td>
+      <td>76.19</td>
+      <td>0.25</td>
+      <td>19.05</td>
+      <td>7.94</td>
+      <td>Phát hiện 5 lỗi liên quan đến kiểu dữ liệu, miền giá trị hoặc categorical value.</td>
+      <td>Điểm càng cao nghĩa là dữ liệu càng hợp lệ về kiểu, format và miền giá trị.</td>
+    </tr>
+    <tr>
+      <td>uniqueness_score</td>
+      <td>Uniqueness</td>
+      <td>88.89</td>
+      <td>0.20</td>
+      <td>17.78</td>
+      <td>11.11</td>
+      <td>Dataset có 1 dòng trùng lặp hoàn toàn trên tổng 9 dòng.</td>
+      <td>Điểm càng cao nghĩa là dữ liệu càng ít trùng lặp.</td>
+    </tr>
+    <tr>
+      <td>consistency_score</td>
+      <td>Consistency</td>
+      <td>92.06</td>
+      <td>0.15</td>
+      <td>13.81</td>
+      <td>3.97</td>
+      <td>Phát hiện 1 lỗi định dạng/nhất quán và 3 missing value được tính phạt nhẹ.</td>
+      <td>Điểm càng cao nghĩa là dữ liệu càng nhất quán và ít lỗi định dạng.</td>
+    </tr>
+    <tr>
+      <td>anomaly_safety_score</td>
+      <td>Anomaly Safety</td>
+      <td>77.78</td>
+      <td>0.15</td>
+      <td>11.67</td>
+      <td>11.11</td>
+      <td>Phát hiện 1 dòng bất thường bằng tổ hợp IQR, Z-score và Isolation Forest.</td>
+      <td>Điểm càng cao nghĩa là dataset càng ít giá trị bất thường.</td>
+    </tr>
+  </tbody>
+</table>
+        </div>
+
+        <div class="section">
+            <h2>3. Quality Issues</h2>
+            <div class="grid">
+                
+    <div class="metric-card">
+        <div class="metric-title">High issues</div>
+        <div class="metric-value">2</div>
+        <div class="metric-desc">Lỗi nghiêm trọng</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Medium issues</div>
+        <div class="metric-value">7</div>
+        <div class="metric-desc">Lỗi cần xử lý</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Low issues</div>
+        <div class="metric-value">0</div>
+        <div class="metric-desc">Lỗi nhẹ</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Total issues</div>
+        <div class="metric-value">9</div>
+        <div class="metric-desc">Tổng issue group</div>
+    </div>
+    
+            </div>
+
+            <table class="dataframe data-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>issue_type</th>
+      <th>column_name</th>
+      <th>severity</th>
+      <th>issue_count</th>
+      <th>issue_rate (%)</th>
+      <th>description</th>
+      <th>recommendation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Missing Value</td>
+      <td>email</td>
+      <td>High</td>
+      <td>2</td>
+      <td>22.22</td>
+      <td>Cột 'email' có 2 giá trị thiếu, chiếm 22.22% tổng số dòng.</td>
+      <td>Kiểm tra nguyên nhân thiếu dữ liệu. Có thể loại bỏ dòng, điền giá trị thay thế bằng mean/median/mode hoặc đánh dấu Unknown tùy theo ý nghĩa nghiệp vụ của cột.</td>
+    </tr>
+    <tr>
+      <td>Duplicate Rows</td>
+      <td>__row__</td>
+      <td>High</td>
+      <td>1</td>
+      <td>11.11</td>
+      <td>Dataset có 1 dòng bị trùng lặp hoàn toàn, chiếm 11.11% tổng số dòng.</td>
+      <td>Kiểm tra các dòng trùng lặp. Nếu không có ý nghĩa nghiệp vụ đặc biệt, nên loại bỏ duplicate rows trước khi phân tích hoặc huấn luyện mô hình.</td>
+    </tr>
+    <tr>
+      <td>Invalid Numeric Type</td>
+      <td>age</td>
+      <td>Medium</td>
+      <td>1</td>
+      <td>12.50</td>
+      <td>Cột 'age' được kỳ vọng là numeric nhưng có 1 giá trị không thể chuyển thành số.</td>
+      <td>Kiểm tra các giá trị sai kiểu. Có thể sửa định dạng, chuyển đổi kiểu dữ liệu hoặc đưa các giá trị lỗi thành missing value.</td>
+    </tr>
+    <tr>
+      <td>Missing Value</td>
+      <td>age</td>
+      <td>Medium</td>
+      <td>1</td>
+      <td>11.11</td>
+      <td>Cột 'age' có 1 giá trị thiếu, chiếm 11.11% tổng số dòng.</td>
+      <td>Kiểm tra nguyên nhân thiếu dữ liệu. Có thể loại bỏ dòng, điền giá trị thay thế bằng mean/median/mode hoặc đánh dấu Unknown tùy theo ý nghĩa nghiệp vụ của cột.</td>
+    </tr>
+    <tr>
+      <td>Invalid Range</td>
+      <td>age</td>
+      <td>Medium</td>
+      <td>1</td>
+      <td>11.11</td>
+      <td>Cột 'age' có 1 giá trị âm, không phù hợp với miền giá trị kỳ vọng.</td>
+      <td>Kiểm tra lại nguồn dữ liệu. Có thể sửa giá trị, loại bỏ dòng lỗi hoặc chuyển giá trị bất hợp lệ thành missing value.</td>
+    </tr>
+    <tr>
+      <td>Invalid Age Range</td>
+      <td>age</td>
+      <td>Medium</td>
+      <td>1</td>
+      <td>11.11</td>
+      <td>Cột 'age' có 1 giá trị tuổi lớn hơn 120.</td>
+      <td>Kiểm tra lại dữ liệu tuổi. Những giá trị này có thể là lỗi nhập liệu.</td>
+    </tr>
+    <tr>
+      <td>Invalid Range</td>
+      <td>total_spent</td>
+      <td>Medium</td>
+      <td>1</td>
+      <td>11.11</td>
+      <td>Cột 'total_spent' có 1 giá trị âm, không phù hợp với miền giá trị kỳ vọng.</td>
+      <td>Kiểm tra lại nguồn dữ liệu. Có thể sửa giá trị, loại bỏ dòng lỗi hoặc chuyển giá trị bất hợp lệ thành missing value.</td>
+    </tr>
+    <tr>
+      <td>Text Format Inconsistency</td>
+      <td>name</td>
+      <td>Medium</td>
+      <td>1</td>
+      <td>11.11</td>
+      <td>Cột 'name' có 1 giá trị chứa khoảng trắng dư ở đầu hoặc cuối chuỗi.</td>
+      <td>Chuẩn hóa chuỗi bằng cách trim khoảng trắng trước khi phân tích.</td>
+    </tr>
+    <tr>
+      <td>Invalid Categorical Value</td>
+      <td>churn</td>
+      <td>Medium</td>
+      <td>1</td>
+      <td>11.11</td>
+      <td>Cột 'churn' được kỳ vọng là nhãn nhị phân nhưng có 1 giá trị nằm ngoài tập giá trị hợp lệ.</td>
+      <td>Chuẩn hóa nhãn về dạng 0/1, Yes/No hoặc True/False. Kiểm tra các giá trị bất thường trong cột nhãn.</td>
+    </tr>
+  </tbody>
+</table>
+        </div>
+
+        <div class="section">
+            <h2>4. Privacy Risk</h2>
+            <div class="grid">
+                
+    <div class="metric-card">
+        <div class="metric-title">Privacy Safety Score</div>
+        <div class="metric-value">54.29/100</div>
+        <div class="metric-desc">Điểm càng cao càng an toàn</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Privacy Risk</div>
+        <div class="metric-value"><span class="badge high">High</span></div>
+        <div class="metric-desc">Mức rủi ro riêng tư</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">PII Columns</div>
+        <div class="metric-value">2</div>
+        <div class="metric-desc">Số cột có PII</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">PII Cell Rate</div>
+        <div class="metric-value">25.4%</div>
+        <div class="metric-desc">Tỷ lệ ô có PII</div>
+    </div>
+    
+            </div>
+
+            <table class="dataframe data-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>pii_type</th>
+      <th>column_name</th>
+      <th>match_count</th>
+      <th>match_rate (%)</th>
+      <th>severity</th>
+      <th>detection_method</th>
+      <th>masked_examples</th>
+      <th>recommendation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Full Name</td>
+      <td>name</td>
+      <td>9</td>
+      <td>100.00</td>
+      <td>High</td>
+      <td>column name heuristic</td>
+      <td>A***, B***, C***</td>
+      <td>Cân nhắc pseudonymize tên người dùng nếu không cần định danh trực tiếp.</td>
+    </tr>
+    <tr>
+      <td>Email</td>
+      <td>email</td>
+      <td>7</td>
+      <td>77.78</td>
+      <td>High</td>
+      <td>regex + column name heuristic</td>
+      <td>an***@example.com, bi***@example.com, ch***@example.com</td>
+      <td>Mask hoặc hash email trước khi chia sẻ dữ liệu; chỉ giữ domain nếu cần phân tích.</td>
+    </tr>
+  </tbody>
+</table>
+        </div>
+
+        <div class="section">
+            <h2>5. Drift Detection</h2>
+            <div class="grid">
+                
+    <div class="metric-card">
+        <div class="metric-title">Drift Score</div>
+        <div class="metric-value">0.0/100</div>
+        <div class="metric-desc">Điểm càng cao càng ổn định</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Overall Drift</div>
+        <div class="metric-value"><span class="badge high">High</span></div>
+        <div class="metric-desc">Mức drift tổng quan</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Drifted Columns</div>
+        <div class="metric-value">4</div>
+        <div class="metric-desc">Số cột bị drift</div>
+    </div>
+    
+                
+    <div class="metric-card">
+        <div class="metric-title">Schema Drift Count</div>
+        <div class="metric-value">0</div>
+        <div class="metric-desc">Số thay đổi schema</div>
+    </div>
+    
+            </div>
+
+            <h3>Schema drift</h3>
+            <p class="muted">Không có dữ liệu để hiển thị.</p>
+
+            <h3>Numeric drift</h3>
+            <table class="dataframe data-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>column_name</th>
+      <th>drift_type</th>
+      <th>baseline_mean</th>
+      <th>current_mean</th>
+      <th>mean_diff</th>
+      <th>baseline_median</th>
+      <th>current_median</th>
+      <th>psi</th>
+      <th>psi_interpretation</th>
+      <th>ks_statistic</th>
+      <th>ks_p_value</th>
+      <th>drift_level</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>age</td>
+      <td>Numeric</td>
+      <td>29.0000</td>
+      <td>40.0000</td>
+      <td>11.0000</td>
+      <td>28.0</td>
+      <td>42.0</td>
+      <td>10.2759</td>
+      <td>High drift</td>
+      <td>0.7778</td>
+      <td>0.006294</td>
+      <td>High drift</td>
+    </tr>
+    <tr>
+      <td>churn</td>
+      <td>Numeric</td>
+      <td>0.3333</td>
+      <td>0.8889</td>
+      <td>0.5556</td>
+      <td>0.0</td>
+      <td>1.0</td>
+      <td>1.5403</td>
+      <td>High drift</td>
+      <td>0.5556</td>
+      <td>0.125874</td>
+      <td>High drift</td>
+    </tr>
+    <tr>
+      <td>total_spent</td>
+      <td>Numeric</td>
+      <td>1777777.7778</td>
+      <td>7988888.8889</td>
+      <td>6211111.1111</td>
+      <td>1800000.0</td>
+      <td>8700000.0</td>
+      <td>12.2804</td>
+      <td>High drift</td>
+      <td>0.8889</td>
+      <td>0.000740</td>
+      <td>High drift</td>
+    </tr>
+  </tbody>
+</table>
+
+            <h3>Categorical drift</h3>
+            <table class="dataframe data-table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>column_name</th>
+      <th>drift_type</th>
+      <th>unique_values</th>
+      <th>distribution_diff</th>
+      <th>chi_square_statistic</th>
+      <th>chi_square_p_value</th>
+      <th>drift_level</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>city</td>
+      <td>Categorical</td>
+      <td>4</td>
+      <td>0.4444</td>
+      <td>7.3333</td>
+      <td>0.061999</td>
+      <td>High drift</td>
+    </tr>
+    <tr>
+      <td>email</td>
+      <td>Categorical</td>
+      <td>9</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>1.000000</td>
+      <td>No significant drift</td>
+    </tr>
+    <tr>
+      <td>name</td>
+      <td>Categorical</td>
+      <td>9</td>
+      <td>0.0000</td>
+      <td>0.0000</td>
+      <td>1.000000</td>
+      <td>No significant drift</td>
+    </tr>
+  </tbody>
+</table>
+        </div>
+
+        <div class="section">
+            <h2>6. Recommendations</h2>
+            <div class="recommendation">
+                <ul>
+                    <li>Ưu tiên xử lý các lỗi High/Critical trong Quality Issues.</li>
+                    <li>Mask, hash hoặc pseudonymize các cột có PII trước khi chia sẻ dữ liệu.</li>
+                    <li>Nếu Drift Level là High, không nên dùng current dataset thay thế baseline khi chưa điều tra nguyên nhân.</li>
+                    <li>Kiểm tra lại outlier và missing value trước khi huấn luyện mô hình AI/ML.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer">
+            AI-assisted Data Trust Platform · Version 0.9 Report Generator · HTML report có thể in ra PDF bằng trình duyệt.
+        </div>
+    </div>
+</body>
+</html>
