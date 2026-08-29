@@ -4,7 +4,6 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
-
 NON_NEGATIVE_KEYWORDS = [
     "age",
     "amount",
@@ -172,7 +171,7 @@ def check_categorical_value_issues(df: pd.DataFrame) -> Dict[str, Any]:
     """
     issues: List[Dict[str, Any]] = []
     details: List[Dict[str, Any]] = []
-    total_rows = len(df)
+
 
     for col in df.columns:
         series = df[col]

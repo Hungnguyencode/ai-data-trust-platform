@@ -9,7 +9,6 @@ from api.schemas.score_schema import (
 from src.scoring.score_engine import calculate_data_trust_score
 from src.validation.rule_engine import run_quality_checks
 
-
 router = APIRouter()
 
 

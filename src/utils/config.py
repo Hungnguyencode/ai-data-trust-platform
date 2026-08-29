@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from src.utils.helpers import get_project_root
-
 
 PROJECT_ROOT = get_project_root()
 

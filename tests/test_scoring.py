@@ -1,7 +1,6 @@
 import pandas as pd
-from fastapi.testclient import TestClient
-
 import pytest
+from fastapi.testclient import TestClient
 
 from api.main import app
 from src.scoring.score_engine import (
@@ -11,7 +10,6 @@ from src.scoring.score_engine import (
 )
 from src.scoring.weights import SCORE_WEIGHTS
 from src.validation.rule_engine import run_quality_checks
-
 
 client = TestClient(app)
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict
 
+from src.assistant.cleaning_plan import cleaning_plan_markdown
 from src.assistant.fallback_rules import (
     ai_readiness_explanation,
     anomaly_summary,
@@ -16,17 +17,14 @@ from src.assistant.fallback_rules import (
     explain_score_gap,
     explain_top_columns_to_fix,
     fast_score_improvement_plan,
-    privacy_summary,
     priority_action_plan,
+    privacy_summary,
     public_dataset_decision,
     quality_summary,
     smart_diagnosis,
     trust_score_summary,
 )
-
 from src.assistant.intent_router import detect_intent
-from src.assistant.cleaning_plan import cleaning_plan_markdown
-
 
 ASSISTANT_VERSION = "2.6"
 

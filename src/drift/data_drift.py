@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import chisquare, ks_2samp
 
-from src.drift.psi import calculate_psi, interpret_psi
+from src.drift.psi import calculate_psi
 from src.drift.schema_drift import compare_schema
 
 

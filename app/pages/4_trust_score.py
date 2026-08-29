@@ -7,7 +7,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -15,9 +14,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from database.repositories.scan_repository import save_full_scan
 from src.scoring.score_engine import calculate_data_trust_score
-from src.validation.rule_engine import run_quality_checks
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
-
+from src.validation.rule_engine import run_quality_checks
 
 st.set_page_config(
     page_title="Trust Score",

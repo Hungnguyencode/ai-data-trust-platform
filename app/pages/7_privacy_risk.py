@@ -14,7 +14,6 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.privacy.pii_detector import run_privacy_scan
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
 
-
 st.set_page_config(
     page_title="Privacy Risk",
     page_icon="🔐",

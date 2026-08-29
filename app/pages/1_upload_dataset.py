@@ -6,7 +6,6 @@ from pathlib import Path
 import plotly.express as px
 import streamlit as st
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -16,7 +15,6 @@ from database.db import test_connection
 from database.repositories.scan_repository import save_dataset_metadata
 from src.ingestion.file_loader import load_dataset
 from src.profiling.profiler import profile_dataset
-
 
 st.set_page_config(
     page_title="Upload Dataset",

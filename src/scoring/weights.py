@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 SCORE_WEIGHTS = {
     "completeness_score": 0.25,
     "validity_score": 0.25,
