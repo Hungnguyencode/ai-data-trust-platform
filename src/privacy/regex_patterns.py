@@ -7,7 +7,10 @@ EMAIL_PATTERN = re.compile(
 )
 
 PHONE_PATTERN = re.compile(
-    r"(?<!\d)(?:\+84|84|0)(?:\s|\.)?(?:3|5|7|8|9)\d(?:\s|\.)?\d{3}(?:\s|\.)?\d{3}(?!\d)"
+    r"(?<!\d)(?:\+84|84|0)(?:\s|\.)?"
+    r"(?:3|5|7|8|9)\d"
+    r"(?:\s|\.)?\d{3}"
+    r"(?:\s|\.)?\d{4}(?!\d)"
 )
 
 CITIZEN_ID_PATTERN = re.compile(
