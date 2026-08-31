@@ -64,7 +64,6 @@ def _priority_score(severity: str, issue_type: str = "", source: str = "") -> in
 
 
 def _suggest_action(source: str, issue_type: str, column_name: str) -> str:
-    source_l = source.lower()
     issue_l = issue_type.lower()
     col_l = column_name.lower()
 
@@ -124,7 +123,7 @@ def _reason_text(source: str, issue_type: str, severity: str, count: Any, rate: 
         return f"Cột có drift_level={severity}; cần kiểm tra thay đổi phân phối."
 
     if source == "Anomaly Detection":
-        return f"Có anomaly/outlier trong dataset; cần kiểm tra dòng bất thường trước khi training."
+        return "Có anomaly/outlier trong dataset; cần kiểm tra dòng bất thường trước khi training."
 
     return "Có dấu hiệu rủi ro trong scan context."
 

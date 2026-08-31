@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from typing import Dict, Any
+from typing import Any, Dict
 
 import pandas as pd
 
-from src.ingestion.schema_infer import infer_column_types, get_schema_summary
+from src.ingestion.schema_infer import get_schema_summary, infer_column_types
 from src.profiling.statistics import (
     get_basic_info,
-    get_missing_summary,
-    get_duplicate_summary,
-    get_numeric_summary,
     get_categorical_summary,
+    get_duplicate_summary,
+    get_missing_summary,
+    get_numeric_summary,
 )
 
 

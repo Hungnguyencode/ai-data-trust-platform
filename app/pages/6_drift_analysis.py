@@ -18,7 +18,6 @@ from src.drift.data_drift import (
 from src.ingestion.file_loader import load_dataset
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
 
-
 st.set_page_config(
     page_title="Drift Analysis",
     page_icon="📉",

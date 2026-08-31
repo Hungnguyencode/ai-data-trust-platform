@@ -5,8 +5,8 @@ from typing import Any, Dict
 import pandas as pd
 
 from src.anomaly.iqr_detector import detect_iqr_outliers
-from src.anomaly.zscore_detector import detect_zscore_outliers
 from src.anomaly.isolation_forest import detect_isolation_forest_outliers
+from src.anomaly.zscore_detector import detect_zscore_outliers
 
 
 def calculate_anomaly_score(outlier_rate: float) -> float:

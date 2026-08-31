@@ -24,7 +24,6 @@ from src.reports.html_report import (
 from src.utils.config import REPORTS_DIR
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
 
-
 st.set_page_config(
     page_title="Reports",
     page_icon="📄",

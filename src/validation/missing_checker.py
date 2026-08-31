@@ -21,7 +21,7 @@ def check_missing_values(df: pd.DataFrame) -> Dict[str, Any]:
     - issues: danh sách lỗi missing
     - summary_df: bảng thống kê missing theo cột
     """
-    total_rows = len(df)
+
     issues: List[Dict[str, Any]] = []
 
     summary_df = pd.DataFrame(

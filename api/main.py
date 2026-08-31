@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.routes.assistant import router as assistant_router
 from api.routes.datasets import router as datasets_router
 from api.routes.scans import router as scans_router
 from api.routes.scores import router as scores_router
-from api.routes.assistant import router as assistant_router
 
 app = FastAPI(
     title="AI Data Trust Platform API",

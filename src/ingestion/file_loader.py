@@ -5,7 +5,6 @@ from typing import Tuple
 
 import pandas as pd
 
-
 SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xls", ".json"}
 
 

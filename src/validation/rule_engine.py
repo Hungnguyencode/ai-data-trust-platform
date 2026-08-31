@@ -4,14 +4,13 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
-from src.validation.missing_checker import check_missing_values
-from src.validation.duplicate_checker import check_duplicate_rows
-from src.validation.type_checker import check_type_issues
 from src.validation.consistency_checker import (
-    check_range_issues,
     check_categorical_value_issues,
+    check_range_issues,
 )
-
+from src.validation.duplicate_checker import check_duplicate_rows
+from src.validation.missing_checker import check_missing_values
+from src.validation.type_checker import check_type_issues
 
 Issue = Dict[str, Any]
 

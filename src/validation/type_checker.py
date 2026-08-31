@@ -4,7 +4,6 @@ from typing import Any, Dict, List
 
 import pandas as pd
 
-
 NUMERIC_KEYWORDS = [
     "age",
     "amount",
@@ -56,7 +55,7 @@ def check_type_issues(df: pd.DataFrame) -> Dict[str, Any]:
     """
     issues: List[Dict[str, Any]] = []
     details: List[Dict[str, Any]] = []
-    total_rows = len(df)
+
 
     for col in df.columns:
         series = df[col]

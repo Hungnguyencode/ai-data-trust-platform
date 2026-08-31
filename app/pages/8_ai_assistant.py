@@ -23,7 +23,6 @@ from src.assistant.prompt_builder import (
     build_missing_result_names,
 )
 
-
 st.set_page_config(
     page_title="AI Assistant",
     page_icon="🤖",

@@ -6,7 +6,6 @@ import pandas as pd
 
 from src.privacy.regex_patterns import (
     ADDRESS_COLUMN_KEYWORDS,
-    ADDRESS_KEYWORDS,
     ADDRESS_REGEX_PATTERN,
     CITIZEN_ID_COLUMN_KEYWORDS,
     CITIZEN_ID_PATTERN,

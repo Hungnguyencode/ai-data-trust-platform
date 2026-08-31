@@ -367,7 +367,7 @@ def public_dataset_decision(context: Dict[str, Any]) -> str:
     drift_level = str(drift.get("overall_drift_level", "")).lower()
     if drift and drift_level == "high":
         evidence.append(
-            f"Drift Detection đang ở mức **High**, current dataset có thay đổi phân phối mạnh so với baseline."
+            "Drift Detection đang ở mức **High**, current dataset có thay đổi phân phối mạnh so với baseline."
         )
 
     score = _safe_float(trust.get("overall_score", 0))
