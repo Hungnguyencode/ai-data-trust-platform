@@ -1010,6 +1010,40 @@ if uploaded_file is not None:
                     "Governance REJECTED."
                 )
 
+            if governance_error:
+                st.error(
+                    "Governance đã được tính nhưng "
+                    "chưa persist thành công: "
+                    f"{governance_error}"
+                )
+
+                if st.button(
+                    "Retry governance persistence",
+                    key="retry_governance_persistence",
+                ):
+                    st.session_state.pop(
+                        "current_governance_registration",
+                        None,
+                    )
+
+                    st.session_state.pop(
+                        "current_governance_error",
+                        None,
+                    )
+
+                    st.rerun()
+
+            elif governance_registration:
+                st.caption(
+                    "Governance Decision đã được lưu "
+                    "vào SQL Server. "
+                    "governance_id="
+                    + str(
+                        governance_registration.get(
+                            "governance_id"
+                        )
+                    )
+                )
 
             if catalog_registration:
                 with st.expander(
@@ -1332,7 +1366,8 @@ if uploaded_file is not None:
                         lineage_col_b,
                         lineage_col_c,
                         lineage_col_d,
-                    ) = st.columns(4)
+                        lineage_col_e,
+                    ) = st.columns(5)
 
                     lineage_col_a.metric(
                         "Ingestions",
@@ -1349,13 +1384,20 @@ if uploaded_file is not None:
                     )
 
                     lineage_col_c.metric(
+                        "Governance",
+                        lineage_summary[
+                            "governance_count"
+                        ],
+                    )
+
+                    lineage_col_d.metric(
                         "Lifecycle events",
                         lineage_summary[
                             "lifecycle_event_count"
                         ],
                     )
 
-                    lineage_col_d.metric(
+                    lineage_col_e.metric(
                         "Current state",
                         lineage_summary[
                             "lifecycle_state"
@@ -1364,8 +1406,9 @@ if uploaded_file is not None:
 
                     st.caption(
                         "End-to-end lineage: "
-                        "Raw/Bronze → Validation artifact "
-                        "→ Lifecycle → Active/Superseded."
+                        "Raw/Bronze → Validation "
+                        "→ Governance → Lifecycle "
+                        "→ Active/Superseded."
                     )
 
                     timeline_df = pd.DataFrame(
@@ -1379,10 +1422,87 @@ if uploaded_file is not None:
                             "Version này chưa có "
                             "lineage event."
                         )
+
                     else:
                         st.dataframe(
                             timeline_df,
                             use_container_width=True,
+                        )
+
+                    st.markdown(
+                        "**Current governance evidence**"
+                    )
+
+                    latest_governance_decision = (
+                        lineage_summary.get(
+                            "latest_governance_decision"
+                        )
+                    )
+
+                    if latest_governance_decision:
+                        (
+                            governance_lineage_col1,
+                            governance_lineage_col2,
+                            governance_lineage_col3,
+                            governance_lineage_col4,
+                        ) = st.columns(4)
+
+                        governance_lineage_col1.metric(
+                            "Decision",
+                            latest_governance_decision,
+                        )
+
+                        governance_lineage_col2.metric(
+                            "Policy",
+                            lineage_summary.get(
+                                "latest_governance_policy",
+                                "N/A",
+                            ),
+                        )
+
+                        latest_trust_score = (
+                            lineage_summary.get(
+                                "latest_trust_score"
+                            )
+                        )
+
+                        governance_lineage_col3.metric(
+                            "Trust Score",
+                            (
+                                latest_trust_score
+                                if latest_trust_score
+                                is not None
+                                else "N/A"
+                            ),
+                        )
+
+                        governance_lineage_col4.metric(
+                            "Privacy",
+                            lineage_summary.get(
+                                "latest_privacy_status",
+                                "N/A",
+                            ),
+                        )
+
+                        st.caption(
+                            "Governance ID: "
+                            + str(
+                                lineage_summary.get(
+                                    "latest_governance_id"
+                                )
+                            )
+                            + " | Governance approved: "
+                            + str(
+                                lineage_summary.get(
+                                    "governance_approved"
+                                )
+                            )
+                        )
+
+                    else:
+                        st.info(
+                            "Validation mới nhất chưa có "
+                            "Governance Decision tương ứng."
                         )
 
                     st.markdown(
@@ -1400,6 +1520,7 @@ if uploaded_file is not None:
                             str(raw_path),
                             language=None,
                         )
+
                     else:
                         st.caption(
                             "Không có raw_path."
@@ -1412,8 +1533,23 @@ if uploaded_file is not None:
                     )
 
                     if validation_rows:
-                        latest_validation = (
-                            validation_rows[-1]
+                        latest_validation = max(
+                            validation_rows,
+                            key=lambda item: (
+                                str(
+                                    item.get(
+                                        "validated_at",
+                                        "",
+                                    )
+                                ),
+                                int(
+                                    item.get(
+                                        "validation_id",
+                                        0,
+                                    )
+                                    or 0
+                                ),
+                            ),
                         )
 
                         st.markdown(
