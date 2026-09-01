@@ -20,6 +20,10 @@ from database.repositories.catalog_repository import (
     get_ingestion_history,
     register_ingestion,
 )
+from database.repositories.governance_repository import (
+    get_governance_history,
+    register_governance_decision,
+)
 from database.repositories.lineage_repository import (
     get_catalog_lineage,
     get_version_lineage,
@@ -34,9 +38,15 @@ from database.repositories.version_repository import (
     get_lifecycle_history,
     promote_version,
 )
+from src.governance.governance_service import (
+    evaluate_dataset_governance,
+)
 from src.ingestion.ingestion_service import (
     calculate_sha256,
     ingest_dataset,
+)
+from src.lifecycle.dataset_lifecycle import (
+    is_governed_promotion_eligible,
 )
 from src.profiling.profiler import profile_dataset
 from src.validation.validation_gate import (
@@ -58,6 +68,12 @@ DERIVED_DATASET_STATE_KEYS = (
     "current_validation_result",
     "current_validation_registration",
     "current_validation_error",
+
+    # thêm 3 dòng này
+    "current_governance_result",
+    "current_governance_registration",
+    "current_governance_error",
+
     "current_lifecycle_result",
     "current_lifecycle_error",
 )
@@ -598,13 +614,123 @@ if uploaded_file is not None:
                 validation_error = None
 
             except Exception as exc:
-                validation_error = str(
-                    exc
-                )
+                validation_error = str(exc)
 
                 st.session_state[
                     "current_validation_error"
                 ] = validation_error
+
+
+        # Governance state phải nằm NGOÀI
+        # block validation_registration is None.
+        governance_result = st.session_state.get(
+            "current_governance_result"
+        )
+
+        governance_registration = (
+            st.session_state.get(
+                "current_governance_registration"
+            )
+        )
+
+        governance_error = st.session_state.get(
+            "current_governance_error"
+        )
+
+
+        if (
+            validation_result
+            and governance_result is None
+            and governance_error is None
+        ):
+            try:
+                governance_bundle = (
+                    evaluate_dataset_governance(
+                        df=df,
+                        validation_result=validation_result,
+                    )
+                )
+
+                governance_result = (
+                    governance_bundle[
+                        "governance_result"
+                    ].to_dict()
+                )
+
+                st.session_state[
+                    "current_governance_result"
+                ] = governance_result
+
+                st.session_state[
+                    "current_quality_report"
+                ] = governance_bundle[
+                    "quality_report"
+                ]
+
+                st.session_state[
+                    "current_trust_score_report"
+                ] = governance_bundle[
+                    "trust_score_report"
+                ]
+
+                st.session_state[
+                    "current_privacy_report"
+                ] = governance_bundle[
+                    "privacy_report"
+                ]
+
+                st.session_state.pop(
+                    "current_governance_error",
+                    None,
+                )
+
+                governance_error = None
+
+            except Exception as exc:
+                governance_error = str(exc)
+
+                st.session_state[
+                    "current_governance_error"
+                ] = governance_error
+
+
+        if (
+            governance_result
+            and catalog_registration
+            and validation_registration
+            and governance_registration is None
+            and governance_error is None
+        ):
+            try:
+                governance_registration = (
+                    register_governance_decision(
+                        governance_result=governance_result,
+                        catalog_registration=(
+                            catalog_registration
+                        ),
+                        validation_registration=(
+                            validation_registration
+                        ),
+                    )
+                )
+
+                st.session_state[
+                    "current_governance_registration"
+                ] = governance_registration
+
+                st.session_state.pop(
+                    "current_governance_error",
+                    None,
+                )
+
+                governance_error = None
+
+            except Exception as exc:
+                governance_error = str(exc)
+
+                st.session_state[
+                    "current_governance_error"
+                ] = governance_error
 
         lifecycle_result = st.session_state.get(
             "current_lifecycle_result"
@@ -705,7 +831,8 @@ if uploaded_file is not None:
             ):
                 st.success(
                     "ACCEPTED — dataset đã qua Validation Gate "
-                    "và được route sang data/processed (Silver)."
+                    "và được route sang data/processed "
+                    "(validated artifact / Silver candidate)."
                 )
 
             else:
@@ -852,9 +979,99 @@ if uploaded_file is not None:
 
                 st.rerun()
 
+        st.subheader(
+            "4. Governance Decision"
+        )
+
+
+        if governance_result:
+
+            st.json(
+                governance_result
+            )
+
+            decision = governance_result[
+                "decision"
+            ]
+
+            if decision == "APPROVED":
+                st.success(
+                    "Governance APPROVED — dataset "
+                    "đã đạt Governance Policy."
+                )
+
+            elif decision == "REVIEW_REQUIRED":
+                st.warning(
+                    "Governance yêu cầu review."
+                )
+
+            else:
+                st.error(
+                    "Governance REJECTED."
+                )
+
+
+            if catalog_registration:
+                with st.expander(
+                    "Xem governance history"
+                ):
+                    try:
+                        governance_history = (
+                            get_governance_history(
+                                int(
+                                    catalog_registration[
+                                        "catalog_id"
+                                    ]
+                                ),
+                                limit=50,
+                            )
+                        )
+
+                        st.dataframe(
+                            governance_history,
+                            use_container_width=True,
+                        )
+
+                    except Exception as exc:
+                        st.warning(
+                            "Không đọc được governance history: "
+                            f"{exc}"
+                        )
+
+        else:
+            st.warning(
+                "Chưa có Governance Decision."
+            )
+
+            if governance_error:
+                st.code(
+                    governance_error,
+                    language=None,
+                )
+
+            if st.button(
+                "Retry governance",
+                key="retry_governance",
+            ):
+                st.session_state.pop(
+                    "current_governance_result",
+                    None,
+                )
+
+                st.session_state.pop(
+                    "current_governance_registration",
+                    None,
+                )
+
+                st.session_state.pop(
+                    "current_governance_error",
+                    None,
+                )
+
+                st.rerun()
 
         st.subheader(
-            "4. Dataset Lifecycle"
+            "5. Dataset Lifecycle"
         )
 
         lifecycle_state = None
@@ -925,12 +1142,18 @@ if uploaded_file is not None:
                 lifecycle_state,
             )
 
+            governed_promotion_eligible = (
+                is_governed_promotion_eligible(
+                    lifecycle_state,
+                    governance_registration,
+                )
+            )
+
             lifecycle_col3.metric(
                 "Promotion eligible",
                 (
                     "YES"
-                    if lifecycle_state
-                    == "VALIDATED"
+                    if governed_promotion_eligible
                     else "NO"
                 ),
             )
@@ -947,42 +1170,67 @@ if uploaded_file is not None:
                 )
 
             elif lifecycle_state == "VALIDATED":
-                st.success(
-                    "Version đã vượt qua Validation Gate "
-                    "và đủ điều kiện promote thành ACTIVE."
-                )
+                if governed_promotion_eligible:
+                    st.success(
+                        "Version đã vượt qua Validation Gate "
+                        "và Governance Decision = APPROVED. "
+                        "Đủ điều kiện promote thành ACTIVE."
+                    )
 
-                if st.button(
-                    f"Promote v{version_number} to ACTIVE",
-                    key=(
-                        "promote_version_"
-                        f"{version_id}"
-                    ),
-                    type="primary",
-                ):
-                    try:
-                        promotion_result = (
-                            promote_version(
-                                catalog_id=catalog_id,
-                                version_id=version_id,
+                    if st.button(
+                        f"Promote v{version_number} to ACTIVE",
+                        key=(
+                            "promote_version_"
+                            f"{version_id}"
+                        ),
+                        type="primary",
+                    ):
+                        try:
+                            promotion_result = (
+                                promote_version(
+                                    catalog_id=catalog_id,
+                                    version_id=version_id,
+                                )
+                            )
+
+                            st.session_state[
+                                "current_lifecycle_result"
+                            ] = promotion_result
+
+                            st.session_state.pop(
+                                "current_lifecycle_error",
+                                None,
+                            )
+
+                            st.rerun()
+
+                        except Exception as exc:
+                            st.error(
+                                "Không thể promote version: "
+                                f"{exc}"
+                            )
+
+                else:
+                    st.warning(
+                        "Version đã vượt qua Validation Gate "
+                        "nhưng chưa được Governance APPROVED. "
+                        "Không được phép promote thành ACTIVE."
+                    )
+
+                    if governance_registration:
+                        st.caption(
+                            "Governance decision: "
+                            + str(
+                                governance_registration.get(
+                                    "decision",
+                                    "UNKNOWN",
+                                )
                             )
                         )
-
-                        st.session_state[
-                            "current_lifecycle_result"
-                        ] = promotion_result
-
-                        st.session_state.pop(
-                            "current_lifecycle_error",
-                            None,
-                        )
-
-                        st.rerun()
-
-                    except Exception as exc:
-                        st.error(
-                            "Không thể promote version: "
-                            f"{exc}"
+                    else:
+                        st.caption(
+                            "Chưa có Governance Decision "
+                            "được lưu cho validation hiện tại."
                         )
 
             elif lifecycle_state == "QUARANTINED":
@@ -1202,7 +1450,7 @@ if uploaded_file is not None:
                 )
 
         st.subheader(
-            "5. Tổng quan dataset"
+            "6. Tổng quan dataset"
         )
 
         (
@@ -1234,7 +1482,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "6. Preview dữ liệu"
+            "7. Preview dữ liệu"
         )
 
         st.dataframe(
@@ -1244,7 +1492,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "7. Kiểu dữ liệu tự động nhận diện"
+            "8. Kiểu dữ liệu tự động nhận diện"
         )
 
         column_types = profile[
@@ -1345,7 +1593,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "8. Missing value theo cột"
+            "9. Missing value theo cột"
         )
 
         missing_summary = profile[
@@ -1388,7 +1636,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "9. Duplicate rows"
+            "10. Duplicate rows"
         )
 
         duplicate_summary = profile[
@@ -1413,7 +1661,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "10. Schema summary"
+            "11. Schema summary"
         )
 
         st.dataframe(

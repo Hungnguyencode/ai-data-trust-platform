@@ -1,6 +1,7 @@
 import pytest
 
 from src.lifecycle.dataset_lifecycle import (
+    is_governed_promotion_eligible,
     is_promotion_eligible,
     lifecycle_state_from_validation,
     lifecycle_summary,
@@ -88,3 +89,52 @@ def test_invalid_lifecycle_state_is_rejected():
         lifecycle_summary(
             lifecycle_state="MAGIC"
         )
+
+
+def test_validated_and_governance_approved_can_promote():
+    assert (
+        is_governed_promotion_eligible(
+            "VALIDATED",
+            {
+                "decision": "APPROVED",
+                "promotion_eligible": True,
+            },
+        )
+        is True
+    )
+
+
+def test_validated_without_governance_cannot_promote():
+    assert (
+        is_governed_promotion_eligible(
+            "VALIDATED",
+            None,
+        )
+        is False
+    )
+
+
+def test_review_required_cannot_promote():
+    assert (
+        is_governed_promotion_eligible(
+            "VALIDATED",
+            {
+                "decision": "REVIEW_REQUIRED",
+                "promotion_eligible": False,
+            },
+        )
+        is False
+    )
+
+
+def test_active_version_is_not_governed_promotion_eligible():
+    assert (
+        is_governed_promotion_eligible(
+            "ACTIVE",
+            {
+                "decision": "APPROVED",
+                "promotion_eligible": True,
+            },
+        )
+        is False
+    )

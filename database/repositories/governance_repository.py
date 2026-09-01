@@ -284,24 +284,33 @@ def get_latest_governance_decision(
     query = text(
         """
         SELECT TOP 1
-            governance_id,
-            catalog_id,
-            version_id,
-            validation_id,
-            policy_version,
-            decision,
-            reason,
-            promotion_eligible,
-            trust_score,
-            validation_status,
-            privacy_status,
-            blocking_issue_count,
-            created_at
-        FROM dbo.governance_decisions
-        WHERE version_id = :version_id
+            gd.governance_id,
+            gd.catalog_id,
+            gd.version_id,
+            gd.validation_id,
+            gd.policy_version,
+            gd.decision,
+            gd.reason,
+            gd.promotion_eligible,
+            gd.trust_score,
+            gd.validation_status,
+            gd.privacy_status,
+            gd.blocking_issue_count,
+            gd.created_at
+        FROM dbo.governance_decisions AS gd
+        WHERE gd.version_id = :version_id
+          AND gd.validation_id = (
+                SELECT TOP 1
+                    vh.validation_id
+                FROM dbo.validation_history AS vh
+                WHERE vh.version_id = :version_id
+                ORDER BY
+                    vh.validated_at DESC,
+                    vh.validation_id DESC
+          )
         ORDER BY
-            created_at DESC,
-            governance_id DESC;
+            gd.created_at DESC,
+            gd.governance_id DESC;
         """
     )
 

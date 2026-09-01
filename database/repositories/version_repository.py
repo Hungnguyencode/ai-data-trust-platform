@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from database.db import get_engine
 from src.lifecycle.dataset_lifecycle import (
+    is_governed_promotion_eligible,
     lifecycle_state_from_validation,
 )
 
@@ -167,8 +168,13 @@ def promote_version(
     catalog_id: int,
     version_id: int,
 ) -> dict[str, Any]:
-    catalog_id = int(catalog_id)
-    version_id = int(version_id)
+    catalog_id = int(
+        catalog_id
+    )
+
+    version_id = int(
+        version_id
+    )
 
     target_query = text(
         """
@@ -181,6 +187,41 @@ def promote_version(
             WITH (UPDLOCK, HOLDLOCK)
         WHERE catalog_id = :catalog_id
           AND version_id = :version_id;
+        """
+    )
+
+    latest_governance_query = text(
+        """
+        SELECT TOP 1
+            gd.governance_id,
+            gd.catalog_id,
+            gd.version_id,
+            gd.validation_id,
+            gd.policy_version,
+            gd.decision,
+            gd.reason,
+            gd.promotion_eligible,
+            gd.trust_score,
+            gd.validation_status,
+            gd.privacy_status,
+            gd.blocking_issue_count,
+            gd.created_at
+        FROM dbo.governance_decisions AS gd
+            WITH (UPDLOCK, HOLDLOCK)
+        WHERE gd.catalog_id = :catalog_id
+          AND gd.version_id = :version_id
+          AND gd.validation_id = (
+                SELECT TOP 1
+                    vh.validation_id
+                FROM dbo.validation_history AS vh
+                WHERE vh.version_id = :version_id
+                ORDER BY
+                    vh.validated_at DESC,
+                    vh.validation_id DESC
+          )
+        ORDER BY
+            gd.created_at DESC,
+            gd.governance_id DESC;
         """
     )
 
@@ -262,7 +303,9 @@ def promote_version(
             )
 
         current_state = str(
-            target["lifecycle_state"]
+            target[
+                "lifecycle_state"
+            ]
         ).upper()
 
         if current_state == "ACTIVE":
@@ -270,18 +313,53 @@ def promote_version(
                 "catalog_id": catalog_id,
                 "version_id": version_id,
                 "version_number": int(
-                    target["version_number"]
+                    target[
+                        "version_number"
+                    ]
                 ),
                 "lifecycle_state": "ACTIVE",
                 "changed": False,
                 "superseded_version_id": None,
+                "governance_id": None,
             }
 
         if current_state != "VALIDATED":
             raise ValueError(
                 "Chỉ version ở trạng thái VALIDATED "
-                "mới được promote. "
+                "mới được xét promote. "
                 f"Trạng thái hiện tại: {current_state}"
+            )
+
+        governance = connection.execute(
+            latest_governance_query,
+            {
+                "catalog_id": catalog_id,
+                "version_id": version_id,
+            },
+        ).mappings().first()
+
+        if governance is None:
+            raise ValueError(
+                "Version đã VALIDATED nhưng chưa có "
+                "Governance Decision cho validation "
+                "mới nhất."
+            )
+
+        governance_values = dict(
+            governance
+        )
+
+        if not is_governed_promotion_eligible(
+            current_state,
+            governance_values,
+        ):
+            raise ValueError(
+                "Governance Policy không cho phép "
+                "promote version này. "
+                "decision="
+                f"{governance_values['decision']}, "
+                "promotion_eligible="
+                f"{bool(governance_values['promotion_eligible'])}"
             )
 
         current_active = connection.execute(
@@ -296,12 +374,16 @@ def promote_version(
         if (
             current_active is not None
             and int(
-                current_active["version_id"]
+                current_active[
+                    "version_id"
+                ]
             )
             != version_id
         ):
             superseded_version_id = int(
-                current_active["version_id"]
+                current_active[
+                    "version_id"
+                ]
             )
 
             connection.execute(
@@ -338,6 +420,18 @@ def promote_version(
             },
         )
 
+        governance_id = int(
+            governance_values[
+                "governance_id"
+            ]
+        )
+
+        governance_policy = str(
+            governance_values[
+                "policy_version"
+            ]
+        )
+
         connection.execute(
             history_query,
             {
@@ -345,7 +439,11 @@ def promote_version(
                 "version_id": version_id,
                 "from_state": current_state,
                 "to_state": "ACTIVE",
-                "reason": "Version promoted to ACTIVE.",
+                "reason": (
+                    "Version promoted to ACTIVE "
+                    f"under governance_id={governance_id}, "
+                    f"policy={governance_policy}."
+                ),
             },
         )
 
@@ -353,12 +451,18 @@ def promote_version(
         "catalog_id": catalog_id,
         "version_id": version_id,
         "version_number": int(
-            target["version_number"]
+            target[
+                "version_number"
+            ]
         ),
         "lifecycle_state": "ACTIVE",
         "changed": True,
         "superseded_version_id": (
             superseded_version_id
+        ),
+        "governance_id": governance_id,
+        "governance_policy_version": (
+            governance_policy
         ),
     }
 

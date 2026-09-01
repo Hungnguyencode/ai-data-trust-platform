@@ -39,6 +39,65 @@ def is_promotion_eligible(
     )
 
 
+def is_governed_promotion_eligible(
+    lifecycle_state: str,
+    governance_decision: Mapping[str, Any] | None,
+) -> bool:
+    """
+    Final promotion gate.
+
+    A version can be promoted only when:
+    - lifecycle state is VALIDATED
+    - governance decision exists
+    - decision is APPROVED
+    - promotion_eligible is True
+    """
+
+    if not is_promotion_eligible(
+        lifecycle_state
+    ):
+        return False
+
+    if governance_decision is None:
+        return False
+
+    decision = str(
+        governance_decision.get(
+            "decision",
+            "",
+        )
+    ).strip().upper()
+
+    eligible_value = (
+        governance_decision.get(
+            "promotion_eligible",
+            False,
+        )
+    )
+
+    if isinstance(
+        eligible_value,
+        str,
+    ):
+        eligible = (
+            eligible_value.strip().lower()
+            in {
+                "1",
+                "true",
+                "yes",
+            }
+        )
+    else:
+        eligible = bool(
+            eligible_value
+        )
+
+    return (
+        decision == "APPROVED"
+        and eligible
+    )
+
+
 def lifecycle_summary(
     *,
     lifecycle_state: str,
@@ -61,8 +120,9 @@ def lifecycle_summary(
             "kết luận validation."
         ),
         "VALIDATED": (
-            "Version đã qua Validation Gate và "
-            "đủ điều kiện để promote."
+            "Version đã qua Validation Gate. "
+            "Governance Decision sẽ quyết định "
+            "version có được promote hay không."
         ),
         "QUARANTINED": (
             "Version bị Validation Gate reject "
