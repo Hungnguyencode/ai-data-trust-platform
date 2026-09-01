@@ -4,19 +4,25 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import plotly.express as px
-import streamlit as st
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+
+import pandas as pd
+import plotly.express as px
+import streamlit as st
 
 from database.db import test_connection
 from database.repositories.catalog_repository import (
     get_dataset_version_history,
     get_ingestion_history,
     register_ingestion,
+)
+from database.repositories.lineage_repository import (
+    get_catalog_lineage,
+    get_version_lineage,
 )
 from database.repositories.validation_repository import (
     get_validation_history,
@@ -1032,6 +1038,154 @@ if uploaded_file is not None:
                 except Exception as exc:
                     st.warning(
                         "Không đọc được lifecycle history: "
+                        f"{exc}"
+                    )
+
+            with st.expander(
+                "Xem lineage summary của tất cả versions"
+            ):
+                try:
+                    catalog_lineage = (
+                        get_catalog_lineage(
+                            catalog_id
+                        )
+                    )
+
+                    st.dataframe(
+                        catalog_lineage,
+                        use_container_width=True,
+                    )
+
+                except Exception as exc:
+                    st.warning(
+                        "Không đọc được "
+                        "catalog lineage: "
+                        f"{exc}"
+                    )
+
+            with st.expander(
+                "Xem end-to-end Dataset Lineage"
+            ):
+                try:
+                    version_lineage = (
+                        get_version_lineage(
+                            version_id
+                        )
+                    )
+
+                    lineage_summary = (
+                        version_lineage[
+                            "summary"
+                        ]
+                    )
+
+                    (
+                        lineage_col_a,
+                        lineage_col_b,
+                        lineage_col_c,
+                        lineage_col_d,
+                    ) = st.columns(4)
+
+                    lineage_col_a.metric(
+                        "Ingestions",
+                        lineage_summary[
+                            "ingestion_count"
+                        ],
+                    )
+
+                    lineage_col_b.metric(
+                        "Validations",
+                        lineage_summary[
+                            "validation_count"
+                        ],
+                    )
+
+                    lineage_col_c.metric(
+                        "Lifecycle events",
+                        lineage_summary[
+                            "lifecycle_event_count"
+                        ],
+                    )
+
+                    lineage_col_d.metric(
+                        "Current state",
+                        lineage_summary[
+                            "lifecycle_state"
+                        ],
+                    )
+
+                    st.caption(
+                        "End-to-end lineage: "
+                        "Raw/Bronze → Validation artifact "
+                        "→ Lifecycle → Active/Superseded."
+                    )
+
+                    timeline_df = pd.DataFrame(
+                        version_lineage[
+                            "timeline"
+                        ]
+                    )
+
+                    if timeline_df.empty:
+                        st.info(
+                            "Version này chưa có "
+                            "lineage event."
+                        )
+                    else:
+                        st.dataframe(
+                            timeline_df,
+                            use_container_width=True,
+                        )
+
+                    st.markdown(
+                        "**Raw/Bronze artifact**"
+                    )
+
+                    raw_path = (
+                        lineage_summary.get(
+                            "raw_path"
+                        )
+                    )
+
+                    if raw_path:
+                        st.code(
+                            str(raw_path),
+                            language=None,
+                        )
+                    else:
+                        st.caption(
+                            "Không có raw_path."
+                        )
+
+                    validation_rows = (
+                        version_lineage[
+                            "validations"
+                        ]
+                    )
+
+                    if validation_rows:
+                        latest_validation = (
+                            validation_rows[-1]
+                        )
+
+                        st.markdown(
+                            "**Latest validation artifact**"
+                        )
+
+                        st.code(
+                            str(
+                                latest_validation.get(
+                                    "artifact_path",
+                                    "N/A",
+                                )
+                            ),
+                            language=None,
+                        )
+
+                except Exception as exc:
+                    st.warning(
+                        "Không đọc được "
+                        "end-to-end lineage: "
                         f"{exc}"
                     )
 
