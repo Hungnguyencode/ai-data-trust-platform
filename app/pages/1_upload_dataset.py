@@ -18,11 +18,18 @@ from database.repositories.catalog_repository import (
     get_ingestion_history,
     register_ingestion,
 )
+from database.repositories.validation_repository import (
+    get_validation_history,
+    register_validation,
+)
 from src.ingestion.ingestion_service import (
     calculate_sha256,
     ingest_dataset,
 )
 from src.profiling.profiler import profile_dataset
+from src.validation.validation_gate import (
+    validate_and_route_dataset,
+)
 
 DERIVED_DATASET_STATE_KEYS = (
     "current_dataset_id",
@@ -36,6 +43,9 @@ DERIVED_DATASET_STATE_KEYS = (
     "last_saved_scan",
     "current_catalog_registration",
     "current_catalog_error",
+    "current_validation_result",
+    "current_validation_registration",
+    "current_validation_error",
 )
 
 
@@ -506,8 +516,289 @@ if uploaded_file is not None:
             "basic_info"
         ]
 
+        validation_result = st.session_state.get(
+            "current_validation_result"
+        )
+
+        validation_registration = st.session_state.get(
+            "current_validation_registration"
+        )
+
+        validation_error = st.session_state.get(
+            "current_validation_error"
+        )
+
+        if (
+            validation_result is None
+            and validation_error is None
+        ):
+            try:
+                gate_result = (
+                    validate_and_route_dataset(
+                        df=df,
+                        ingestion_metadata=(
+                            ingestion_metadata
+                        ),
+                    )
+                )
+
+                validation_result = (
+                    gate_result.to_dict()
+                )
+
+                st.session_state[
+                    "current_validation_result"
+                ] = validation_result
+
+            except Exception as exc:
+                validation_error = str(
+                    exc
+                )
+
+                st.session_state[
+                    "current_validation_error"
+                ] = validation_error
+
+        if (
+            validation_result
+            and catalog_registration
+            and validation_registration is None
+        ):
+            try:
+                validation_registration = (
+                    register_validation(
+                        validation_result,
+                        catalog_registration,
+                    )
+                )
+
+                st.session_state[
+                    "current_validation_registration"
+                ] = validation_registration
+
+                st.session_state.pop(
+                    "current_validation_error",
+                    None,
+                )
+
+                validation_error = None
+
+            except Exception as exc:
+                validation_error = str(
+                    exc
+                )
+
+                st.session_state[
+                    "current_validation_error"
+                ] = validation_error
+
         st.subheader(
-            "3. Tổng quan dataset"
+            "3. Validation Gate"
+        )
+
+        if validation_result:
+            validation_status = str(
+                validation_result[
+                    "status"
+                ]
+            )
+
+            (
+                validation_col1,
+                validation_col2,
+                validation_col3,
+                validation_col4,
+                validation_col5,
+            ) = st.columns(5)
+
+            validation_col1.metric(
+                "Validation",
+                validation_status,
+            )
+
+            validation_col2.metric(
+                "High",
+                validation_result[
+                    "high_issues"
+                ],
+            )
+
+            validation_col3.metric(
+                "Medium",
+                validation_result[
+                    "medium_issues"
+                ],
+            )
+
+            validation_col4.metric(
+                "Low",
+                validation_result[
+                    "low_issues"
+                ],
+            )
+
+            validation_col5.metric(
+                "Blocking",
+                validation_result[
+                    "blocking_issue_count"
+                ],
+            )
+
+            if (
+                validation_status
+                == "ACCEPTED"
+            ):
+                st.success(
+                    "ACCEPTED — dataset đã qua Validation Gate "
+                    "và được route sang data/processed (Silver)."
+                )
+
+            else:
+                st.error(
+                    "REJECTED — dataset có High severity issue "
+                    "và đã được route sang data/quarantine."
+                )
+
+            st.caption(
+                "Policy v1: High severity sẽ block dataset. "
+                "Medium và Low vẫn được ghi nhận nhưng không block."
+            )
+
+            with st.expander(
+                "Xem validation artifact"
+            ):
+                st.write(
+                    "**Policy version:**",
+                    validation_result[
+                        "policy_version"
+                    ],
+                )
+
+                st.write(
+                    "**Validated at:**",
+                    validation_result[
+                        "validated_at"
+                    ],
+                )
+
+                st.write(
+                    "**Dataset artifact:**"
+                )
+
+                st.code(
+                    validation_result[
+                        "artifact_path"
+                    ],
+                    language=None,
+                )
+
+                st.write(
+                    "**Validation metadata:**"
+                )
+
+                st.code(
+                    validation_result[
+                        "validation_metadata_path"
+                    ],
+                    language=None,
+                )
+
+            blocking_issues = (
+                validation_result.get(
+                    "blocking_issues",
+                    [],
+                )
+            )
+
+            if blocking_issues:
+                st.warning(
+                    "Các lỗi khiến dataset bị reject:"
+                )
+
+                st.dataframe(
+                    blocking_issues,
+                    use_container_width=True,
+                )
+
+            if validation_registration:
+                validation_id = (
+                    validation_registration.get(
+                        "validation_id"
+                    )
+                )
+
+                if validation_id is not None:
+                    st.caption(
+                        "Validation đã được lưu vào SQL Server. "
+                        f"validation_id={validation_id}"
+                    )
+
+            if catalog_registration:
+                with st.expander(
+                    "Xem validation history"
+                ):
+                    try:
+                        validation_history = (
+                            get_validation_history(
+                                int(
+                                    catalog_registration[
+                                        "catalog_id"
+                                    ]
+                                ),
+                                limit=50,
+                            )
+                        )
+
+                        st.dataframe(
+                            validation_history,
+                            use_container_width=True,
+                        )
+
+                    except Exception as exc:
+                        st.warning(
+                            "Không đọc được validation history: "
+                            f"{exc}"
+                        )
+
+        else:
+            st.warning(
+                "Validation Gate chưa chạy thành công."
+            )
+
+            if validation_error:
+                st.code(
+                    validation_error,
+                    language=None,
+                )
+
+            st.info(
+                "Nếu lỗi báo thiếu validation_history, "
+                "hãy chạy lại migration database."
+            )
+
+            if st.button(
+                "Retry validation",
+                key="retry_validation",
+            ):
+                st.session_state.pop(
+                    "current_validation_result",
+                    None,
+                )
+
+                st.session_state.pop(
+                    "current_validation_registration",
+                    None,
+                )
+
+                st.session_state.pop(
+                    "current_validation_error",
+                    None,
+                )
+
+                st.rerun()
+
+        st.subheader(
+            "4. Tổng quan dataset"
         )
 
         (
@@ -539,7 +830,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "4. Preview dữ liệu"
+            "5. Preview dữ liệu"
         )
 
         st.dataframe(
@@ -549,7 +840,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "5. Kiểu dữ liệu tự động nhận diện"
+            "6. Kiểu dữ liệu tự động nhận diện"
         )
 
         column_types = profile[
@@ -650,7 +941,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "6. Missing value theo cột"
+            "7. Missing value theo cột"
         )
 
         missing_summary = profile[
@@ -693,7 +984,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "7. Duplicate rows"
+            "8. Duplicate rows"
         )
 
         duplicate_summary = profile[
@@ -718,7 +1009,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "8. Schema summary"
+            "9. Schema summary"
         )
 
         st.dataframe(

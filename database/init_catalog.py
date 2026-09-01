@@ -11,15 +11,16 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from database.db import get_engine  # noqa: E402
 
-MIGRATION_PATH = (
+MIGRATIONS_DIR = (
     PROJECT_ROOT
     / "database"
     / "migrations"
-    / "001_dataset_catalog.sql"
 )
 
 
-def split_sql_batches(sql_text: str) -> list[str]:
+def split_sql_batches(
+    sql_text: str,
+) -> list[str]:
     batches = re.split(
         r"^\s*GO\s*$",
         sql_text,
@@ -33,30 +34,73 @@ def split_sql_batches(sql_text: str) -> list[str]:
     ]
 
 
-def initialize_catalog_schema() -> None:
-    if not MIGRATION_PATH.exists():
+def get_migration_files() -> list[Path]:
+    if not MIGRATIONS_DIR.exists():
         raise FileNotFoundError(
-            f"Không tìm thấy migration: {MIGRATION_PATH}"
+            f"Không tìm thấy migration directory: "
+            f"{MIGRATIONS_DIR}"
         )
 
-    sql_text = MIGRATION_PATH.read_text(encoding="utf-8")
-    batches = split_sql_batches(sql_text)
+    migration_files = sorted(
+        MIGRATIONS_DIR.glob("*.sql")
+    )
+
+    if not migration_files:
+        raise RuntimeError(
+            "Không tìm thấy SQL migration nào."
+        )
+
+    return migration_files
+
+
+def run_migration(
+    migration_path: Path,
+) -> None:
+    sql_text = migration_path.read_text(
+        encoding="utf-8"
+    )
+
+    batches = split_sql_batches(
+        sql_text
+    )
 
     engine = get_engine()
 
     with engine.begin() as connection:
         for batch in batches:
-            connection.exec_driver_sql(batch)
+            connection.exec_driver_sql(
+                batch
+            )
+
+
+def initialize_database_schema() -> None:
+    migration_files = get_migration_files()
+
+    print(
+        f"Found {len(migration_files)} migration(s)."
+    )
+
+    for migration_path in migration_files:
+        print(
+            f"Running: {migration_path.name}"
+        )
+
+        run_migration(
+            migration_path
+        )
+
+        print(
+            f"OK: {migration_path.name}"
+        )
 
 
 def main() -> None:
-    initialize_catalog_schema()
+    initialize_database_schema()
 
-    print("Dataset catalog schema initialized successfully.")
-    print("Created/verified:")
-    print("  - dataset_catalog")
-    print("  - dataset_versions")
-    print("  - ingestion_history")
+    print("")
+    print(
+        "Database migrations completed successfully."
+    )
 
 
 if __name__ == "__main__":
