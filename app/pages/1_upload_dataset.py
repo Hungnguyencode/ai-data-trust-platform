@@ -22,6 +22,12 @@ from database.repositories.validation_repository import (
     get_validation_history,
     register_validation,
 )
+from database.repositories.version_repository import (
+    apply_validation_lifecycle,
+    get_catalog_lifecycle,
+    get_lifecycle_history,
+    promote_version,
+)
 from src.ingestion.ingestion_service import (
     calculate_sha256,
     ingest_dataset,
@@ -46,6 +52,8 @@ DERIVED_DATASET_STATE_KEYS = (
     "current_validation_result",
     "current_validation_registration",
     "current_validation_error",
+    "current_lifecycle_result",
+    "current_lifecycle_error",
 )
 
 
@@ -393,7 +401,7 @@ if uploaded_file is not None:
             )
 
             catalog_col3.metric(
-                "Version state",
+                "Catalog registration",
                 version_state,
             )
 
@@ -591,6 +599,47 @@ if uploaded_file is not None:
                 st.session_state[
                     "current_validation_error"
                 ] = validation_error
+
+        lifecycle_result = st.session_state.get(
+            "current_lifecycle_result"
+        )
+
+        lifecycle_error = st.session_state.get(
+            "current_lifecycle_error"
+        )
+
+        if (
+            validation_result
+            and validation_registration
+            and catalog_registration
+            and lifecycle_result is None
+            and lifecycle_error is None
+        ):
+            try:
+                lifecycle_result = (
+                    apply_validation_lifecycle(
+                        catalog_registration,
+                        validation_result,
+                    )
+                )
+
+                st.session_state[
+                    "current_lifecycle_result"
+                ] = lifecycle_result
+
+                st.session_state.pop(
+                    "current_lifecycle_error",
+                    None,
+                )
+
+                lifecycle_error = None
+
+            except Exception as exc:
+                lifecycle_error = str(exc)
+
+                st.session_state[
+                    "current_lifecycle_error"
+                ] = lifecycle_error
 
         st.subheader(
             "3. Validation Gate"
@@ -797,8 +846,209 @@ if uploaded_file is not None:
 
                 st.rerun()
 
+
         st.subheader(
-            "4. Tổng quan dataset"
+            "4. Dataset Lifecycle"
+        )
+
+        lifecycle_state = None
+        lifecycle_table = None
+
+        if catalog_registration:
+            catalog_id = int(
+                catalog_registration[
+                    "catalog_id"
+                ]
+            )
+
+            version_id = int(
+                catalog_registration[
+                    "version_id"
+                ]
+            )
+
+            version_number = int(
+                catalog_registration[
+                    "version_number"
+                ]
+            )
+
+            try:
+                lifecycle_table = (
+                    get_catalog_lifecycle(
+                        catalog_id
+                    )
+                )
+
+                current_version_rows = (
+                    lifecycle_table[
+                        lifecycle_table[
+                            "version_id"
+                        ]
+                        == version_id
+                    ]
+                )
+
+                if not current_version_rows.empty:
+                    lifecycle_state = str(
+                        current_version_rows.iloc[
+                            0
+                        ][
+                            "lifecycle_state"
+                        ]
+                    ).upper()
+
+            except Exception as exc:
+                lifecycle_error = str(exc)
+
+        if lifecycle_state:
+            (
+                lifecycle_col1,
+                lifecycle_col2,
+                lifecycle_col3,
+                lifecycle_col4,
+            ) = st.columns(4)
+
+            lifecycle_col1.metric(
+                "Dataset version",
+                f"v{version_number}",
+            )
+
+            lifecycle_col2.metric(
+                "Lifecycle state",
+                lifecycle_state,
+            )
+
+            lifecycle_col3.metric(
+                "Promotion eligible",
+                (
+                    "YES"
+                    if lifecycle_state
+                    == "VALIDATED"
+                    else "NO"
+                ),
+            )
+
+            lifecycle_col4.metric(
+                "Catalog ID",
+                str(catalog_id),
+            )
+
+            if lifecycle_state == "NEW":
+                st.info(
+                    "Version mới được ingest nhưng "
+                    "chưa có kết luận Validation Gate."
+                )
+
+            elif lifecycle_state == "VALIDATED":
+                st.success(
+                    "Version đã vượt qua Validation Gate "
+                    "và đủ điều kiện promote thành ACTIVE."
+                )
+
+                if st.button(
+                    f"Promote v{version_number} to ACTIVE",
+                    key=(
+                        "promote_version_"
+                        f"{version_id}"
+                    ),
+                    type="primary",
+                ):
+                    try:
+                        promotion_result = (
+                            promote_version(
+                                catalog_id=catalog_id,
+                                version_id=version_id,
+                            )
+                        )
+
+                        st.session_state[
+                            "current_lifecycle_result"
+                        ] = promotion_result
+
+                        st.session_state.pop(
+                            "current_lifecycle_error",
+                            None,
+                        )
+
+                        st.rerun()
+
+                    except Exception as exc:
+                        st.error(
+                            "Không thể promote version: "
+                            f"{exc}"
+                        )
+
+            elif lifecycle_state == "QUARANTINED":
+                st.error(
+                    "Version này đang QUARANTINED "
+                    "do không vượt qua Validation Gate. "
+                    "Không được phép promote thành ACTIVE."
+                )
+
+            elif lifecycle_state == "ACTIVE":
+                st.success(
+                    "Đây là version ACTIVE hiện tại "
+                    "của dataset."
+                )
+
+            elif lifecycle_state == "SUPERSEDED":
+                st.info(
+                    "Version này từng ACTIVE nhưng "
+                    "đã được thay thế bởi version mới hơn."
+                )
+
+            if lifecycle_table is not None:
+                with st.expander(
+                    "Xem lifecycle của tất cả versions"
+                ):
+                    st.dataframe(
+                        lifecycle_table,
+                        use_container_width=True,
+                    )
+
+            with st.expander(
+                "Xem lifecycle history của version hiện tại"
+            ):
+                try:
+                    lifecycle_history = (
+                        get_lifecycle_history(
+                            version_id
+                        )
+                    )
+
+                    if lifecycle_history.empty:
+                        st.info(
+                            "Version này chưa có lifecycle "
+                            "transition nào được ghi nhận."
+                        )
+
+                    else:
+                        st.dataframe(
+                            lifecycle_history,
+                            use_container_width=True,
+                        )
+
+                except Exception as exc:
+                    st.warning(
+                        "Không đọc được lifecycle history: "
+                        f"{exc}"
+                    )
+
+        else:
+            st.warning(
+                "Chưa đọc được lifecycle state "
+                "của dataset version."
+            )
+
+            if lifecycle_error:
+                st.code(
+                    lifecycle_error,
+                    language=None,
+                )
+
+        st.subheader(
+            "5. Tổng quan dataset"
         )
 
         (
@@ -830,7 +1080,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "5. Preview dữ liệu"
+            "6. Preview dữ liệu"
         )
 
         st.dataframe(
@@ -840,7 +1090,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "6. Kiểu dữ liệu tự động nhận diện"
+            "7. Kiểu dữ liệu tự động nhận diện"
         )
 
         column_types = profile[
@@ -941,7 +1191,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "7. Missing value theo cột"
+            "8. Missing value theo cột"
         )
 
         missing_summary = profile[
@@ -984,7 +1234,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "8. Duplicate rows"
+            "9. Duplicate rows"
         )
 
         duplicate_summary = profile[
@@ -1009,7 +1259,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "9. Schema summary"
+            "10. Schema summary"
         )
 
         st.dataframe(
