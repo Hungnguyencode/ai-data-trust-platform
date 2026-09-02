@@ -57,15 +57,11 @@ WORKFLOW_STATE_KEYS = (
     "current_workflow_stage",
     "current_profile",
     "current_catalog_registration",
-    "current_catalog_error",
     "current_validation_result",
     "current_validation_registration",
-    "current_validation_error",
     "current_governance_result",
     "current_governance_registration",
-    "current_governance_error",
     "current_lifecycle_result",
-    "current_lifecycle_error",
     "current_quality_report",
     "current_trust_score_report",
     "current_privacy_report",
@@ -191,26 +187,6 @@ def cache_workflow_result(
 
     st.session_state.pop(
         "current_workflow_stage",
-        None,
-    )
-
-    st.session_state.pop(
-        "current_catalog_error",
-        None,
-    )
-
-    st.session_state.pop(
-        "current_validation_error",
-        None,
-    )
-
-    st.session_state.pop(
-        "current_governance_error",
-        None,
-    )
-
-    st.session_state.pop(
-        "current_lifecycle_error",
         None,
     )
 
@@ -618,16 +594,7 @@ if uploaded_file is not None:
             .governance_registration
         )
 
-        lifecycle_result = (
-            st.session_state.get(
-                "current_lifecycle_result",
-                workflow_result.lifecycle_result,
-            )
-        )
 
-        catalog_error = None
-        validation_error = None
-        governance_error = None
         lifecycle_error = None
 
 
@@ -756,38 +723,10 @@ if uploaded_file is not None:
                     )
 
         else:
-            st.warning(
-                "Raw ingestion đã thành công nhưng chưa sync được "
-                "Dataset Catalog vào SQL Server."
+            st.error(
+                "Workflow hoàn tất nhưng không có Catalog Registration. "
+                "Đây là trạng thái không hợp lệ."
             )
-
-            if catalog_error:
-                st.code(
-                    catalog_error,
-                    language=None,
-                )
-
-            st.info(
-                "Nếu đây là lần đầu chạy bản nâng cấp này, "
-                "hãy chạy `python database/init_catalog.py`, "
-                "sau đó bấm Retry catalog sync."
-            )
-
-            if st.button(
-                "Retry catalog sync",
-                key="retry_catalog_sync",
-            ):
-                st.session_state.pop(
-                    "current_catalog_error",
-                    None,
-                )
-
-                st.session_state.pop(
-                    "current_catalog_registration",
-                    None,
-                )
-
-                st.rerun()
 
 
         basic_info = profile[
@@ -965,41 +904,10 @@ if uploaded_file is not None:
                         )
 
         else:
-            st.warning(
-                "Validation Gate chưa chạy thành công."
+            st.error(
+                "Workflow hoàn tất nhưng không có Validation Result. "
+                "Đây là trạng thái không hợp lệ."
             )
-
-            if validation_error:
-                st.code(
-                    validation_error,
-                    language=None,
-                )
-
-            st.info(
-                "Nếu lỗi báo thiếu validation_history, "
-                "hãy chạy lại migration database."
-            )
-
-            if st.button(
-                "Retry validation",
-                key="retry_validation",
-            ):
-                st.session_state.pop(
-                    "current_validation_result",
-                    None,
-                )
-
-                st.session_state.pop(
-                    "current_validation_registration",
-                    None,
-                )
-
-                st.session_state.pop(
-                    "current_validation_error",
-                    None,
-                )
-
-                st.rerun()
 
         st.subheader(
             "4. Governance Decision"
@@ -1032,30 +940,7 @@ if uploaded_file is not None:
                     "Governance REJECTED."
                 )
 
-            if governance_error:
-                st.error(
-                    "Governance đã được tính nhưng "
-                    "chưa persist thành công: "
-                    f"{governance_error}"
-                )
-
-                if st.button(
-                    "Retry governance persistence",
-                    key="retry_governance_persistence",
-                ):
-                    st.session_state.pop(
-                        "current_governance_registration",
-                        None,
-                    )
-
-                    st.session_state.pop(
-                        "current_governance_error",
-                        None,
-                    )
-
-                    st.rerun()
-
-            elif governance_registration:
+            if governance_registration:
                 st.caption(
                     "Governance Decision đã được lưu "
                     "vào SQL Server. "
@@ -1095,36 +980,10 @@ if uploaded_file is not None:
                         )
 
         else:
-            st.warning(
-                "Chưa có Governance Decision."
+            st.error(
+                "Workflow hoàn tất nhưng không có Governance Decision. "
+                "Đây là trạng thái không hợp lệ."
             )
-
-            if governance_error:
-                st.code(
-                    governance_error,
-                    language=None,
-                )
-
-            if st.button(
-                "Retry governance",
-                key="retry_governance",
-            ):
-                st.session_state.pop(
-                    "current_governance_result",
-                    None,
-                )
-
-                st.session_state.pop(
-                    "current_governance_registration",
-                    None,
-                )
-
-                st.session_state.pop(
-                    "current_governance_error",
-                    None,
-                )
-
-                st.rerun()
 
         st.subheader(
             "5. Dataset Lifecycle"
@@ -1252,11 +1111,6 @@ if uploaded_file is not None:
                             st.session_state[
                                 "current_lifecycle_result"
                             ] = promotion_result
-
-                            st.session_state.pop(
-                                "current_lifecycle_error",
-                                None,
-                            )
 
                             st.rerun()
 
