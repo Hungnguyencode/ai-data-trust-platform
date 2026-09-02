@@ -42,3 +42,9 @@ coverage.xml
 build/
 dist/
 *.egg-info/
+
+# Data platform artifacts
+data/raw/
+data/processed/
+data/quarantine/
+data/lifecycle_test/
