@@ -9,7 +9,9 @@ from api.schemas.dataset_schema import (
     DatasetRecordsRequest,
 )
 from api.schemas.lineage_schema import DatasetLineageResponse
+from api.schemas.promotion_schema import DatasetPromotionResponse
 from database.repositories.lineage_repository import get_version_lineage
+from database.repositories.version_repository import promote_version
 
 router = APIRouter()
 
@@ -130,3 +132,130 @@ def get_dataset_lineage(
                 "dataset lineage."
             ),
         ) from exc
+
+
+@router.post(
+    "/{version_id}/promote",
+    response_model=DatasetPromotionResponse,
+)
+def promote_dataset_version(
+    version_id: int = Path(
+        ...,
+        gt=0,
+    ),
+):
+    """
+    Promote one governed dataset version to ACTIVE.
+
+    The API does not implement promotion policy itself.
+    Governance and lifecycle enforcement remain inside
+    the version repository.
+    """
+
+    try:
+        before_lineage = get_version_lineage(
+            version_id
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to load dataset version "
+                "before promotion."
+            ),
+        ) from exc
+
+    before_summary = before_lineage[
+        "summary"
+    ]
+
+    catalog_id = int(
+        before_summary[
+            "catalog_id"
+        ]
+    )
+
+    previous_state = str(
+        before_summary[
+            "lifecycle_state"
+        ]
+    )
+
+    try:
+        promotion_result = promote_version(
+            catalog_id=catalog_id,
+            version_id=version_id,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to promote "
+                "dataset version."
+            ),
+        ) from exc
+
+    try:
+        after_lineage = get_version_lineage(
+            version_id
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Dataset was promoted but "
+                "the updated lineage could not be loaded."
+            ),
+        ) from exc
+
+    after_summary = after_lineage[
+        "summary"
+    ]
+
+    changed = bool(
+        promotion_result.get(
+            "changed",
+            True,
+        )
+    )
+
+    return DatasetPromotionResponse(
+        version_id=version_id,
+        catalog_id=catalog_id,
+        previous_state=previous_state,
+        lifecycle_state=str(
+            after_summary[
+                "lifecycle_state"
+            ]
+        ),
+        changed=changed,
+        governance_decision=(
+            after_summary.get(
+                "latest_governance_decision"
+            )
+        ),
+        message=(
+            "Dataset version promoted "
+            "to ACTIVE successfully."
+            if changed
+            else (
+                "Dataset version is already ACTIVE; "
+                "no changes were applied."
+            )
+        ),
+    )
