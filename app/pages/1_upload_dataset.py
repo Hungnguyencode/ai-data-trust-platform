@@ -18,11 +18,9 @@ from database.db import test_connection
 from database.repositories.catalog_repository import (
     get_dataset_version_history,
     get_ingestion_history,
-    register_ingestion,
 )
 from database.repositories.governance_repository import (
     get_governance_history,
-    register_governance_decision,
 )
 from database.repositories.lineage_repository import (
     get_catalog_lineage,
@@ -30,16 +28,15 @@ from database.repositories.lineage_repository import (
 )
 from database.repositories.validation_repository import (
     get_validation_history,
-    register_validation,
 )
 from database.repositories.version_repository import (
-    apply_validation_lifecycle,
     get_catalog_lifecycle,
     get_lifecycle_history,
     promote_version,
 )
-from src.governance.governance_service import (
-    evaluate_dataset_governance,
+from src.ingestion.contracts import (
+    IngestionMetadata,
+    IngestionResult,
 )
 from src.ingestion.ingestion_service import (
     calculate_sha256,
@@ -48,40 +45,55 @@ from src.ingestion.ingestion_service import (
 from src.lifecycle.dataset_lifecycle import (
     is_governed_promotion_eligible,
 )
-from src.profiling.profiler import profile_dataset
-from src.validation.validation_gate import (
-    validate_and_route_dataset,
+from src.workflows import (
+    DatasetWorkflowError,
+    DatasetWorkflowResult,
+    continue_dataset_workflow,
 )
 
-DERIVED_DATASET_STATE_KEYS = (
-    "current_dataset_id",
-    "current_quality_report",
-    "current_trust_score_report",
-    "current_anomaly_report",
-    "current_privacy_report",
-    "current_drift_report",
-    "drift_baseline_file_name",
-    "drift_current_file_name",
-    "last_saved_scan",
+WORKFLOW_STATE_KEYS = (
+    "current_workflow_result",
+    "current_workflow_error",
+    "current_workflow_stage",
+    "current_profile",
     "current_catalog_registration",
     "current_catalog_error",
     "current_validation_result",
     "current_validation_registration",
     "current_validation_error",
-
-    # thêm 3 dòng này
     "current_governance_result",
     "current_governance_registration",
     "current_governance_error",
-
     "current_lifecycle_result",
     "current_lifecycle_error",
+    "current_quality_report",
+    "current_trust_score_report",
+    "current_privacy_report",
+)
+
+
+DERIVED_DATASET_STATE_KEYS = (
+    "current_dataset_id",
+    "current_anomaly_report",
+    "current_drift_report",
+    "drift_baseline_file_name",
+    "drift_current_file_name",
+    "last_saved_scan",
+    *WORKFLOW_STATE_KEYS,
 )
 
 
 def clear_derived_dataset_state() -> None:
     for key in DERIVED_DATASET_STATE_KEYS:
         st.session_state.pop(key, None)
+
+
+def clear_workflow_state() -> None:
+    for key in WORKFLOW_STATE_KEYS:
+        st.session_state.pop(
+            key,
+            None,
+        )
 
 
 def get_cached_ingestion_metadata() -> dict[str, Any] | None:
@@ -93,6 +105,113 @@ def get_cached_ingestion_metadata() -> dict[str, Any] | None:
         metadata
         if isinstance(metadata, dict)
         else None
+    )
+
+
+def get_cached_ingestion_result(
+    *,
+    dataframe: pd.DataFrame,
+    metadata: dict[str, Any],
+) -> IngestionResult:
+    cached_result = st.session_state.get(
+        "current_ingestion_result"
+    )
+
+    if isinstance(
+        cached_result,
+        IngestionResult,
+    ):
+        return cached_result
+
+    rebuilt_result = IngestionResult(
+        dataframe=dataframe,
+        metadata=IngestionMetadata(
+            **metadata
+        ),
+    )
+
+    st.session_state[
+        "current_ingestion_result"
+    ] = rebuilt_result
+
+    return rebuilt_result
+
+
+def cache_workflow_result(
+    result: DatasetWorkflowResult,
+) -> None:
+    st.session_state[
+        "current_workflow_result"
+    ] = result
+
+    st.session_state[
+        "current_profile"
+    ] = result.profile
+
+    st.session_state[
+        "current_catalog_registration"
+    ] = result.catalog_registration
+
+    st.session_state[
+        "current_validation_result"
+    ] = result.validation_result
+
+    st.session_state[
+        "current_validation_registration"
+    ] = result.validation_registration
+
+    st.session_state[
+        "current_governance_result"
+    ] = result.governance_result
+
+    st.session_state[
+        "current_governance_registration"
+    ] = result.governance_registration
+
+    st.session_state[
+        "current_lifecycle_result"
+    ] = result.lifecycle_result
+
+    st.session_state[
+        "current_quality_report"
+    ] = result.quality_report
+
+    st.session_state[
+        "current_trust_score_report"
+    ] = result.trust_score_report
+
+    st.session_state[
+        "current_privacy_report"
+    ] = result.privacy_report
+
+    st.session_state.pop(
+        "current_workflow_error",
+        None,
+    )
+
+    st.session_state.pop(
+        "current_workflow_stage",
+        None,
+    )
+
+    st.session_state.pop(
+        "current_catalog_error",
+        None,
+    )
+
+    st.session_state.pop(
+        "current_validation_error",
+        None,
+    )
+
+    st.session_state.pop(
+        "current_governance_error",
+        None,
+    )
+
+    st.session_state.pop(
+        "current_lifecycle_error",
+        None,
     )
 
 
@@ -111,7 +230,6 @@ def is_same_uploaded_dataset(
         and metadata.get("content_sha256")
         == content_sha256
         and "current_df" in st.session_state
-        and "current_profile" in st.session_state
     )
 
 
@@ -189,10 +307,6 @@ if uploaded_file is not None:
                 "current_df"
             ]
 
-            profile = st.session_state[
-                "current_profile"
-            ]
-
             ingestion_metadata = (
                 get_cached_ingestion_metadata()
             )
@@ -204,7 +318,16 @@ if uploaded_file is not None:
                 )
 
             file_type = str(
-                ingestion_metadata["file_type"]
+                ingestion_metadata[
+                    "file_type"
+                ]
+            )
+
+            ingestion_result = (
+                get_cached_ingestion_result(
+                    dataframe=df,
+                    metadata=ingestion_metadata,
+                )
             )
 
             is_new_ingestion = False
@@ -215,17 +338,21 @@ if uploaded_file is not None:
                 persist_raw=True,
             )
 
-            df = ingestion_result.dataframe
+            df = (
+                ingestion_result.dataframe
+            )
 
             ingestion_metadata = (
-                ingestion_result.metadata.to_dict()
+                ingestion_result
+                .metadata
+                .to_dict()
             )
 
             file_type = (
-                ingestion_result.metadata.file_type
+                ingestion_result
+                .metadata
+                .file_type
             )
-
-            profile = profile_dataset(df)
 
             clear_derived_dataset_state()
 
@@ -235,19 +362,23 @@ if uploaded_file is not None:
 
             st.session_state[
                 "current_file_name"
-            ] = ingestion_result.metadata.file_name
+            ] = (
+                ingestion_result
+                .metadata
+                .file_name
+            )
 
             st.session_state[
                 "current_file_type"
             ] = file_type
 
             st.session_state[
-                "current_profile"
-            ] = profile
-
-            st.session_state[
                 "current_ingestion_metadata"
             ] = ingestion_metadata
+
+            st.session_state[
+                "current_ingestion_result"
+            ] = ingestion_result
 
             is_new_ingestion = True
 
@@ -263,39 +394,6 @@ if uploaded_file is not None:
                 "Dataset này đã được ingest trong session hiện tại; "
                 "không tạo ingestion_id mới khi Streamlit rerun."
             )
-
-
-        catalog_registration = st.session_state.get(
-            "current_catalog_registration"
-        )
-
-        catalog_error = st.session_state.get(
-            "current_catalog_error"
-        )
-
-        if catalog_registration is None:
-            try:
-                catalog_registration = register_ingestion(
-                    ingestion_metadata
-                )
-
-                st.session_state[
-                    "current_catalog_registration"
-                ] = catalog_registration
-
-                st.session_state.pop(
-                    "current_catalog_error",
-                    None,
-                )
-
-                catalog_error = None
-
-            except Exception as exc:
-                catalog_error = str(exc)
-
-                st.session_state[
-                    "current_catalog_error"
-                ] = catalog_error
 
 
         st.subheader(
@@ -381,6 +479,156 @@ if uploaded_file is not None:
                     "Đây là bản Raw/Bronze gốc trên máy local. "
                     "Thư mục data/raw đã được gitignore."
                 )
+
+
+        workflow_result = (
+            st.session_state.get(
+                "current_workflow_result"
+            )
+        )
+
+        workflow_error = (
+            st.session_state.get(
+                "current_workflow_error"
+            )
+        )
+
+        workflow_stage = (
+            st.session_state.get(
+                "current_workflow_stage"
+            )
+        )
+
+        if (
+            not isinstance(
+                workflow_result,
+                DatasetWorkflowResult,
+            )
+            and workflow_error is None
+        ):
+            try:
+                workflow_result = (
+                    continue_dataset_workflow(
+                        ingestion_result
+                    )
+                )
+
+                cache_workflow_result(
+                    workflow_result
+                )
+
+            except DatasetWorkflowError as exc:
+                workflow_error = str(
+                    exc
+                )
+
+                workflow_stage = (
+                    exc.stage
+                )
+
+                st.session_state[
+                    "current_workflow_error"
+                ] = workflow_error
+
+                st.session_state[
+                    "current_workflow_stage"
+                ] = workflow_stage
+
+            except Exception as exc:
+                workflow_error = str(
+                    exc
+                )
+
+                workflow_stage = (
+                    "UNKNOWN"
+                )
+
+                st.session_state[
+                    "current_workflow_error"
+                ] = workflow_error
+
+                st.session_state[
+                    "current_workflow_stage"
+                ] = workflow_stage
+
+        if not isinstance(
+            workflow_result,
+            DatasetWorkflowResult,
+        ):
+            st.subheader(
+                "2. Dataset Workflow"
+            )
+
+            st.error(
+                "Dataset Workflow chưa hoàn tất."
+            )
+
+            if workflow_stage:
+                st.write(
+                    "**Failed stage:**",
+                    workflow_stage,
+                )
+
+            if workflow_error:
+                st.code(
+                    workflow_error,
+                    language=None,
+                )
+
+            st.info(
+                "Raw ingestion đã được giữ lại trong session. "
+                "Retry workflow sẽ tái sử dụng cùng ingestion_id; "
+                "không ingest lại file chỉ vì Streamlit rerun."
+            )
+
+            if st.button(
+                "Retry dataset workflow",
+                key="retry_dataset_workflow",
+                type="primary",
+            ):
+                clear_workflow_state()
+                st.rerun()
+
+            st.stop()
+
+        profile = workflow_result.profile
+
+        catalog_registration = (
+            workflow_result
+            .catalog_registration
+        )
+
+        validation_result = (
+            workflow_result
+            .validation_result
+        )
+
+        validation_registration = (
+            workflow_result
+            .validation_registration
+        )
+
+        governance_result = (
+            workflow_result
+            .governance_result
+        )
+
+        governance_registration = (
+            workflow_result
+            .governance_registration
+        )
+
+        lifecycle_result = (
+            st.session_state.get(
+                "current_lifecycle_result",
+                workflow_result.lifecycle_result,
+            )
+        )
+
+        catalog_error = None
+        validation_error = None
+        governance_error = None
+        lifecycle_error = None
 
 
         st.subheader(
@@ -546,232 +794,6 @@ if uploaded_file is not None:
             "basic_info"
         ]
 
-        validation_result = st.session_state.get(
-            "current_validation_result"
-        )
-
-        validation_registration = st.session_state.get(
-            "current_validation_registration"
-        )
-
-        validation_error = st.session_state.get(
-            "current_validation_error"
-        )
-
-        if (
-            validation_result is None
-            and validation_error is None
-        ):
-            try:
-                gate_result = (
-                    validate_and_route_dataset(
-                        df=df,
-                        ingestion_metadata=(
-                            ingestion_metadata
-                        ),
-                    )
-                )
-
-                validation_result = (
-                    gate_result.to_dict()
-                )
-
-                st.session_state[
-                    "current_validation_result"
-                ] = validation_result
-
-            except Exception as exc:
-                validation_error = str(
-                    exc
-                )
-
-                st.session_state[
-                    "current_validation_error"
-                ] = validation_error
-
-        if (
-            validation_result
-            and catalog_registration
-            and validation_registration is None
-        ):
-            try:
-                validation_registration = (
-                    register_validation(
-                        validation_result,
-                        catalog_registration,
-                    )
-                )
-
-                st.session_state[
-                    "current_validation_registration"
-                ] = validation_registration
-
-                st.session_state.pop(
-                    "current_validation_error",
-                    None,
-                )
-
-                validation_error = None
-
-            except Exception as exc:
-                validation_error = str(exc)
-
-                st.session_state[
-                    "current_validation_error"
-                ] = validation_error
-
-
-        # Governance state phải nằm NGOÀI
-        # block validation_registration is None.
-        governance_result = st.session_state.get(
-            "current_governance_result"
-        )
-
-        governance_registration = (
-            st.session_state.get(
-                "current_governance_registration"
-            )
-        )
-
-        governance_error = st.session_state.get(
-            "current_governance_error"
-        )
-
-
-        if (
-            validation_result
-            and governance_result is None
-            and governance_error is None
-        ):
-            try:
-                governance_bundle = (
-                    evaluate_dataset_governance(
-                        df=df,
-                        validation_result=validation_result,
-                    )
-                )
-
-                governance_result = (
-                    governance_bundle[
-                        "governance_result"
-                    ].to_dict()
-                )
-
-                st.session_state[
-                    "current_governance_result"
-                ] = governance_result
-
-                st.session_state[
-                    "current_quality_report"
-                ] = governance_bundle[
-                    "quality_report"
-                ]
-
-                st.session_state[
-                    "current_trust_score_report"
-                ] = governance_bundle[
-                    "trust_score_report"
-                ]
-
-                st.session_state[
-                    "current_privacy_report"
-                ] = governance_bundle[
-                    "privacy_report"
-                ]
-
-                st.session_state.pop(
-                    "current_governance_error",
-                    None,
-                )
-
-                governance_error = None
-
-            except Exception as exc:
-                governance_error = str(exc)
-
-                st.session_state[
-                    "current_governance_error"
-                ] = governance_error
-
-
-        if (
-            governance_result
-            and catalog_registration
-            and validation_registration
-            and governance_registration is None
-            and governance_error is None
-        ):
-            try:
-                governance_registration = (
-                    register_governance_decision(
-                        governance_result=governance_result,
-                        catalog_registration=(
-                            catalog_registration
-                        ),
-                        validation_registration=(
-                            validation_registration
-                        ),
-                    )
-                )
-
-                st.session_state[
-                    "current_governance_registration"
-                ] = governance_registration
-
-                st.session_state.pop(
-                    "current_governance_error",
-                    None,
-                )
-
-                governance_error = None
-
-            except Exception as exc:
-                governance_error = str(exc)
-
-                st.session_state[
-                    "current_governance_error"
-                ] = governance_error
-
-        lifecycle_result = st.session_state.get(
-            "current_lifecycle_result"
-        )
-
-        lifecycle_error = st.session_state.get(
-            "current_lifecycle_error"
-        )
-
-        if (
-            validation_result
-            and validation_registration
-            and catalog_registration
-            and lifecycle_result is None
-            and lifecycle_error is None
-        ):
-            try:
-                lifecycle_result = (
-                    apply_validation_lifecycle(
-                        catalog_registration,
-                        validation_result,
-                    )
-                )
-
-                st.session_state[
-                    "current_lifecycle_result"
-                ] = lifecycle_result
-
-                st.session_state.pop(
-                    "current_lifecycle_error",
-                    None,
-                )
-
-                lifecycle_error = None
-
-            except Exception as exc:
-                lifecycle_error = str(exc)
-
-                st.session_state[
-                    "current_lifecycle_error"
-                ] = lifecycle_error
 
         st.subheader(
             "3. Validation Gate"
