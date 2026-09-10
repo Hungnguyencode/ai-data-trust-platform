@@ -5,6 +5,7 @@ from api.routes.assistant import router as assistant_router
 from api.routes.datasets import router as datasets_router
 from api.routes.scans import router as scans_router
 from api.routes.scores import router as scores_router
+from api.routes.workflows import router as workflows_router
 
 app = FastAPI(
     title="AI Data Trust Platform API",
@@ -56,6 +57,10 @@ def api_info():
             "rule-grounded assistant",
             "FastAPI assistant endpoint",
             "column-level cleaning plan",
+            "governed dataset workflow API",
+            "dataset lineage API",
+            "governance-aware promotion API",
+            "persisted scan history API",
         ],
         "note": "This API is a minimal backend layer. Streamlit can still run independently.",
     }
@@ -65,3 +70,8 @@ app.include_router(datasets_router, prefix="/api/datasets", tags=["datasets"])
 app.include_router(scans_router, prefix="/api/scans", tags=["scans"])
 app.include_router(scores_router, prefix="/api/scores", tags=["scores"])
 app.include_router(assistant_router, prefix="/api/assistant", tags=["assistant"])
+app.include_router(
+    workflows_router,
+    prefix="/api/workflows",
+    tags=["workflows"],
+)
