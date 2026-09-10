@@ -295,6 +295,54 @@ def get_scan_history(limit: int = 50) -> pd.DataFrame:
     return df
 
 
+def get_scan_by_id(scan_id: int) -> pd.DataFrame:
+    """
+    Load one persisted scan with dataset metadata and Trust Score.
+    """
+
+    query = text(
+        """
+        SELECT
+            sr.scan_id,
+            d.dataset_id,
+            d.file_name,
+            d.file_type,
+            d.total_rows,
+            d.total_columns,
+            d.missing_cells,
+            d.duplicate_rows,
+            sr.total_issues,
+            sr.high_issues,
+            sr.medium_issues,
+            sr.low_issues,
+            sr.affected_columns,
+            ts.overall_score,
+            ts.risk_level,
+            ts.ai_readiness,
+            sr.created_at
+        FROM scan_runs sr
+        INNER JOIN datasets d
+            ON sr.dataset_id = d.dataset_id
+        LEFT JOIN trust_scores ts
+            ON sr.scan_id = ts.scan_id
+        WHERE sr.scan_id = :scan_id;
+        """
+    )
+
+    engine = get_engine()
+
+    with engine.connect() as conn:
+        df = pd.read_sql_query(
+            query,
+            conn,
+            params={
+                "scan_id": int(scan_id),
+            },
+        )
+
+    return df
+
+
 def get_quality_issues_by_scan(scan_id: int) -> pd.DataFrame:
     """
     Lấy quality issues theo scan_id.

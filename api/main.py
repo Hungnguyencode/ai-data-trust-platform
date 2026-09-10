@@ -60,6 +60,7 @@ def api_info():
             "governed dataset workflow API",
             "dataset lineage API",
             "governance-aware promotion API",
+            "persisted scan history API",
         ],
         "note": "This API is a minimal backend layer. Streamlit can still run independently.",
     }
