@@ -1,0 +1,87 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: ai-data-trust-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    restart: unless-stopped
+
+  bootstrap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-data-trust-platform:dev
+    container_name: ai-data-trust-bootstrap
+    environment:
+      DB_SERVER: sqlserver
+      DB_NAME: AIDataTrustPlatform
+      DB_DRIVER: ODBC Driver 18 for SQL Server
+      DB_TRUSTED_CONNECTION: "no"
+      DB_USERNAME: sa
+      DB_PASSWORD: "${MSSQL_SA_PASSWORD}"
+    depends_on:
+      - sqlserver
+    command: ["python", "-m", "database.bootstrap"]
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-data-trust-platform:dev
+    container_name: ai-data-trust-api
+    environment:
+      DB_SERVER: sqlserver
+      DB_NAME: AIDataTrustPlatform
+      DB_DRIVER: ODBC Driver 18 for SQL Server
+      DB_TRUSTED_CONNECTION: "no"
+      DB_USERNAME: sa
+      DB_PASSWORD: "${MSSQL_SA_PASSWORD}"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    volumes:
+      - platform_data:/app/data
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-data-trust-platform:dev
+    container_name: ai-data-trust-ui
+    environment:
+      DB_SERVER: sqlserver
+      DB_NAME: AIDataTrustPlatform
+      DB_DRIVER: ODBC Driver 18 for SQL Server
+      DB_TRUSTED_CONNECTION: "no"
+      DB_USERNAME: sa
+      DB_PASSWORD: "${MSSQL_SA_PASSWORD}"
+      API_BASE_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "8501:8501"
+    volumes:
+      - platform_data:/app/data
+    command:
+      [
+        "streamlit",
+        "run",
+        "app/streamlit_app.py",
+        "--server.address=0.0.0.0",
+        "--server.port=8501"
+      ]
+    restart: unless-stopped
+
+volumes:
+  sqlserver_data:
+  platform_data:
