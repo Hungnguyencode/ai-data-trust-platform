@@ -11,67 +11,75 @@ services:
       - sqlserver_data:/var/opt/mssql
     restart: unless-stopped
 
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q 'SELECT 1' -b -o /dev/null || exit 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   bootstrap:
+    image: ai-data-trust-platform:dev
     build:
       context: .
       dockerfile: Dockerfile
-    image: ai-data-trust-platform:dev
     container_name: ai-data-trust-bootstrap
+    command: ["python", "-m", "database.bootstrap"]
     environment:
       DB_SERVER: sqlserver
       DB_NAME: AIDataTrustPlatform
       DB_DRIVER: ODBC Driver 18 for SQL Server
       DB_TRUSTED_CONNECTION: "no"
       DB_USERNAME: sa
-      DB_PASSWORD: "${MSSQL_SA_PASSWORD}"
+      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
     depends_on:
-      - sqlserver
-    command: ["python", "-m", "database.bootstrap"]
+      sqlserver:
+        condition: service_healthy
     restart: "no"
 
   api:
+    image: ai-data-trust-platform:dev
     build:
       context: .
       dockerfile: Dockerfile
-    image: ai-data-trust-platform:dev
     container_name: ai-data-trust-api
+    ports:
+      - "8000:8000"
     environment:
       DB_SERVER: sqlserver
       DB_NAME: AIDataTrustPlatform
       DB_DRIVER: ODBC Driver 18 for SQL Server
       DB_TRUSTED_CONNECTION: "no"
       DB_USERNAME: sa
-      DB_PASSWORD: "${MSSQL_SA_PASSWORD}"
+      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
     depends_on:
       bootstrap:
         condition: service_completed_successfully
-    ports:
-      - "8000:8000"
     volumes:
       - platform_data:/app/data
     restart: unless-stopped
 
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:8000/health > /dev/null || exit 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   ui:
+    image: ai-data-trust-platform:dev
     build:
       context: .
       dockerfile: Dockerfile
-    image: ai-data-trust-platform:dev
     container_name: ai-data-trust-ui
-    environment:
-      DB_SERVER: sqlserver
-      DB_NAME: AIDataTrustPlatform
-      DB_DRIVER: ODBC Driver 18 for SQL Server
-      DB_TRUSTED_CONNECTION: "no"
-      DB_USERNAME: sa
-      DB_PASSWORD: "${MSSQL_SA_PASSWORD}"
-      API_BASE_URL: http://api:8000
-    depends_on:
-      api:
-        condition: service_started
-    ports:
-      - "8501:8501"
-    volumes:
-      - platform_data:/app/data
     command:
       [
         "streamlit",
@@ -80,7 +88,33 @@ services:
         "--server.address=0.0.0.0",
         "--server.port=8501"
       ]
+    ports:
+      - "8501:8501"
+    environment:
+      DB_SERVER: sqlserver
+      DB_NAME: AIDataTrustPlatform
+      DB_DRIVER: ODBC Driver 18 for SQL Server
+      DB_TRUSTED_CONNECTION: "no"
+      DB_USERNAME: sa
+      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      API_BASE_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - platform_data:/app/data
     restart: unless-stopped
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:8501/_stcore/health > /dev/null || exit 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
 volumes:
   sqlserver_data:
