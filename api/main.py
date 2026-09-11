@@ -6,12 +6,14 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from api.routes.assistant import router as assistant_router
 from api.routes.datasets import router as datasets_router
 from api.routes.scans import router as scans_router
 from api.routes.scores import router as scores_router
 from api.routes.workflows import router as workflows_router
+from database.db import test_connection
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -66,7 +68,7 @@ async def log_http_request(request: Request, call_next):
 
     response.headers["X-Request-ID"] = request_id
 
-    if request.url.path != "/health":
+    if request.url.path not in {"/health", "/ready"}:
         logger.info(
             json.dumps(
                 {
@@ -101,6 +103,28 @@ def health_check():
         "service": "ai-data-trust-api",
         "version": "2.6.0",
     }
+
+
+@app.get("/ready")
+def readiness_check():
+    database_ok, _ = test_connection()
+
+    payload = {
+        "status": "ready" if database_ok else "not_ready",
+        "service": "ai-data-trust-api",
+        "version": "2.6.0",
+        "dependencies": {
+            "sqlserver": "ok" if database_ok else "unavailable",
+        },
+    }
+
+    if database_ok:
+        return payload
+
+    return JSONResponse(
+        status_code=503,
+        content=payload,
+    )
 
 
 @app.get("/api/info")

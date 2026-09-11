@@ -4,6 +4,7 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 
+from api import main as api_main
 from api.main import app
 
 client = TestClient(app)
@@ -30,3 +31,43 @@ def test_request_id_is_generated_when_missing() -> None:
 
     assert request_id
     assert str(UUID(request_id)) == request_id
+
+
+def test_readiness_returns_ready_when_database_is_available(monkeypatch):
+    monkeypatch.setattr(
+        api_main,
+        "test_connection",
+        lambda: (True, "SQL Server connection successful."),
+    )
+
+    response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ready",
+        "service": "ai-data-trust-api",
+        "version": "2.6.0",
+        "dependencies": {
+            "sqlserver": "ok",
+        },
+    }
+
+
+def test_readiness_returns_503_when_database_is_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        api_main,
+        "test_connection",
+        lambda: (False, "SQL Server unavailable."),
+    )
+
+    response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "not_ready",
+        "service": "ai-data-trust-api",
+        "version": "2.6.0",
+        "dependencies": {
+            "sqlserver": "unavailable",
+        },
+    }
