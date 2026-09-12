@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from fastapi import Request
 from fastapi.testclient import TestClient
 
 from api import main as api_main
@@ -71,3 +72,53 @@ def test_readiness_returns_503_when_database_is_unavailable(monkeypatch):
             "sqlserver": "unavailable",
         },
     }
+
+
+def test_metrics_use_full_included_router_path():
+    response = client.get(
+        "/api/assistant/status"
+    )
+
+    assert response.status_code == 200
+
+    metrics_response = client.get(
+        "/metrics"
+    )
+
+    assert metrics_response.status_code == 200
+    assert (
+        'path="/api/assistant/status"'
+        in metrics_response.text
+    )
+
+
+def test_resolve_metric_path_keeps_dynamic_route_template():
+    request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": "/api/scans/123",
+            "raw_path": b"/api/scans/123",
+            "query_string": b"",
+            "headers": [],
+            "client": (
+                "testclient",
+                50000,
+            ),
+            "server": (
+                "testserver",
+                80,
+            ),
+            "root_path": "",
+            "app": app,
+        }
+    )
+
+    assert (
+        api_main.resolve_metric_path(
+            request
+        )
+        == "/api/scans/{scan_id}"
+    )
