@@ -116,7 +116,7 @@ services:
       retries: 5
       start_period: 15s
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.14.0
     container_name: ai-data-trust-prometheus
 
     command:
@@ -136,7 +136,7 @@ services:
 
     restart: unless-stopped
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.2.1
     container_name: ai-data-trust-grafana
 
     ports:
@@ -144,7 +144,8 @@ services:
 
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
 
     depends_on:
