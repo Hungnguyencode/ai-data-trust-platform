@@ -6,7 +6,9 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from fastapi.routing import iter_route_contexts
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from api.routes.assistant import router as assistant_router
 from api.routes.datasets import router as datasets_router
@@ -14,6 +16,7 @@ from api.routes.scans import router as scans_router
 from api.routes.scores import router as scores_router
 from api.routes.workflows import router as workflows_router
 from database.db import test_connection
+from src.observability.metrics import observe_http_request
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -33,42 +36,147 @@ app.add_middleware(
 )
 
 
+EXCLUDED_METRIC_PATHS = {
+    "/health",
+    "/ready",
+    "/metrics",
+}
+
+
+def resolve_metric_path(request: Request) -> str:
+    """
+    Resolve the full low-cardinality FastAPI route template.
+
+    Examples:
+    /api/scans/history
+    /api/scans/{scan_id}
+    /api/datasets/{version_id}/lineage
+    """
+
+    scope = dict(request.scope)
+
+    scope["path"] = request.url.path
+    scope["raw_path"] = request.url.path.encode("utf-8")
+    scope["root_path"] = ""
+
+    partial_match_path = None
+
+    for route_context in iter_route_contexts(
+        request.app.router.routes
+    ):
+        match, _ = route_context.matches(scope)
+
+        route_path = (
+            getattr(
+                route_context,
+                "path_format",
+                None,
+            )
+            or getattr(
+                route_context,
+                "path",
+                None,
+            )
+        )
+
+        if match.name == "FULL" and route_path:
+            return str(route_path)
+
+        if (
+            match.name == "PARTIAL"
+            and route_path
+            and partial_match_path is None
+        ):
+            partial_match_path = str(
+                route_path
+            )
+
+    return (
+        partial_match_path
+        or "__unmatched__"
+    )
+
+
 @app.middleware("http")
 async def log_http_request(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID") or str(uuid4())
+    request_id = (
+        request.headers.get("X-Request-ID")
+        or str(uuid4())
+    )
+
     started_at = time.perf_counter()
 
+    metric_path = resolve_metric_path(
+        request
+    )
+
+    should_observe = (
+        request.url.path
+        not in EXCLUDED_METRIC_PATHS
+    )
+
     try:
-        response = await call_next(request)
+        response = await call_next(
+            request
+        )
+
     except Exception:
+        duration_seconds = (
+            time.perf_counter()
+            - started_at
+        )
+
         duration_ms = round(
-            (time.perf_counter() - started_at) * 1000,
+            duration_seconds * 1000,
             2,
         )
 
-        logger.exception(
-            json.dumps(
-                {
-                    "event": "http_request",
-                    "request_id": request_id,
-                    "method": request.method,
-                    "path": request.url.path,
-                    "status_code": 500,
-                    "duration_ms": duration_ms,
-                },
-                ensure_ascii=False,
+        if should_observe:
+            observe_http_request(
+                method=request.method,
+                path=metric_path,
+                status_code=500,
+                duration_seconds=duration_seconds,
             )
-        )
+
+            logger.exception(
+                json.dumps(
+                    {
+                        "event": "http_request",
+                        "request_id": request_id,
+                        "method": request.method,
+                        "path": request.url.path,
+                        "status_code": 500,
+                        "duration_ms": duration_ms,
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
         raise
 
+    duration_seconds = (
+        time.perf_counter()
+        - started_at
+    )
+
     duration_ms = round(
-        (time.perf_counter() - started_at) * 1000,
+        duration_seconds * 1000,
         2,
     )
 
-    response.headers["X-Request-ID"] = request_id
+    response.headers[
+        "X-Request-ID"
+    ] = request_id
 
-    if request.url.path not in {"/health", "/ready"}:
+    if should_observe:
+        observe_http_request(
+            method=request.method,
+            path=metric_path,
+            status_code=response.status_code,
+            duration_seconds=duration_seconds,
+        )
+
         logger.info(
             json.dumps(
                 {
@@ -124,6 +232,14 @@ def readiness_check():
     return JSONResponse(
         status_code=503,
         content=payload,
+    )
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
     )
 
 

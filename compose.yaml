@@ -4,7 +4,7 @@ services:
     container_name: ai-data-trust-sqlserver
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD is required}"
     ports:
       - "1433:1433"
     volumes:
@@ -35,7 +35,7 @@ services:
       DB_DRIVER: ODBC Driver 18 for SQL Server
       DB_TRUSTED_CONNECTION: "no"
       DB_USERNAME: sa
-      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -55,7 +55,7 @@ services:
       DB_DRIVER: ODBC Driver 18 for SQL Server
       DB_TRUSTED_CONNECTION: "no"
       DB_USERNAME: sa
-      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -96,7 +96,7 @@ services:
       DB_DRIVER: ODBC Driver 18 for SQL Server
       DB_TRUSTED_CONNECTION: "no"
       DB_USERNAME: sa
-      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       API_BASE_URL: http://api:8000
     depends_on:
       api:
@@ -115,7 +115,46 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    container_name: ai-data-trust-prometheus
+
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+    ports:
+      - "9090:9090"
+
+    depends_on:
+      api:
+        condition: service_healthy
+
+    restart: unless-stopped
+  grafana:
+    image: grafana/grafana:13.2.1
+    container_name: ai-data-trust-grafana
+
+    ports:
+      - "3000:3000"
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+
+    depends_on:
+      - prometheus
+
+    restart: unless-stopped
 
 volumes:
   sqlserver_data:
   platform_data:
+  prometheus_data:
+  grafana_data:
