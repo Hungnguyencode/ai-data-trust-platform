@@ -135,8 +135,25 @@ services:
         condition: service_healthy
 
     restart: unless-stopped
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ai-data-trust-grafana
+
+    ports:
+      - "3000:3000"
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+
+    depends_on:
+      - prometheus
+
+    restart: unless-stopped
 
 volumes:
   sqlserver_data:
   platform_data:
   prometheus_data:
+  grafana_data:
