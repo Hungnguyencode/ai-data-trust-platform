@@ -4,7 +4,7 @@ services:
     container_name: ai-data-trust-sqlserver
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD is required}"
     ports:
       - "1433:1433"
     volumes:
@@ -35,7 +35,7 @@ services:
       DB_DRIVER: ODBC Driver 18 for SQL Server
       DB_TRUSTED_CONNECTION: "no"
       DB_USERNAME: sa
-      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -55,7 +55,7 @@ services:
       DB_DRIVER: ODBC Driver 18 for SQL Server
       DB_TRUSTED_CONNECTION: "no"
       DB_USERNAME: sa
-      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -96,7 +96,7 @@ services:
       DB_DRIVER: ODBC Driver 18 for SQL Server
       DB_TRUSTED_CONNECTION: "no"
       DB_USERNAME: sa
-      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       API_BASE_URL: http://api:8000
     depends_on:
       api:
