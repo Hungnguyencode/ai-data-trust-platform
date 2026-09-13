@@ -1,0 +1,25 @@
+FROM apache/airflow:3.3.1-python3.12
+
+USER root
+
+RUN apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y --no-install-recommends \
+        unixodbc \
+        unixodbc-dev \
+        msodbcsql18 \
+    && rm -rf /var/lib/apt/lists/*
+
+USER airflow
+
+COPY --chown=airflow:root requirements-airflow.txt /tmp/requirements-airflow.txt
+
+RUN python -m pip install --no-cache-dir \
+        -r /tmp/requirements-airflow.txt \
+    && python -m pip check
+
+WORKDIR /app
+
+COPY --chown=airflow:root src /app/src
+COPY --chown=airflow:root database /app/database
+
+ENV PYTHONPATH=/app

@@ -152,9 +152,100 @@ services:
       - prometheus
 
     restart: unless-stopped
+  platform-data-init:
+    image: ai-data-trust-platform:dev
+
+    profiles:
+      - orchestration
+
+    user: "0:0"
+
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+
+        echo "Initializing shared platform_data permissions..."
+
+        mkdir -p \
+          /app/data/raw \
+          /app/data/processed \
+          /app/data/quarantine \
+          /app/data/reports
+
+        chown -R 50000:0 /app/data
+        chmod -R ug+rwX /app/data
+
+        find /app/data -type d -exec chmod g+s {} +
+
+        echo "platform_data permissions: OK"
+
+    volumes:
+      - platform_data:/app/data
+
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+
+    restart: "no"
+  airflow:
+    image: ai-data-trust-airflow:3.3.1-dev
+
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+
+    container_name: ai-data-trust-airflow
+
+    profiles:
+      - orchestration
+
+    command: standalone
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+
+      PYTHONPATH: /app
+
+      DB_SERVER: sqlserver
+      DB_NAME: AIDataTrustPlatform
+      DB_DRIVER: ODBC Driver 18 for SQL Server
+      DB_TRUSTED_CONNECTION: "no"
+      DB_USERNAME: sa
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+
+    volumes:
+      - airflow_data:/opt/airflow
+      - platform_data:/app/data
+      - ./orchestration/airflow/dags:/opt/airflow/dags:ro
+
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+
+      platform-data-init:
+        condition: service_completed_successfully
+
+    restart: unless-stopped
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:8080/api/v2/monitor/health > /dev/null || exit 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
 
 volumes:
   sqlserver_data:
   platform_data:
   prometheus_data:
   grafana_data:
+  airflow_data:
