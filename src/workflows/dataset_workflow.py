@@ -6,6 +6,10 @@ from typing import Any, Mapping
 from database.repositories.catalog_repository import (
     register_ingestion,
 )
+from database.repositories.data_contract_repository import (
+    get_active_data_contract,
+    save_contract_validation,
+)
 from database.repositories.governance_repository import (
     register_governance_decision,
 )
@@ -14,6 +18,9 @@ from database.repositories.validation_repository import (
 )
 from database.repositories.version_repository import (
     apply_validation_lifecycle,
+)
+from src.data_contracts.contract_engine import (
+    validate_contract,
 )
 from src.governance.governance_service import (
     evaluate_dataset_governance,
@@ -118,6 +125,113 @@ def continue_dataset_workflow(
             stage="CATALOG_REGISTRATION",
             exc=exc,
         )
+
+    data_contract = None
+    contract_validation = None
+
+    try:
+        data_contract = (
+            get_active_data_contract(
+                int(
+                    catalog_registration[
+                        "catalog_id"
+                    ]
+                )
+            )
+        )
+
+    except Exception as exc:
+        _raise_stage_error(
+            stage="DATA_CONTRACT_LOOKUP",
+            exc=exc,
+        )
+
+    if data_contract is not None:
+        try:
+            contract_result = (
+                validate_contract(
+                    dataframe,
+                    data_contract[
+                        "columns"
+                    ],
+                )
+            )
+
+            contract_result_dict = (
+                _to_dict(
+                    contract_result
+                )
+            )
+
+        except Exception as exc:
+            _raise_stage_error(
+                stage="DATA_CONTRACT_VALIDATION",
+                exc=exc,
+            )
+
+        try:
+            contract_validation = (
+                save_contract_validation(
+                    contract_id=int(
+                        data_contract[
+                            "contract_id"
+                        ]
+                    ),
+                    catalog_id=int(
+                        catalog_registration[
+                            "catalog_id"
+                        ]
+                    ),
+                    version_id=int(
+                        catalog_registration[
+                            "version_id"
+                        ]
+                    ),
+                    validation=(
+                        contract_result_dict
+                    ),
+                )
+            )
+
+        except Exception as exc:
+            _raise_stage_error(
+                stage="DATA_CONTRACT_PERSISTENCE",
+                exc=exc,
+            )
+
+        contract_status = str(
+            contract_result_dict[
+                "status"
+            ]
+        ).upper()
+
+        enforcement_mode = str(
+            data_contract[
+                "enforcement_mode"
+            ]
+        ).upper()
+
+        if (
+            contract_status == "BREAKING"
+            and enforcement_mode == "BLOCK"
+        ):
+            violation_count = int(
+                contract_result_dict[
+                    "violation_count"
+                ]
+            )
+
+            _raise_stage_error(
+                stage="DATA_CONTRACT_GATE",
+                exc=ValueError(
+                    "Dataset violates active "
+                    "Data Contract "
+                    f"v{data_contract['contract_version']} "
+                    "under BLOCK enforcement "
+                    f"with {violation_count} "
+                    "violation(s)."
+                ),
+            )
 
     try:
         gate_result = (
@@ -260,6 +374,12 @@ def continue_dataset_workflow(
         ),
         privacy_report=(
             privacy_report
+        ),
+        data_contract=(
+            data_contract
+        ),
+        contract_validation=(
+            contract_validation
         ),
     )
 

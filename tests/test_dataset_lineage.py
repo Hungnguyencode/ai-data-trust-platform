@@ -58,6 +58,39 @@ def build_validation(
     }
 
 
+def build_contract_validation(
+    *,
+    contract_validation_id: int = 11,
+    contract_id: int = 3,
+    contract_version: int = 1,
+    validation_status: str = "COMPATIBLE",
+    enforcement_mode: str = "BLOCK",
+    violation_count: int = 0,
+    validated_at: str = (
+        "2026-09-01T08:20:30+00:00"
+    ),
+) -> dict:
+    return {
+        "contract_validation_id": (
+            contract_validation_id
+        ),
+        "contract_id": contract_id,
+        "contract_version": (
+            contract_version
+        ),
+        "validation_status": (
+            validation_status
+        ),
+        "enforcement_mode": (
+            enforcement_mode
+        ),
+        "violation_count": (
+            violation_count
+        ),
+        "validated_at": validated_at,
+    }
+
+
 def build_governance(
     *,
     governance_id: int = 2,
@@ -107,6 +140,9 @@ def test_lineage_timeline_is_chronological():
                 "is_new_version": True,
             }
         ],
+        contract_validations=[
+            build_contract_validation()
+        ],
         validations=[
             build_validation()
         ],
@@ -137,6 +173,7 @@ def test_lineage_timeline_is_chronological():
         for event in timeline
     ] == [
         "INGESTION",
+        "DATA_CONTRACT",
         "VALIDATION",
         "GOVERNANCE",
         "LIFECYCLE",
@@ -155,6 +192,11 @@ def test_same_timestamp_uses_pipeline_stage_order():
                 "ingested_at": occurred_at,
                 "is_new_version": True,
             }
+        ],
+        contract_validations=[
+            build_contract_validation(
+                validated_at=occurred_at
+            )
         ],
         validations=[
             build_validation(
@@ -181,6 +223,7 @@ def test_same_timestamp_uses_pipeline_stage_order():
         for event in timeline
     ] == [
         "INGESTION",
+        "DATA_CONTRACT",
         "VALIDATION",
         "GOVERNANCE",
         "LIFECYCLE",
@@ -264,6 +307,91 @@ def test_governance_event_contains_evidence():
     assert "privacy=LOW" in (
         timeline[0]["detail"]
     )
+
+
+def test_data_contract_event_contains_evidence():
+    timeline = build_lineage_timeline(
+        ingestions=[],
+        contract_validations=[
+            build_contract_validation(
+                validation_status="BREAKING",
+                enforcement_mode="BLOCK",
+                violation_count=3,
+            )
+        ],
+        validations=[],
+        governance_decisions=[],
+        lifecycle_events=[],
+    )
+
+    event = timeline[0]
+
+    assert event["event_type"] == "DATA_CONTRACT"
+    assert event["event_status"] == "BREAKING"
+    assert event["reference_id"] == 11
+
+    assert "contract_id=3" in event["detail"]
+    assert "contract_version=1" in event["detail"]
+    assert "enforcement=BLOCK" in event["detail"]
+    assert "violations=3" in event["detail"]
+
+
+def test_lineage_summary_uses_latest_contract_validation():
+    lineage = build_version_lineage(
+        version=build_version(),
+        ingestions=[],
+        contract_validations=[
+            build_contract_validation(
+                contract_validation_id=10,
+                contract_id=2,
+                contract_version=1,
+                validation_status="BREAKING",
+                enforcement_mode="WARN",
+                violation_count=4,
+                validated_at=(
+                    "2026-09-01T08:00:00+00:00"
+                ),
+            ),
+            build_contract_validation(
+                contract_validation_id=12,
+                contract_id=3,
+                contract_version=2,
+                validation_status="COMPATIBLE",
+                enforcement_mode="BLOCK",
+                violation_count=0,
+                validated_at=(
+                    "2026-09-01T09:00:00+00:00"
+                ),
+            ),
+        ],
+        validations=[],
+        governance_decisions=[],
+        lifecycle_events=[],
+    )
+
+    summary = lineage["summary"]
+
+    assert summary["contract_validation_count"] == 2
+    assert (
+        summary["latest_contract_validation_id"]
+        == 12
+    )
+    assert summary["latest_contract_id"] == 3
+    assert summary["latest_contract_version"] == 2
+    assert (
+        summary["latest_contract_validation_status"]
+        == "COMPATIBLE"
+    )
+    assert (
+        summary["latest_contract_enforcement_mode"]
+        == "BLOCK"
+    )
+    assert (
+        summary["latest_contract_violation_count"]
+        == 0
+    )
+
+    assert len(lineage["contract_validations"]) == 2
 
 
 def test_validated_and_approved_version_can_promote():

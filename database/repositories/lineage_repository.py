@@ -78,6 +78,55 @@ def get_version_lineage(
         """
     )
 
+    contract_validation_query = text(
+        """
+        SELECT
+            cvh.contract_validation_id,
+            cvh.contract_id,
+            cvh.catalog_id,
+            cvh.version_id,
+            dc.contract_version,
+            dc.contract_name,
+            dc.enforcement_mode,
+            cvh.validation_status,
+            cvh.missing_required_count,
+            cvh.unexpected_column_count,
+            cvh.type_mismatch_count,
+            cvh.nullability_violation_count,
+            cvh.violation_count,
+            cvh.validated_at
+        FROM dbo.contract_validation_history AS cvh
+        INNER JOIN dbo.data_contracts AS dc
+            ON cvh.contract_id = dc.contract_id
+        WHERE cvh.version_id = :version_id
+        ORDER BY
+            cvh.validated_at ASC,
+            cvh.contract_validation_id ASC;
+        """
+    )
+
+    contract_violation_query = text(
+        """
+        SELECT
+            cv.violation_id,
+            cv.contract_validation_id,
+            cv.column_name,
+            cv.violation_type,
+            cv.expected_value,
+            cv.actual_value,
+            cv.message,
+            cv.created_at
+        FROM dbo.contract_violations AS cv
+        INNER JOIN dbo.contract_validation_history AS cvh
+            ON cv.contract_validation_id =
+                cvh.contract_validation_id
+        WHERE cvh.version_id = :version_id
+        ORDER BY
+            cv.contract_validation_id ASC,
+            cv.violation_id ASC;
+        """
+    )
+
     validation_query = text(
         """
         SELECT
@@ -179,6 +228,59 @@ def get_version_lineage(
             ).mappings().all()
         ]
 
+        contract_validations = [
+            dict(row)
+            for row in connection.execute(
+                contract_validation_query,
+                {
+                    "version_id": version_id,
+                },
+            ).mappings().all()
+        ]
+
+        contract_violations = [
+            dict(row)
+            for row in connection.execute(
+                contract_violation_query,
+                {
+                    "version_id": version_id,
+                },
+            ).mappings().all()
+        ]
+
+        violations_by_validation: dict[
+            int,
+            list[dict[str, Any]],
+        ] = {}
+
+        for violation in contract_violations:
+            contract_validation_id = int(
+                violation[
+                    "contract_validation_id"
+                ]
+            )
+
+            violations_by_validation.setdefault(
+                contract_validation_id,
+                [],
+            ).append(
+                violation
+            )
+
+        for contract_validation in contract_validations:
+            contract_validation_id = int(
+                contract_validation[
+                    "contract_validation_id"
+                ]
+            )
+
+            contract_validation[
+                "violations"
+            ] = violations_by_validation.get(
+                contract_validation_id,
+                [],
+            )
+
         validations = [
             dict(row)
             for row
@@ -229,6 +331,9 @@ def get_version_lineage(
         ),
         lifecycle_events=(
             lifecycle_events
+        ),
+        contract_validations=(
+            contract_validations
         ),
     )
 

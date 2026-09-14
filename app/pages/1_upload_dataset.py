@@ -729,13 +729,108 @@ if uploaded_file is not None:
             )
 
 
+        workflow_summary = (
+            workflow_result.summary()
+        )
+
+        st.subheader(
+            "3. Data Contract Gate"
+        )
+
+        contract_id = (
+            workflow_summary.get(
+                "contract_id"
+            )
+        )
+
+        if contract_id is None:
+            st.info(
+                "Dataset này không có active Data Contract. "
+                "Workflow tiếp tục mà không áp dụng "
+                "contract enforcement."
+            )
+
+        else:
+            (
+                contract_col1,
+                contract_col2,
+                contract_col3,
+                contract_col4,
+            ) = st.columns(4)
+
+            contract_status = str(
+                workflow_summary[
+                    "contract_validation_status"
+                ]
+            )
+
+            contract_mode = str(
+                workflow_summary[
+                    "contract_enforcement_mode"
+                ]
+            )
+
+            contract_col1.metric(
+                "Contract version",
+                "v"
+                + str(
+                    workflow_summary[
+                        "contract_version"
+                    ]
+                ),
+            )
+
+            contract_col2.metric(
+                "Validation",
+                contract_status,
+            )
+
+            contract_col3.metric(
+                "Enforcement",
+                contract_mode,
+            )
+
+            contract_col4.metric(
+                "Validation ID",
+                str(
+                    workflow_summary[
+                        "contract_validation_id"
+                    ]
+                ),
+            )
+
+            if contract_status == "COMPATIBLE":
+                st.success(
+                    "COMPATIBLE — dataset phù hợp "
+                    "với active Data Contract."
+                )
+
+            elif contract_mode == "WARN":
+                st.warning(
+                    "BREAKING — dataset vi phạm "
+                    "Data Contract nhưng WARN mode "
+                    "cho phép workflow tiếp tục."
+                )
+
+            else:
+                st.error(
+                    "BREAKING — dataset vi phạm "
+                    "Data Contract."
+                )
+
+            st.caption(
+                "Contract ID: "
+                + str(contract_id)
+                + " | Enforcement: "
+                + contract_mode
+            )
+
         basic_info = profile[
             "basic_info"
         ]
 
-
         st.subheader(
-            "3. Validation Gate"
+            "4. Validation Gate"
         )
 
         if validation_result:
@@ -910,7 +1005,7 @@ if uploaded_file is not None:
             )
 
         st.subheader(
-            "4. Governance Decision"
+            "5. Governance Decision"
         )
 
 
@@ -986,7 +1081,7 @@ if uploaded_file is not None:
             )
 
         st.subheader(
-            "5. Dataset Lifecycle"
+            "6. Dataset Lifecycle"
         )
 
         lifecycle_state = None
@@ -1282,9 +1377,9 @@ if uploaded_file is not None:
 
                     st.caption(
                         "End-to-end lineage: "
-                        "Raw/Bronze → Validation "
-                        "→ Governance → Lifecycle "
-                        "→ Active/Superseded."
+                        "Raw/Bronze → Data Contract "
+                        "→ Validation → Governance "
+                        "→ Lifecycle → Active/Superseded."
                     )
 
                     timeline_df = pd.DataFrame(
@@ -1462,7 +1557,7 @@ if uploaded_file is not None:
                 )
 
         st.subheader(
-            "6. Tổng quan dataset"
+            "7. Tổng quan dataset"
         )
 
         (
@@ -1494,7 +1589,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "7. Preview dữ liệu"
+            "8. Preview dữ liệu"
         )
 
         st.dataframe(
@@ -1504,7 +1599,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "8. Kiểu dữ liệu tự động nhận diện"
+            "9. Kiểu dữ liệu tự động nhận diện"
         )
 
         column_types = profile[
@@ -1605,7 +1700,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "9. Missing value theo cột"
+            "10. Missing value theo cột"
         )
 
         missing_summary = profile[
@@ -1648,7 +1743,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "10. Duplicate rows"
+            "11. Duplicate rows"
         )
 
         duplicate_summary = profile[
@@ -1673,7 +1768,7 @@ if uploaded_file is not None:
 
 
         st.subheader(
-            "11. Schema summary"
+            "12. Schema summary"
         )
 
         st.dataframe(

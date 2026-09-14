@@ -44,6 +44,11 @@ def build_summary(
         "privacy_status": "LOW",
         "lifecycle_state": lifecycle_state,
         "promotion_eligible": promotion_eligible,
+        "contract_id": 3,
+        "contract_version": 3,
+        "contract_enforcement_mode": "BLOCK",
+        "contract_validation_id": 12,
+        "contract_validation_status": "COMPATIBLE",
     }
 
 
@@ -109,6 +114,24 @@ def test_run_dataset_workflow_api_success(
     )
 
     assert payload["promotion_eligible"] is True
+
+    assert payload["contract_id"] == 3
+    assert payload["contract_version"] == 3
+
+    assert (
+        payload["contract_enforcement_mode"]
+        == "BLOCK"
+    )
+
+    assert (
+        payload["contract_validation_id"]
+        == 12
+    )
+
+    assert (
+        payload["contract_validation_status"]
+        == "COMPATIBLE"
+    )
 
     assert (
         payload["lineage_url"]

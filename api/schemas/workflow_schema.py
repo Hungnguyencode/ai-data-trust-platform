@@ -22,4 +22,10 @@ class DatasetWorkflowResponse(BaseModel):
     lifecycle_state: str
     promotion_eligible: bool
 
+    contract_id: int | None = None
+    contract_version: int | None = None
+    contract_enforcement_mode: str | None = None
+    contract_validation_id: int | None = None
+    contract_validation_status: str | None = None
+
     lineage_url: str

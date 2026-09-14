@@ -18,6 +18,17 @@ def build_lineage_response() -> dict:
             "ingestion_count": 1,
             "validation_count": 1,
             "governance_count": 1,
+            "contract_validation_count": 1,
+            "latest_contract_validation_id": 9,
+            "latest_contract_id": 3,
+            "latest_contract_version": 2,
+            "latest_contract_validation_status": (
+                "COMPATIBLE"
+            ),
+            "latest_contract_enforcement_mode": (
+                "BLOCK"
+            ),
+            "latest_contract_violation_count": 0,
             "lifecycle_event_count": 2,
             "latest_validation_status": (
                 "ACCEPTED"
@@ -42,6 +53,19 @@ def build_lineage_response() -> dict:
             "lifecycle_state": "ACTIVE",
         },
         "ingestions": [],
+        "contract_validations": [
+            {
+                "contract_validation_id": 9,
+                "contract_id": 3,
+                "contract_version": 2,
+                "validation_status": "COMPATIBLE",
+                "enforcement_mode": "BLOCK",
+                "violation_count": 0,
+                "validated_at": (
+                    "2026-09-01T08:20:30+00:00"
+                ),
+            }
+        ],
         "validations": [],
         "governance_decisions": [],
         "lifecycle_events": [],
@@ -91,6 +115,38 @@ def test_get_dataset_lineage_success(
             "promotion_eligible"
         ]
         is False
+    )
+
+    assert (
+        payload["summary"][
+            "contract_validation_count"
+        ]
+        == 1
+    )
+
+    assert (
+        payload["summary"][
+            "latest_contract_validation_status"
+        ]
+        == "COMPATIBLE"
+    )
+
+    assert (
+        payload["summary"][
+            "latest_contract_enforcement_mode"
+        ]
+        == "BLOCK"
+    )
+
+    assert len(
+        payload["contract_validations"]
+    ) == 1
+
+    assert (
+        payload["contract_validations"][0][
+            "contract_id"
+        ]
+        == 3
     )
 
 

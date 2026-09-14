@@ -107,6 +107,12 @@ def configure_successful_workflow(
             "is_new_version": True,
         }
 
+    def fake_get_active_contract(
+        catalog_id: int,
+    ):
+        assert catalog_id == 1
+        return None
+
     def fake_validation_gate(
         *,
         df: pd.DataFrame,
@@ -304,6 +310,12 @@ def configure_successful_workflow(
 
     monkeypatch.setattr(
         workflow_module,
+        "get_active_data_contract",
+        fake_get_active_contract,
+    )
+
+    monkeypatch.setattr(
+        workflow_module,
         "validate_and_route_dataset",
         fake_validation_gate,
     )
@@ -473,6 +485,358 @@ def test_workflow_does_not_auto_promote(
     assert not hasattr(
         workflow_module,
         "promote_version",
+    )
+
+
+def test_compatible_data_contract_allows_workflow(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls = configure_successful_workflow(
+        monkeypatch
+    )
+
+    active_contract = {
+        "contract_id": 11,
+        "catalog_id": 1,
+        "contract_version": 2,
+        "contract_name": "customers",
+        "enforcement_mode": "BLOCK",
+        "is_active": True,
+        "columns": [
+            {
+                "column_name": "customer_id",
+                "expected_type": "NUMERIC",
+                "is_required": True,
+                "is_nullable": False,
+            },
+            {
+                "column_name": "age",
+                "expected_type": "NUMERIC",
+                "is_required": True,
+                "is_nullable": False,
+            },
+        ],
+    }
+
+    monkeypatch.setattr(
+        workflow_module,
+        "get_active_data_contract",
+        lambda catalog_id: active_contract,
+    )
+
+    monkeypatch.setattr(
+        workflow_module,
+        "validate_contract",
+        lambda dataframe, columns: FakeResult(
+            {
+                "status": "COMPATIBLE",
+                "is_compatible": True,
+                "missing_required_count": 0,
+                "unexpected_column_count": 0,
+                "type_mismatch_count": 0,
+                "nullability_violation_count": 0,
+                "violation_count": 0,
+                "violations": [],
+            }
+        ),
+    )
+
+    def fake_save_contract_validation(
+        *,
+        contract_id: int,
+        catalog_id: int,
+        version_id: int,
+        validation: dict,
+    ) -> dict:
+        calls.append(
+            "contract_persist"
+        )
+
+        assert contract_id == 11
+        assert catalog_id == 1
+        assert version_id == 4
+        assert (
+            validation["status"]
+            == "COMPATIBLE"
+        )
+
+        return {
+            "contract_validation_id": 31,
+            "contract_id": 11,
+            "catalog_id": 1,
+            "version_id": 4,
+            "validation_status": (
+                "COMPATIBLE"
+            ),
+            "violation_count": 0,
+            "violations": [],
+        }
+
+    monkeypatch.setattr(
+        workflow_module,
+        "save_contract_validation",
+        fake_save_contract_validation,
+    )
+
+    result = (
+        workflow_module.continue_dataset_workflow(
+            build_ingestion_result()
+        )
+    )
+
+    assert (
+        result.data_contract[
+            "contract_id"
+        ]
+        == 11
+    )
+
+    assert (
+        result.contract_validation[
+            "validation_status"
+        ]
+        == "COMPATIBLE"
+    )
+
+    assert "contract_persist" in calls
+    assert "validation_gate" in calls
+
+    summary = result.summary()
+
+    assert summary[
+        "contract_id"
+    ] == 11
+
+    assert summary[
+        "contract_version"
+    ] == 2
+
+    assert (
+        summary[
+            "contract_validation_status"
+        ]
+        == "COMPATIBLE"
+    )
+
+
+def test_breaking_block_contract_stops_workflow(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls = configure_successful_workflow(
+        monkeypatch
+    )
+
+    active_contract = {
+        "contract_id": 12,
+        "catalog_id": 1,
+        "contract_version": 3,
+        "contract_name": "customers",
+        "enforcement_mode": "BLOCK",
+        "is_active": True,
+        "columns": [],
+    }
+
+    monkeypatch.setattr(
+        workflow_module,
+        "get_active_data_contract",
+        lambda catalog_id: active_contract,
+    )
+
+    monkeypatch.setattr(
+        workflow_module,
+        "validate_contract",
+        lambda dataframe, columns: FakeResult(
+            {
+                "status": "BREAKING",
+                "is_compatible": False,
+                "missing_required_count": 1,
+                "unexpected_column_count": 0,
+                "type_mismatch_count": 0,
+                "nullability_violation_count": 0,
+                "violation_count": 1,
+                "violations": [
+                    {
+                        "violation_type": (
+                            "MISSING_REQUIRED_COLUMN"
+                        ),
+                        "column_name": "email",
+                        "expected_value": "present",
+                        "actual_value": "missing",
+                        "message": (
+                            "Required column is missing."
+                        ),
+                    }
+                ],
+            }
+        ),
+    )
+
+    def fake_save_contract_validation(
+        **kwargs,
+    ):
+        calls.append(
+            "contract_persist"
+        )
+
+        return {
+            "contract_validation_id": 32,
+            "validation_status": (
+                "BREAKING"
+            ),
+        }
+
+    monkeypatch.setattr(
+        workflow_module,
+        "save_contract_validation",
+        fake_save_contract_validation,
+    )
+
+    with pytest.raises(
+        DatasetWorkflowError
+    ) as exc_info:
+        workflow_module.continue_dataset_workflow(
+            build_ingestion_result()
+        )
+
+    assert (
+        exc_info.value.stage
+        == "DATA_CONTRACT_GATE"
+    )
+
+    assert "contract_persist" in calls
+
+    assert (
+        "validation_gate"
+        not in calls
+    )
+
+
+def test_breaking_warn_contract_continues_workflow(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls = configure_successful_workflow(
+        monkeypatch
+    )
+
+    active_contract = {
+        "contract_id": 13,
+        "catalog_id": 1,
+        "contract_version": 4,
+        "contract_name": "customers",
+        "enforcement_mode": "WARN",
+        "is_active": True,
+        "columns": [],
+    }
+
+    monkeypatch.setattr(
+        workflow_module,
+        "get_active_data_contract",
+        lambda catalog_id: active_contract,
+    )
+
+    monkeypatch.setattr(
+        workflow_module,
+        "validate_contract",
+        lambda dataframe, columns: FakeResult(
+            {
+                "status": "BREAKING",
+                "is_compatible": False,
+                "missing_required_count": 0,
+                "unexpected_column_count": 1,
+                "type_mismatch_count": 0,
+                "nullability_violation_count": 0,
+                "violation_count": 1,
+                "violations": [
+                    {
+                        "violation_type": (
+                            "UNEXPECTED_COLUMN"
+                        ),
+                        "column_name": "legacy",
+                        "expected_value": (
+                            "not defined"
+                        ),
+                        "actual_value": "TEXT",
+                        "message": (
+                            "Unexpected column."
+                        ),
+                    }
+                ],
+            }
+        ),
+    )
+
+    def fake_save_contract_validation(
+        **kwargs,
+    ):
+        calls.append(
+            "contract_persist"
+        )
+
+        return {
+            "contract_validation_id": 33,
+            "validation_status": (
+                "BREAKING"
+            ),
+        }
+
+    monkeypatch.setattr(
+        workflow_module,
+        "save_contract_validation",
+        fake_save_contract_validation,
+    )
+
+    result = (
+        workflow_module.continue_dataset_workflow(
+            build_ingestion_result()
+        )
+    )
+
+    assert "contract_persist" in calls
+    assert "validation_gate" in calls
+
+    assert (
+        result.contract_validation[
+            "validation_status"
+        ]
+        == "BREAKING"
+    )
+
+
+def test_data_contract_lookup_failure_exposes_stage(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    configure_successful_workflow(
+        monkeypatch
+    )
+
+    def fail_lookup(
+        catalog_id: int,
+    ):
+        raise RuntimeError(
+            "contract database unavailable"
+        )
+
+    monkeypatch.setattr(
+        workflow_module,
+        "get_active_data_contract",
+        fail_lookup,
+    )
+
+    with pytest.raises(
+        DatasetWorkflowError
+    ) as exc_info:
+        workflow_module.continue_dataset_workflow(
+            build_ingestion_result()
+        )
+
+    assert (
+        exc_info.value.stage
+        == "DATA_CONTRACT_LOOKUP"
+    )
+
+    assert (
+        "contract database unavailable"
+        in str(exc_info.value)
     )
 
 
