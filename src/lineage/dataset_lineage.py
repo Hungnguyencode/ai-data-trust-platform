@@ -14,6 +14,7 @@ REQUIRED_VERSION_FIELDS = {
 
 EVENT_STAGE_ORDER = {
     "INGESTION": 10,
+    "DATA_CONTRACT": 15,
     "VALIDATION": 20,
     "GOVERNANCE": 30,
     "LIFECYCLE": 40,
@@ -114,12 +115,16 @@ def build_lineage_timeline(
     governance_decisions: Sequence[
         Mapping[str, Any]
     ] = (),
+    contract_validations: Sequence[
+        Mapping[str, Any]
+    ] = (),
 ) -> list[dict[str, Any]]:
     """
     Build one chronological lineage timeline.
 
     Timeline event types:
     - INGESTION
+    - DATA_CONTRACT
     - VALIDATION
     - GOVERNANCE
     - LIFECYCLE
@@ -171,6 +176,42 @@ def build_lineage_timeline(
                         "Existing dataset version "
                         "was ingested again."
                     )
+                ),
+            }
+        )
+
+    for contract_validation in contract_validations:
+        row = _to_dict(
+            contract_validation
+        )
+
+        validation_status = str(
+            row.get(
+                "validation_status",
+                "UNKNOWN",
+            )
+        ).upper()
+
+        timeline.append(
+            {
+                "event_type": "DATA_CONTRACT",
+                "event_status": validation_status,
+                "occurred_at": row.get(
+                    "validated_at"
+                ),
+                "reference_id": row.get(
+                    "contract_validation_id"
+                ),
+                "artifact_path": None,
+                "detail": (
+                    "contract_id="
+                    f"{row.get('contract_id', 'N/A')}; "
+                    "contract_version="
+                    f"{row.get('contract_version', 'N/A')}; "
+                    "enforcement="
+                    f"{row.get('enforcement_mode', 'N/A')}; "
+                    "violations="
+                    f"{row.get('violation_count', 0)}"
                 ),
             }
         )
@@ -351,6 +392,9 @@ def build_version_lineage(
     governance_decisions: Sequence[
         Mapping[str, Any]
     ] = (),
+    contract_validations: Sequence[
+        Mapping[str, Any]
+    ] = (),
 ) -> dict[str, Any]:
     """
     Build the complete lineage read model
@@ -403,6 +447,11 @@ def build_version_lineage(
         for item in validations
     ]
 
+    contract_validation_rows = [
+        _to_dict(item)
+        for item in contract_validations
+    ]
+
     governance_rows = [
         _to_dict(item)
         for item
@@ -429,6 +478,9 @@ def build_version_lineage(
             lifecycle_events=(
                 lifecycle_rows
             ),
+            contract_validations=(
+                contract_validation_rows
+            ),
         )
     )
 
@@ -436,6 +488,12 @@ def build_version_lineage(
         validation_rows,
         timestamp_field="validated_at",
         id_field="validation_id",
+    )
+
+    latest_contract_validation = _latest_row(
+        contract_validation_rows,
+        timestamp_field="validated_at",
+        id_field="contract_validation_id",
     )
 
     current_governance = None
@@ -625,6 +683,72 @@ def build_version_lineage(
             lifecycle_state
             == "ACTIVE"
         ),
+                "contract_validation_count": len(
+            contract_validation_rows
+        ),
+        "latest_contract_validation_id": (
+            int(
+                latest_contract_validation[
+                    "contract_validation_id"
+                ]
+            )
+            if latest_contract_validation
+            else None
+        ),
+        "latest_contract_id": (
+            int(
+                latest_contract_validation[
+                    "contract_id"
+                ]
+            )
+            if latest_contract_validation
+            else None
+        ),
+        "latest_contract_version": (
+            int(
+                latest_contract_validation[
+                    "contract_version"
+                ]
+            )
+            if latest_contract_validation
+            and latest_contract_validation.get(
+                "contract_version"
+            )
+            is not None
+            else None
+        ),
+        "latest_contract_validation_status": (
+            str(
+                latest_contract_validation[
+                    "validation_status"
+                ]
+            ).upper()
+            if latest_contract_validation
+            else None
+        ),
+        "latest_contract_enforcement_mode": (
+            str(
+                latest_contract_validation[
+                    "enforcement_mode"
+                ]
+            ).upper()
+            if latest_contract_validation
+            and latest_contract_validation.get(
+                "enforcement_mode"
+            )
+            is not None
+            else None
+        ),
+        "latest_contract_violation_count": (
+            int(
+                latest_contract_validation.get(
+                    "violation_count",
+                    0,
+                )
+            )
+            if latest_contract_validation
+            else None
+        ),
     }
 
     return {
@@ -643,4 +767,7 @@ def build_version_lineage(
             lifecycle_rows
         ),
         "timeline": timeline,
+                "contract_validations": (
+            contract_validation_rows
+        ),
     }

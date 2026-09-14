@@ -57,6 +57,9 @@ class DatasetWorkflowResult:
     trust_score_report: dict[str, Any]
     privacy_report: dict[str, Any]
 
+    data_contract: dict[str, Any] | None = None
+    contract_validation: dict[str, Any] | None = None
+
     def summary(self) -> dict[str, Any]:
         return {
             "ingestion_id": self.ingestion_metadata.get(
@@ -94,5 +97,40 @@ class DatasetWorkflowResult:
             ),
             "promotion_eligible": self.governance_result.get(
                 "promotion_eligible"
+            ),
+            "contract_id": (
+                self.data_contract.get(
+                    "contract_id"
+                )
+                if self.data_contract
+                else None
+            ),
+            "contract_version": (
+                self.data_contract.get(
+                    "contract_version"
+                )
+                if self.data_contract
+                else None
+            ),
+            "contract_enforcement_mode": (
+                self.data_contract.get(
+                    "enforcement_mode"
+                )
+                if self.data_contract
+                else None
+            ),
+            "contract_validation_id": (
+                self.contract_validation.get(
+                    "contract_validation_id"
+                )
+                if self.contract_validation
+                else None
+            ),
+            "contract_validation_status": (
+                self.contract_validation.get(
+                    "validation_status"
+                )
+                if self.contract_validation
+                else None
             ),
         }

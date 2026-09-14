@@ -69,6 +69,7 @@ def run_governed_dataset_workflow(
         -> Raw/Bronze ingestion
         -> Profiling
         -> Catalog/version registration
+        -> Data Contract Gate
         -> Validation Gate
         -> Governance
         -> Lifecycle sync
@@ -149,6 +150,54 @@ def run_governed_dataset_workflow(
         ),
         promotion_eligible=bool(
             summary["promotion_eligible"]
+        ),
+        contract_id=(
+            int(summary["contract_id"])
+            if summary.get("contract_id")
+            is not None
+            else None
+        ),
+        contract_version=(
+            int(summary["contract_version"])
+            if summary.get("contract_version")
+            is not None
+            else None
+        ),
+        contract_enforcement_mode=(
+            str(
+                summary[
+                    "contract_enforcement_mode"
+                ]
+            )
+            if summary.get(
+                "contract_enforcement_mode"
+            )
+            is not None
+            else None
+        ),
+        contract_validation_id=(
+            int(
+                summary[
+                    "contract_validation_id"
+                ]
+            )
+            if summary.get(
+                "contract_validation_id"
+            )
+            is not None
+            else None
+        ),
+        contract_validation_status=(
+            str(
+                summary[
+                    "contract_validation_status"
+                ]
+            )
+            if summary.get(
+                "contract_validation_status"
+            )
+            is not None
+            else None
         ),
         lineage_url=(
             f"/api/datasets/{version_id}/lineage"

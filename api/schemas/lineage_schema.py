@@ -9,6 +9,7 @@ class DatasetLineageResponse(BaseModel):
     summary: dict[str, Any]
     version: dict[str, Any]
     ingestions: list[dict[str, Any]]
+    contract_validations: list[dict[str, Any]]
     validations: list[dict[str, Any]]
     governance_decisions: list[dict[str, Any]]
     lifecycle_events: list[dict[str, Any]]
