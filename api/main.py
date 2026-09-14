@@ -12,6 +12,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from api.routes.assistant import router as assistant_router
 from api.routes.datasets import router as datasets_router
+from api.routes.pipeline_runs import router as pipeline_runs_router
 from api.routes.scans import router as scans_router
 from api.routes.scores import router as scores_router
 from api.routes.workflows import router as workflows_router
@@ -263,6 +264,7 @@ def api_info():
             "dataset lineage API",
             "governance-aware promotion API",
             "persisted scan history API",
+            "pipeline operations API",
         ],
         "note": "This API is a minimal backend layer. Streamlit can still run independently.",
     }
@@ -276,4 +278,9 @@ app.include_router(
     workflows_router,
     prefix="/api/workflows",
     tags=["workflows"],
+)
+app.include_router(
+    pipeline_runs_router,
+    prefix="/api/pipeline-runs",
+    tags=["pipeline-runs"],
 )
