@@ -428,6 +428,103 @@ def get_data_contract(
     )
 
 
+def get_data_contract_history(
+    catalog_id: int,
+) -> list[dict[str, Any]]:
+    contract_query = text(
+        """
+        SELECT
+            contract_id,
+            catalog_id,
+            contract_version,
+            contract_name,
+            enforcement_mode,
+            is_active,
+            created_at,
+            updated_at
+        FROM dbo.data_contracts
+        WHERE catalog_id = :catalog_id
+        ORDER BY contract_version DESC;
+        """
+    )
+
+    columns_query = text(
+        """
+        SELECT
+            dcc.contract_column_id,
+            dcc.contract_id,
+            dcc.column_name,
+            dcc.expected_type,
+            dcc.is_required,
+            dcc.is_nullable,
+            dcc.created_at
+        FROM dbo.data_contract_columns AS dcc
+        INNER JOIN dbo.data_contracts AS dc
+            ON dc.contract_id = dcc.contract_id
+        WHERE dc.catalog_id = :catalog_id
+        ORDER BY
+            dc.contract_version DESC,
+            dcc.contract_column_id;
+        """
+    )
+
+    engine = get_engine()
+
+    with engine.connect() as connection:
+        contract_rows = connection.execute(
+            contract_query,
+            {
+                "catalog_id": int(
+                    catalog_id
+                ),
+            },
+        ).mappings().all()
+
+        if not contract_rows:
+            return []
+
+        column_rows = connection.execute(
+            columns_query,
+            {
+                "catalog_id": int(
+                    catalog_id
+                ),
+            },
+        ).mappings().all()
+
+    columns_by_contract: dict[
+        int,
+        list[dict[str, Any]],
+    ] = {}
+
+    for row in column_rows:
+        contract_id = int(
+            row["contract_id"]
+        )
+
+        columns_by_contract.setdefault(
+            contract_id,
+            [],
+        ).append(
+            dict(row)
+        )
+
+    return [
+        _build_contract_record(
+            contract_row,
+            columns_by_contract.get(
+                int(
+                    contract_row[
+                        "contract_id"
+                    ]
+                ),
+                [],
+            ),
+        )
+        for contract_row in contract_rows
+    ]
+
+
 def get_active_data_contract(
     catalog_id: int,
 ) -> dict[str, Any] | None:

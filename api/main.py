@@ -11,6 +11,9 @@ from fastapi.routing import iter_route_contexts
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from api.routes.assistant import router as assistant_router
+from api.routes.data_contracts import (
+    router as data_contracts_router,
+)
 from api.routes.datasets import router as datasets_router
 from api.routes.pipeline_runs import router as pipeline_runs_router
 from api.routes.scans import router as scans_router
@@ -261,6 +264,7 @@ def api_info():
             "FastAPI assistant endpoint",
             "column-level cleaning plan",
             "data contract enforcement",
+            "data contract management API",
             "governed dataset workflow API",
             "contract-aware dataset lineage API",
             "governance-aware promotion API",
@@ -275,6 +279,11 @@ app.include_router(datasets_router, prefix="/api/datasets", tags=["datasets"])
 app.include_router(scans_router, prefix="/api/scans", tags=["scans"])
 app.include_router(scores_router, prefix="/api/scores", tags=["scores"])
 app.include_router(assistant_router, prefix="/api/assistant", tags=["assistant"])
+app.include_router(
+    data_contracts_router,
+    prefix="/api/data-contracts",
+    tags=["data-contracts"],
+)
 app.include_router(
     workflows_router,
     prefix="/api/workflows",
