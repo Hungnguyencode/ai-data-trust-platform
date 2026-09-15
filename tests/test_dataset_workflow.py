@@ -67,6 +67,29 @@ def build_ingestion_result() -> IngestionResult:
     )
 
 
+def capture_operational_events(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[dict]:
+    events: list[dict] = []
+
+    def fake_emit_operational_event(
+        **kwargs,
+    ):
+        events.append(
+            kwargs
+        )
+
+        return None
+
+    monkeypatch.setattr(
+        workflow_module,
+        "emit_operational_event",
+        fake_emit_operational_event,
+    )
+
+    return events
+
+
 def configure_successful_workflow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> list[str]:
@@ -626,6 +649,10 @@ def test_breaking_block_contract_stops_workflow(
         monkeypatch
     )
 
+    events = capture_operational_events(
+        monkeypatch
+    )
+
     active_contract = {
         "contract_id": 12,
         "catalog_id": 1,
@@ -710,11 +737,37 @@ def test_breaking_block_contract_stops_workflow(
         not in calls
     )
 
+    assert len(events) == 1
+
+    assert (
+        events[0]["event_type"]
+        == "DATA_CONTRACT_BREAKING"
+    )
+
+    assert (
+        events[0]["severity"]
+        == "ERROR"
+    )
+
+    assert (
+        events[0]["reference_id"]
+        == 32
+    )
+
+    assert (
+        events[0]["event_stage"]
+        == "DATA_CONTRACT_GATE"
+    )
+
 
 def test_breaking_warn_contract_continues_workflow(
     monkeypatch: pytest.MonkeyPatch,
 ):
     calls = configure_successful_workflow(
+        monkeypatch
+    )
+
+    events = capture_operational_events(
         monkeypatch
     )
 
@@ -799,6 +852,318 @@ def test_breaking_warn_contract_continues_workflow(
             "validation_status"
         ]
         == "BREAKING"
+    )
+
+    assert len(events) == 1
+
+    assert (
+        events[0]["event_type"]
+        == "DATA_CONTRACT_BREAKING"
+    )
+
+    assert (
+        events[0]["severity"]
+        == "WARNING"
+    )
+
+    assert (
+        events[0]["reference_id"]
+        == 33
+    )
+
+    assert (
+        events[0]["event_stage"]
+        == "DATA_CONTRACT_GATE"
+    )
+
+
+
+def test_rejected_validation_and_governance_emit_operational_events(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls = configure_successful_workflow(
+        monkeypatch
+    )
+
+    events = capture_operational_events(
+        monkeypatch
+    )
+
+    def fake_validation_gate(
+        *,
+        df: pd.DataFrame,
+        ingestion_metadata: dict,
+    ) -> FakeResult:
+        calls.append(
+            "validation_gate"
+        )
+
+        assert len(df) == 2
+
+        return FakeResult(
+            {
+                "ingestion_id": "ingestion-1",
+                "status": "REJECTED",
+                "policy_version": "1.0",
+                "validated_at": (
+                    "2026-09-02T00:01:00+00:00"
+                ),
+                "total_issues": 1,
+                "high_issues": 1,
+                "medium_issues": 0,
+                "low_issues": 0,
+                "blocking_issue_count": 1,
+                "blocking_issues": [
+                    {
+                        "issue_type": (
+                            "MISSING_VALUE"
+                        ),
+                        "severity": "High",
+                    }
+                ],
+                "artifact_path": (
+                    "data/quarantine/"
+                    "customers.csv"
+                ),
+                "validation_metadata_path": (
+                    "data/quarantine/"
+                    "customers.validation.json"
+                ),
+            }
+        )
+
+    def fake_register_validation(
+        validation_result: dict,
+        catalog_registration: dict,
+    ) -> dict:
+        calls.append(
+            "validation_persist"
+        )
+
+        assert (
+            validation_result["status"]
+            == "REJECTED"
+        )
+
+        return {
+            "validation_id": 41,
+            "version_id": 4,
+            "catalog_id": 1,
+        }
+
+    def fake_evaluate_governance(
+        *,
+        df: pd.DataFrame,
+        validation_result: dict,
+    ) -> dict:
+        calls.append(
+            "governance_evaluate"
+        )
+
+        assert (
+            validation_result["status"]
+            == "REJECTED"
+        )
+
+        return {
+            "governance_result": FakeResult(
+                {
+                    "decision": "REJECTED",
+                    "reason": (
+                        "Validation Gate "
+                        "rejected dataset."
+                    ),
+                    "promotion_eligible": False,
+                    "policy_version": "1.0",
+                    "validation_status": (
+                        "REJECTED"
+                    ),
+                    "trust_score": 55.0,
+                    "privacy_status": "LOW",
+                    "blocking_issue_count": 1,
+                }
+            ),
+            "quality_report": {
+                "summary": {
+                    "total_issues": 1,
+                }
+            },
+            "trust_score_report": {
+                "overall_score": 55.0,
+            },
+            "privacy_report": {
+                "summary": {
+                    "risk_level": "Low",
+                }
+            },
+        }
+
+    def fake_register_governance(
+        *,
+        governance_result: dict,
+        catalog_registration: dict,
+        validation_registration: dict,
+    ) -> dict:
+        calls.append(
+            "governance_persist"
+        )
+
+        assert (
+            governance_result["decision"]
+            == "REJECTED"
+        )
+
+        assert (
+            validation_registration[
+                "validation_id"
+            ]
+            == 41
+        )
+
+        return {
+            "governance_id": 52,
+            "catalog_id": 1,
+            "version_id": 4,
+            "validation_id": 41,
+            "decision": "REJECTED",
+            "promotion_eligible": False,
+        }
+
+    def fake_apply_lifecycle(
+        catalog_registration: dict,
+        validation_result: dict,
+    ) -> dict:
+        calls.append(
+            "lifecycle"
+        )
+
+        assert (
+            validation_result["status"]
+            == "REJECTED"
+        )
+
+        return {
+            "catalog_id": 1,
+            "version_id": 4,
+            "version_number": 4,
+            "previous_state": "NEW",
+            "lifecycle_state": (
+                "QUARANTINED"
+            ),
+            "changed": True,
+        }
+
+    monkeypatch.setattr(
+        workflow_module,
+        "validate_and_route_dataset",
+        fake_validation_gate,
+    )
+
+    monkeypatch.setattr(
+        workflow_module,
+        "register_validation",
+        fake_register_validation,
+    )
+
+    monkeypatch.setattr(
+        workflow_module,
+        "evaluate_dataset_governance",
+        fake_evaluate_governance,
+    )
+
+    monkeypatch.setattr(
+        workflow_module,
+        "register_governance_decision",
+        fake_register_governance,
+    )
+
+    monkeypatch.setattr(
+        workflow_module,
+        "apply_validation_lifecycle",
+        fake_apply_lifecycle,
+    )
+
+    result = (
+        workflow_module.continue_dataset_workflow(
+            build_ingestion_result()
+        )
+    )
+
+    assert (
+        result.validation_result[
+            "status"
+        ]
+        == "REJECTED"
+    )
+
+    assert (
+        result.governance_result[
+            "decision"
+        ]
+        == "REJECTED"
+    )
+
+    assert (
+        result.lifecycle_result[
+            "lifecycle_state"
+        ]
+        == "QUARANTINED"
+    )
+
+    assert len(events) == 2
+
+    assert [
+        event["event_type"]
+        for event in events
+    ] == [
+        "VALIDATION_REJECTED",
+        "GOVERNANCE_REJECTED",
+    ]
+
+    validation_event = events[0]
+
+    assert (
+        validation_event["severity"]
+        == "ERROR"
+    )
+
+    assert (
+        validation_event["event_stage"]
+        == "VALIDATION_GATE"
+    )
+
+    assert (
+        validation_event["reference_id"]
+        == 41
+    )
+
+    assert (
+        validation_event["version_id"]
+        == 4
+    )
+
+    governance_event = events[1]
+
+    assert (
+        governance_event["severity"]
+        == "ERROR"
+    )
+
+    assert (
+        governance_event["event_stage"]
+        == "GOVERNANCE"
+    )
+
+    assert (
+        governance_event["reference_id"]
+        == 52
+    )
+
+    assert (
+        governance_event["detail"][
+            "validation_id"
+        ]
+        == 41
     )
 
 

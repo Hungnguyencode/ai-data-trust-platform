@@ -33,6 +33,10 @@ PIPELINE_RUNS_URL = (
     f"{API_BASE_URL}/api/pipeline-runs"
 )
 
+OPERATIONAL_EVENTS_URL = (
+    f"{API_BASE_URL}/api/operational-events"
+)
+
 
 def load_pipeline_runs(
     limit: int = 100,
@@ -72,6 +76,28 @@ def load_pipeline_run(
 
     return dict(
         response.json()
+    )
+
+
+def load_operational_events(
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    response = requests.get(
+        OPERATIONAL_EVENTS_URL,
+        params={
+            "limit": limit,
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+
+    return list(
+        payload.get(
+            "items",
+            [],
+        )
     )
 
 
@@ -179,6 +205,29 @@ except requests.RequestException as exc:
     )
 
     st.stop()
+
+try:
+    operational_events = (
+        load_operational_events(
+            limit=200
+        )
+    )
+except requests.RequestException as exc:
+    operational_events = []
+
+    st.warning(
+        "Pipeline Runs vẫn khả dụng, "
+        "nhưng không thể tải "
+        "Operational Alerts."
+    )
+
+    with st.expander(
+        "Operational Alerts API error"
+    ):
+        st.code(
+            str(exc),
+            language=None,
+        )
 
 if not pipeline_runs:
     st.info(
@@ -765,3 +814,288 @@ with st.expander(
     st.json(
         selected_run
     )
+
+st.markdown(
+    '<div class="section-title">'
+    "6. Operational Alerts"
+    "</div>",
+    unsafe_allow_html=True,
+)
+
+if not operational_events:
+    st.info(
+        "Chưa có Operational Alert "
+        "nào được ghi nhận."
+    )
+else:
+    events_df = pd.DataFrame(
+        operational_events
+    )
+
+    severity_series = (
+        events_df["severity"]
+        .fillna("")
+        .astype(str)
+    )
+
+    total_alerts = len(
+        events_df
+    )
+
+    critical_alerts = int(
+        (
+            severity_series
+            == "CRITICAL"
+        ).sum()
+    )
+
+    error_alerts = int(
+        (
+            severity_series
+            == "ERROR"
+        ).sum()
+    )
+
+    warning_alerts = int(
+        (
+            severity_series
+            == "WARNING"
+        ).sum()
+    )
+
+    (
+        alert_metric1,
+        alert_metric2,
+        alert_metric3,
+        alert_metric4,
+    ) = st.columns(4)
+
+    with alert_metric1:
+        render_metric_card(
+            "Total Alerts",
+            str(total_alerts),
+            "Recent operational events",
+        )
+
+    with alert_metric2:
+        render_metric_card(
+            "Critical",
+            str(critical_alerts),
+            "Immediate attention",
+            status=(
+                "critical"
+                if critical_alerts
+                else "low"
+            ),
+        )
+
+    with alert_metric3:
+        render_metric_card(
+            "Error",
+            str(error_alerts),
+            "Rejected / failed operations",
+            status=(
+                "high"
+                if error_alerts
+                else "low"
+            ),
+        )
+
+    with alert_metric4:
+        render_metric_card(
+            "Warning",
+            str(warning_alerts),
+            "Non-blocking violations",
+            status=(
+                "medium"
+                if warning_alerts
+                else "low"
+            ),
+        )
+
+    st.markdown(
+        "**Alerts related to selected "
+        "pipeline run**"
+    )
+
+    pipeline_event_ids = pd.to_numeric(
+        events_df[
+            "pipeline_run_id"
+        ],
+        errors="coerce",
+    )
+
+    related_events_df = (
+        events_df[
+            pipeline_event_ids.eq(
+                int(
+                    selected_run_id
+                )
+            )
+        ]
+        .copy()
+    )
+
+    if related_events_df.empty:
+        st.info(
+            "Selected pipeline run "
+            "không có linked "
+            "Operational Alert."
+        )
+    else:
+        related_columns = [
+            "operational_event_id",
+            "severity",
+            "event_type",
+            "event_stage",
+            "message",
+            "occurred_at",
+        ]
+
+        st.dataframe(
+            related_events_df[
+                related_columns
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    st.markdown(
+        "**Operational Alert History**"
+    )
+
+    (
+        alert_filter_col1,
+        alert_filter_col2,
+    ) = st.columns(2)
+
+    severity_options = [
+        "ALL",
+        *sorted(
+            events_df[
+                "severity"
+            ]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
+        ),
+    ]
+
+    event_type_options = [
+        "ALL",
+        *sorted(
+            events_df[
+                "event_type"
+            ]
+            .dropna()
+            .astype(str)
+            .unique()
+            .tolist()
+        ),
+    ]
+
+    selected_alert_severity = (
+        alert_filter_col1.selectbox(
+            "Alert severity",
+            severity_options,
+        )
+    )
+
+    selected_event_type = (
+        alert_filter_col2.selectbox(
+            "Alert type",
+            event_type_options,
+        )
+    )
+
+    filtered_events_df = (
+        events_df.copy()
+    )
+
+    if (
+        selected_alert_severity
+        != "ALL"
+    ):
+        filtered_events_df = (
+            filtered_events_df[
+                filtered_events_df[
+                    "severity"
+                ]
+                == selected_alert_severity
+            ]
+        )
+
+    if selected_event_type != "ALL":
+        filtered_events_df = (
+            filtered_events_df[
+                filtered_events_df[
+                    "event_type"
+                ]
+                == selected_event_type
+            ]
+        )
+
+    alert_columns = [
+        "operational_event_id",
+        "severity",
+        "event_type",
+        "event_source",
+        "event_stage",
+        "pipeline_run_id",
+        "catalog_id",
+        "version_id",
+        "reference_id",
+        "message",
+        "occurred_at",
+    ]
+
+    st.dataframe(
+        filtered_events_df[
+            alert_columns
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    available_event_ids = (
+        filtered_events_df[
+            "operational_event_id"
+        ]
+        .astype(int)
+        .tolist()
+    )
+
+    if available_event_ids:
+        selected_event_id = (
+            st.selectbox(
+                "Select Operational Event ID",
+                available_event_ids,
+                format_func=(
+                    lambda event_id: (
+                        f"Event #{event_id}"
+                    )
+                ),
+            )
+        )
+
+        selected_event = next(
+            event
+            for event
+            in operational_events
+            if int(
+                event[
+                    "operational_event_id"
+                ]
+            )
+            == int(
+                selected_event_id
+            )
+        )
+
+        with st.expander(
+            "Operational Event Detail"
+        ):
+            st.json(
+                selected_event
+            )

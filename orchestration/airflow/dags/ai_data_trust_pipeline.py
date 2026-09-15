@@ -77,6 +77,9 @@ def ai_data_trust_pipeline():
         from database.repositories.pipeline_run_repository import (
             fail_pipeline_run,
         )
+        from src.observability.operational_events import (
+            emit_pipeline_failed_event,
+        )
 
         pipeline_run_id = int(
             run_context["pipeline_run_id"]
@@ -108,6 +111,15 @@ def ai_data_trust_pipeline():
                 ),
                 error=exc,
             )
+
+            emit_pipeline_failed_event(
+                pipeline_run_id=(
+                    pipeline_run_id
+                ),
+                event_stage="VALIDATE_INPUT",
+                error=exc,
+            )
+
             raise
 
         print(
@@ -132,6 +144,9 @@ def ai_data_trust_pipeline():
         from database.repositories.pipeline_run_repository import (
             fail_pipeline_run,
             mark_pipeline_run_running,
+        )
+        from src.observability.operational_events import (
+            emit_pipeline_failed_event,
         )
         from src.workflows import (
             run_dataset_workflow,
@@ -170,6 +185,15 @@ def ai_data_trust_pipeline():
                 ),
                 error=exc,
             )
+
+            emit_pipeline_failed_event(
+                pipeline_run_id=(
+                    pipeline_run_id
+                ),
+                event_stage="PLATFORM_WORKFLOW",
+                error=exc,
+            )
+
             raise
 
     @task
@@ -180,6 +204,9 @@ def ai_data_trust_pipeline():
         from database.repositories.pipeline_run_repository import (
             complete_pipeline_run,
             fail_pipeline_run,
+        )
+        from src.observability.operational_events import (
+            emit_pipeline_failed_event,
         )
 
         pipeline_run_id = int(
@@ -214,6 +241,15 @@ def ai_data_trust_pipeline():
                 ),
                 error=exc,
             )
+
+            emit_pipeline_failed_event(
+                pipeline_run_id=(
+                    pipeline_run_id
+                ),
+                event_stage="PUBLISH_SUMMARY",
+                error=exc,
+            )
+
             raise
 
     run_context = (
