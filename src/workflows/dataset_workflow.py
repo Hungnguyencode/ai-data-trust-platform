@@ -27,6 +27,7 @@ from src.governance.governance_service import (
 )
 from src.ingestion.contracts import IngestionResult
 from src.ingestion.ingestion_service import ingest_dataset
+from src.observability.operational_events import emit_operational_event
 from src.profiling.profiler import profile_dataset
 from src.validation.validation_gate import (
     validate_and_route_dataset,
@@ -211,27 +212,84 @@ def continue_dataset_workflow(
             ]
         ).upper()
 
-        if (
-            contract_status == "BREAKING"
-            and enforcement_mode == "BLOCK"
-        ):
+        if contract_status == "BREAKING":
+            contract_validation_id = int(
+                contract_validation[
+                    "contract_validation_id"
+                ]
+            )
+
             violation_count = int(
                 contract_result_dict[
                     "violation_count"
                 ]
             )
 
-            _raise_stage_error(
-                stage="DATA_CONTRACT_GATE",
-                exc=ValueError(
+            emit_operational_event(
+                event_key=(
+                    "data-contract:"
+                    f"{contract_validation_id}:breaking"
+                ),
+                event_type="DATA_CONTRACT_BREAKING",
+                severity=(
+                    "ERROR"
+                    if enforcement_mode == "BLOCK"
+                    else "WARNING"
+                ),
+                event_source="DATASET_WORKFLOW",
+                event_stage="DATA_CONTRACT_GATE",
+                catalog_id=int(
+                    catalog_registration[
+                        "catalog_id"
+                    ]
+                ),
+                version_id=int(
+                    catalog_registration[
+                        "version_id"
+                    ]
+                ),
+                reference_id=contract_validation_id,
+                message=(
                     "Dataset violates active "
                     "Data Contract "
                     f"v{data_contract['contract_version']} "
-                    "under BLOCK enforcement "
-                    f"with {violation_count} "
-                    "violation(s)."
+                    f"under {enforcement_mode} enforcement."
                 ),
+                detail={
+                    "contract_id": int(
+                        data_contract[
+                            "contract_id"
+                        ]
+                    ),
+                    "contract_version": int(
+                        data_contract[
+                            "contract_version"
+                        ]
+                    ),
+                    "enforcement_mode": (
+                        enforcement_mode
+                    ),
+                    "validation_status": (
+                        contract_status
+                    ),
+                    "violation_count": (
+                        violation_count
+                    ),
+                },
             )
+
+            if enforcement_mode == "BLOCK":
+                _raise_stage_error(
+                    stage="DATA_CONTRACT_GATE",
+                    exc=ValueError(
+                        "Dataset violates active "
+                        "Data Contract "
+                        f"v{data_contract['contract_version']} "
+                        "under BLOCK enforcement "
+                        f"with {violation_count} "
+                        "violation(s)."
+                    ),
+                )
 
     try:
         gate_result = (
@@ -265,6 +323,66 @@ def continue_dataset_workflow(
         _raise_stage_error(
             stage="VALIDATION_PERSISTENCE",
             exc=exc,
+        )
+
+    validation_status = str(
+        validation_result[
+            "status"
+        ]
+    ).upper()
+
+    if validation_status == "REJECTED":
+        validation_id = int(
+            validation_registration[
+                "validation_id"
+            ]
+        )
+
+        emit_operational_event(
+            event_key=(
+                f"validation:{validation_id}:rejected"
+            ),
+            event_type="VALIDATION_REJECTED",
+            severity="ERROR",
+            event_source="DATASET_WORKFLOW",
+            event_stage="VALIDATION_GATE",
+            catalog_id=int(
+                catalog_registration[
+                    "catalog_id"
+                ]
+            ),
+            version_id=int(
+                catalog_registration[
+                    "version_id"
+                ]
+            ),
+            reference_id=validation_id,
+            message=(
+                "Dataset was rejected by "
+                "Validation Gate."
+            ),
+            detail={
+                "validation_status": (
+                    validation_status
+                ),
+                "policy_version": (
+                    validation_result.get(
+                        "policy_version"
+                    )
+                ),
+                "high_issues": int(
+                    validation_result.get(
+                        "high_issues",
+                        0,
+                    )
+                ),
+                "blocking_issue_count": int(
+                    validation_result.get(
+                        "blocking_issue_count",
+                        0,
+                    )
+                ),
+            },
         )
 
     try:
@@ -326,6 +444,74 @@ def continue_dataset_workflow(
         _raise_stage_error(
             stage="GOVERNANCE_PERSISTENCE",
             exc=exc,
+        )
+
+    governance_decision = str(
+        governance_result[
+            "decision"
+        ]
+    ).upper()
+
+    if governance_decision == "REJECTED":
+        governance_id = int(
+            governance_registration[
+                "governance_id"
+            ]
+        )
+
+        emit_operational_event(
+            event_key=(
+                f"governance:{governance_id}:rejected"
+            ),
+            event_type="GOVERNANCE_REJECTED",
+            severity="ERROR",
+            event_source="DATASET_WORKFLOW",
+            event_stage="GOVERNANCE",
+            catalog_id=int(
+                catalog_registration[
+                    "catalog_id"
+                ]
+            ),
+            version_id=int(
+                catalog_registration[
+                    "version_id"
+                ]
+            ),
+            reference_id=governance_id,
+            message=(
+                "Dataset was rejected by "
+                "Governance Policy."
+            ),
+            detail={
+                "governance_decision": (
+                    governance_decision
+                ),
+                "policy_version": (
+                    governance_result.get(
+                        "policy_version"
+                    )
+                ),
+                "validation_id": int(
+                    validation_registration[
+                        "validation_id"
+                    ]
+                ),
+                "trust_score": (
+                    governance_result.get(
+                        "trust_score"
+                    )
+                ),
+                "privacy_status": (
+                    governance_result.get(
+                        "privacy_status"
+                    )
+                ),
+                "reason": (
+                    governance_result.get(
+                        "reason"
+                    )
+                ),
+            },
         )
 
     try:

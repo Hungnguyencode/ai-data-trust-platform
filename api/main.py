@@ -15,6 +15,9 @@ from api.routes.data_contracts import (
     router as data_contracts_router,
 )
 from api.routes.datasets import router as datasets_router
+from api.routes.operational_events import (
+    router as operational_events_router,
+)
 from api.routes.pipeline_runs import router as pipeline_runs_router
 from api.routes.scans import router as scans_router
 from api.routes.scores import router as scores_router
@@ -270,6 +273,7 @@ def api_info():
             "governance-aware promotion API",
             "persisted scan history API",
             "pipeline operations API",
+            "operational alerts API",
         ],
         "note": "This API is a minimal backend layer. Streamlit can still run independently.",
     }
@@ -293,4 +297,9 @@ app.include_router(
     pipeline_runs_router,
     prefix="/api/pipeline-runs",
     tags=["pipeline-runs"],
+)
+app.include_router(
+    operational_events_router,
+    prefix="/api/operational-events",
+    tags=["operational-events"],
 )
