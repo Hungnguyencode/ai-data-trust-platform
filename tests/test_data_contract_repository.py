@@ -511,6 +511,148 @@ def test_get_data_contract_loads_columns(
     ][0]["is_nullable"] is False
 
 
+def test_get_data_contract_history_groups_columns(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    connection = FakeConnection(
+        [
+            FakeResult(
+                rows=[
+                    {
+                        "contract_id": 12,
+                        "catalog_id": 5,
+                        "contract_version": 2,
+                        "contract_name": "customers-v2",
+                        "enforcement_mode": "WARN",
+                        "is_active": 1,
+                        "created_at": None,
+                        "updated_at": None,
+                    },
+                    {
+                        "contract_id": 11,
+                        "catalog_id": 5,
+                        "contract_version": 1,
+                        "contract_name": "customers-v1",
+                        "enforcement_mode": "BLOCK",
+                        "is_active": 0,
+                        "created_at": None,
+                        "updated_at": None,
+                    },
+                ]
+            ),
+            FakeResult(
+                rows=[
+                    {
+                        "contract_column_id": 20,
+                        "contract_id": 12,
+                        "column_name": "customer_id",
+                        "expected_type": "NUMERIC",
+                        "is_required": 1,
+                        "is_nullable": 0,
+                        "created_at": None,
+                    },
+                    {
+                        "contract_column_id": 21,
+                        "contract_id": 12,
+                        "column_name": "email",
+                        "expected_type": "TEXT",
+                        "is_required": 1,
+                        "is_nullable": 1,
+                        "created_at": None,
+                    },
+                    {
+                        "contract_column_id": 10,
+                        "contract_id": 11,
+                        "column_name": "customer_id",
+                        "expected_type": "NUMERIC",
+                        "is_required": 1,
+                        "is_nullable": 0,
+                        "created_at": None,
+                    },
+                ]
+            ),
+        ]
+    )
+
+    monkeypatch.setattr(
+        repository,
+        "get_engine",
+        lambda: FakeEngine(
+            connection
+        ),
+    )
+
+    result = (
+        repository.get_data_contract_history(
+            5
+        )
+    )
+
+    assert len(result) == 2
+
+    assert result[0][
+        "contract_version"
+    ] == 2
+
+    assert result[0][
+        "is_active"
+    ] is True
+
+    assert len(
+        result[0]["columns"]
+    ) == 2
+
+    assert result[0][
+        "columns"
+    ][0]["is_required"] is True
+
+    assert result[0][
+        "columns"
+    ][0]["is_nullable"] is False
+
+    assert result[1][
+        "contract_version"
+    ] == 1
+
+    assert result[1][
+        "is_active"
+    ] is False
+
+    assert len(
+        result[1]["columns"]
+    ) == 1
+
+    assert len(
+        connection.calls
+    ) == 2
+
+    contract_sql, contract_params = (
+        connection.calls[0]
+    )
+
+    columns_sql, columns_params = (
+        connection.calls[1]
+    )
+
+    assert (
+        "ORDER BY contract_version DESC"
+        in contract_sql
+    )
+
+    assert (
+        "INNER JOIN dbo.data_contracts"
+        in columns_sql
+    )
+
+    assert contract_params == {
+        "catalog_id": 5,
+    }
+
+    assert columns_params == {
+        "catalog_id": 5,
+    }
+
+
 def test_get_active_contract_returns_none(
     monkeypatch: pytest.MonkeyPatch,
 ):
