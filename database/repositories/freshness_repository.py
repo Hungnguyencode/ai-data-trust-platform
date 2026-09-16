@@ -49,6 +49,10 @@ def _normalize_status(
 def get_freshness_policy(
     catalog_id: int,
 ) -> dict[str, Any] | None:
+    normalized_catalog_id = _positive_int(
+        catalog_id,
+        field_name="catalog_id",
+    )
     query = text(
         """
         SELECT TOP 1
@@ -69,10 +73,7 @@ def get_freshness_policy(
         row = connection.execute(
             query,
             {
-                "catalog_id": _positive_int(
-                    catalog_id,
-                    field_name="catalog_id",
-                ),
+                "catalog_id": normalized_catalog_id,
             },
         ).mappings().first()
 
@@ -219,6 +220,10 @@ def get_enabled_freshness_policies() -> pd.DataFrame:
 def get_latest_ingestion_for_catalog(
     catalog_id: int,
 ) -> dict[str, Any] | None:
+    normalized_catalog_id = _positive_int(
+        catalog_id,
+        field_name="catalog_id",
+    )
     query = text(
         """
         SELECT TOP 1
@@ -246,10 +251,7 @@ def get_latest_ingestion_for_catalog(
         row = connection.execute(
             query,
             {
-                "catalog_id": _positive_int(
-                    catalog_id,
-                    field_name="catalog_id",
-                ),
+                "catalog_id": normalized_catalog_id,
             },
         ).mappings().first()
 
@@ -386,6 +388,10 @@ def create_freshness_check(
 def get_freshness_check(
     freshness_check_id: int,
 ) -> dict[str, Any] | None:
+    normalized_check_id = _positive_int(
+        freshness_check_id,
+        field_name="freshness_check_id",
+    )
     query = text(
         """
         SELECT TOP 1
@@ -410,14 +416,7 @@ def get_freshness_check(
         row = connection.execute(
             query,
             {
-                "freshness_check_id": (
-                    _positive_int(
-                        freshness_check_id,
-                        field_name=(
-                            "freshness_check_id"
-                        ),
-                    )
-                ),
+                "freshness_check_id": normalized_check_id,
             },
         ).mappings().first()
 
@@ -432,6 +431,10 @@ def get_freshness_history(
     catalog_id: int,
     limit: int = 50,
 ) -> pd.DataFrame:
+    normalized_catalog_id = _positive_int(
+        catalog_id,
+        field_name="catalog_id",
+    )
     safe_limit = max(
         1,
         min(
@@ -467,9 +470,6 @@ def get_freshness_history(
             query,
             connection,
             params={
-                "catalog_id": _positive_int(
-                    catalog_id,
-                    field_name="catalog_id",
-                ),
+                "catalog_id": normalized_catalog_id,
             },
         )
