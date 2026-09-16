@@ -22,6 +22,7 @@ from api.routes.operational_events import (
 from api.routes.pipeline_runs import router as pipeline_runs_router
 from api.routes.scans import router as scans_router
 from api.routes.scores import router as scores_router
+from api.routes.volume import router as volume_router
 from api.routes.workflows import router as workflows_router
 from database.db import test_connection
 from src.observability.metrics import observe_http_request
@@ -276,6 +277,7 @@ def api_info():
             "pipeline operations API",
             "operational alerts API",
             "dataset freshness monitoring API",
+            "dataset volume monitoring API",
         ],
         "note": "This API is a minimal backend layer. Streamlit can still run independently.",
     }
@@ -309,4 +311,9 @@ app.include_router(
     freshness_router,
     prefix="/api/freshness",
     tags=["freshness"],
+)
+app.include_router(
+    volume_router,
+    prefix="/api/volume",
+    tags=["volume"],
 )
