@@ -608,3 +608,168 @@ def test_missing_current_row_count_is_rejected(
         volume_monitor.check_dataset_volume(
             1
         )
+
+
+def test_check_enabled_volume_policies_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        volume_monitor,
+        "get_enabled_volume_policies",
+        lambda: pd.DataFrame(),
+    )
+
+    result = (
+        volume_monitor
+        .check_enabled_volume_policies()
+    )
+
+    assert result[
+        "policy_count"
+    ] == 0
+
+    assert result[
+        "checked_count"
+    ] == 0
+
+    assert result[
+        "failed_count"
+    ] == 0
+
+    assert result[
+        "normal_count"
+    ] == 0
+
+    assert result[
+        "drop_count"
+    ] == 0
+
+    assert result[
+        "spike_count"
+    ] == 0
+
+    assert result[
+        "no_baseline_count"
+    ] == 0
+
+    assert result["results"] == []
+    assert result["errors"] == []
+
+
+def test_check_enabled_volume_policies_checks_all_and_isolates_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policies = pd.DataFrame(
+        [
+            {"catalog_id": 1},
+            {"catalog_id": 2},
+            {"catalog_id": 3},
+            {"catalog_id": 4},
+            {"catalog_id": 5},
+        ]
+    )
+
+    monkeypatch.setattr(
+        volume_monitor,
+        "get_enabled_volume_policies",
+        lambda: policies,
+    )
+
+    checked_catalog_ids: list[int] = []
+
+    statuses = {
+        1: "NORMAL",
+        2: "DROP",
+        3: "SPIKE",
+        4: "NO_BASELINE",
+    }
+
+    def fake_check_dataset_volume(
+        catalog_id: int,
+    ) -> dict[str, Any]:
+        checked_catalog_ids.append(
+            catalog_id
+        )
+
+        if catalog_id == 5:
+            raise RuntimeError(
+                "simulated failure"
+            )
+
+        return {
+            "policy": {
+                "catalog_id": catalog_id,
+            },
+            "check": {
+                "catalog_id": catalog_id,
+                "volume_status": (
+                    statuses[catalog_id]
+                ),
+            },
+            "operational_event": None,
+        }
+
+    monkeypatch.setattr(
+        volume_monitor,
+        "check_dataset_volume",
+        fake_check_dataset_volume,
+    )
+
+    result = (
+        volume_monitor
+        .check_enabled_volume_policies()
+    )
+
+    assert checked_catalog_ids == [
+        1,
+        2,
+        3,
+        4,
+        5,
+    ]
+
+    assert result[
+        "policy_count"
+    ] == 5
+
+    assert result[
+        "checked_count"
+    ] == 4
+
+    assert result[
+        "failed_count"
+    ] == 1
+
+    assert result[
+        "normal_count"
+    ] == 1
+
+    assert result[
+        "drop_count"
+    ] == 1
+
+    assert result[
+        "spike_count"
+    ] == 1
+
+    assert result[
+        "no_baseline_count"
+    ] == 1
+
+    assert result[
+        "errors"
+    ][0][
+        "catalog_id"
+    ] == 5
+
+    assert result[
+        "errors"
+    ][0][
+        "error_type"
+    ] == "RuntimeError"
+
+    assert result[
+        "errors"
+    ][0][
+        "error_message"
+    ] == "simulated failure"
