@@ -7,6 +7,7 @@ import pandas as pd
 
 from database.repositories.volume_repository import (
     create_volume_check,
+    get_enabled_volume_policies,
     get_recent_ingestions_for_catalog,
     get_volume_policy,
 )
@@ -438,3 +439,86 @@ def check_dataset_volume(
         ),
     }
 
+
+def check_enabled_volume_policies() -> dict[str, Any]:
+    policies = get_enabled_volume_policies()
+
+    results: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+
+    normal_count = 0
+    drop_count = 0
+    spike_count = 0
+    no_baseline_count = 0
+
+    for row in policies.to_dict(
+        orient="records"
+    ):
+        catalog_id = int(
+            row["catalog_id"]
+        )
+
+        try:
+            result = check_dataset_volume(
+                catalog_id
+            )
+
+            results.append(
+                result
+            )
+
+            status = str(
+                result["check"][
+                    "volume_status"
+                ]
+            )
+
+            if status == "NORMAL":
+                normal_count += 1
+            elif status == "DROP":
+                drop_count += 1
+            elif status == "SPIKE":
+                spike_count += 1
+            elif status == "NO_BASELINE":
+                no_baseline_count += 1
+
+        except Exception as exc:
+            errors.append(
+                {
+                    "catalog_id": (
+                        catalog_id
+                    ),
+                    "error_type": (
+                        type(exc).__name__
+                    ),
+                    "error_message": (
+                        str(exc)
+                    ),
+                }
+            )
+
+    return {
+        "policy_count": int(
+            len(policies)
+        ),
+        "checked_count": len(
+            results
+        ),
+        "failed_count": len(
+            errors
+        ),
+        "normal_count": (
+            normal_count
+        ),
+        "drop_count": (
+            drop_count
+        ),
+        "spike_count": (
+            spike_count
+        ),
+        "no_baseline_count": (
+            no_baseline_count
+        ),
+        "results": results,
+        "errors": errors,
+    }
