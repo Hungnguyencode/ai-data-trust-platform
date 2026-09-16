@@ -15,6 +15,7 @@ from api.routes.data_contracts import (
     router as data_contracts_router,
 )
 from api.routes.datasets import router as datasets_router
+from api.routes.freshness import router as freshness_router
 from api.routes.operational_events import (
     router as operational_events_router,
 )
@@ -274,6 +275,7 @@ def api_info():
             "persisted scan history API",
             "pipeline operations API",
             "operational alerts API",
+            "dataset freshness monitoring API",
         ],
         "note": "This API is a minimal backend layer. Streamlit can still run independently.",
     }
@@ -302,4 +304,9 @@ app.include_router(
     operational_events_router,
     prefix="/api/operational-events",
     tags=["operational-events"],
+)
+app.include_router(
+    freshness_router,
+    prefix="/api/freshness",
+    tags=["freshness"],
 )
