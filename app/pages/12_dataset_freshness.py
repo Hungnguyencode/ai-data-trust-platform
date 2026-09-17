@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import requests
 import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -17,109 +15,18 @@ if str(PROJECT_ROOT) not in sys.path:
         str(PROJECT_ROOT),
     )
 
+from app.services.freshness_api import (
+    FreshnessApiError,
+    load_freshness_history,
+    load_freshness_policy,
+    run_freshness_check,
+    save_freshness_policy,
+)
 from src.utils.ui import (
     inject_custom_css,
     render_metric_card,
     render_recommendation_box,
 )
-
-API_BASE_URL = os.getenv(
-    "API_BASE_URL",
-    "http://127.0.0.1:8000",
-)
-
-FRESHNESS_URL = (
-    f"{API_BASE_URL}/api/freshness"
-)
-
-
-def load_freshness_policy(
-    catalog_id: int,
-) -> dict[str, Any] | None:
-    response = requests.get(
-        (
-            f"{FRESHNESS_URL}/catalog/"
-            f"{catalog_id}/policy"
-        ),
-        timeout=10,
-    )
-
-    if response.status_code == 404:
-        return None
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
-
-
-def save_freshness_policy(
-    *,
-    catalog_id: int,
-    max_age_minutes: int,
-    is_enabled: bool,
-) -> dict[str, Any]:
-    response = requests.put(
-        (
-            f"{FRESHNESS_URL}/catalog/"
-            f"{catalog_id}/policy"
-        ),
-        json={
-            "max_age_minutes": (
-                max_age_minutes
-            ),
-            "is_enabled": is_enabled,
-        },
-        timeout=10,
-    )
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
-
-
-def load_freshness_history(
-    catalog_id: int,
-    *,
-    limit: int = 100,
-) -> dict[str, Any]:
-    response = requests.get(
-        (
-            f"{FRESHNESS_URL}/catalog/"
-            f"{catalog_id}/history"
-        ),
-        params={
-            "limit": limit,
-        },
-        timeout=10,
-    )
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
-
-
-def run_freshness_check(
-    catalog_id: int,
-) -> dict[str, Any]:
-    response = requests.post(
-        (
-            f"{FRESHNESS_URL}/catalog/"
-            f"{catalog_id}/check"
-        ),
-        timeout=15,
-    )
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
 
 
 def format_minutes(
@@ -271,7 +178,7 @@ try:
         )
     )
 
-except requests.RequestException as exc:
+except FreshnessApiError as exc:
     st.error(
         "Không thể kết nối "
         "Dataset Freshness API."
@@ -283,8 +190,8 @@ except requests.RequestException as exc:
     )
 
     st.info(
-        "Hãy kiểm tra FastAPI đang chạy "
-        f"tại {API_BASE_URL}."
+        "Hãy kiểm tra FastAPI service "
+        "và cấu hình endpoint API."
     )
 
     st.stop()
@@ -579,7 +486,7 @@ if save_policy_button:
             )
         )
 
-    except requests.RequestException as exc:
+    except FreshnessApiError as exc:
         st.error(
             "Không thể lưu "
             "Freshness Policy."
@@ -641,7 +548,7 @@ if st.button(
             catalog_id
         )
 
-    except requests.RequestException as exc:
+    except FreshnessApiError as exc:
         st.error(
             "Không thể chạy "
             "Freshness Check."

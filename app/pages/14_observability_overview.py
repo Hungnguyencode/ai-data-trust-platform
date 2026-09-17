@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import requests
 import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -17,41 +15,15 @@ if str(PROJECT_ROOT) not in sys.path:
         str(PROJECT_ROOT),
     )
 
+from app.services.observability_api import (
+    ObservabilityApiError,
+    load_observability_overview,
+)
 from src.utils.ui import (
     inject_custom_css,
     render_metric_card,
     render_recommendation_box,
 )
-
-API_BASE_URL = os.getenv(
-    "API_BASE_URL",
-    "http://127.0.0.1:8000",
-)
-
-OBSERVABILITY_URL = (
-    f"{API_BASE_URL}/api/observability"
-)
-
-
-def load_observability_overview(
-    *,
-    event_limit: int = 100,
-    run_limit: int = 100,
-) -> dict[str, Any]:
-    response = requests.get(
-        f"{OBSERVABILITY_URL}/overview",
-        params={
-            "event_limit": event_limit,
-            "run_limit": run_limit,
-        },
-        timeout=15,
-    )
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
 
 
 def normalize_status(
@@ -264,7 +236,7 @@ try:
         load_observability_overview()
     )
 
-except requests.RequestException as exc:
+except ObservabilityApiError as exc:
     st.error(
         "Không thể kết nối "
         "Observability Overview API."
@@ -276,8 +248,8 @@ except requests.RequestException as exc:
     )
 
     st.info(
-        "Hãy kiểm tra FastAPI đang chạy "
-        f"tại {API_BASE_URL}."
+        "Hãy kiểm tra FastAPI service "
+        "và cấu hình API_BASE_URL."
     )
 
     st.stop()

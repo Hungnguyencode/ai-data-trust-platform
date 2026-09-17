@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import requests
 import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -17,113 +15,18 @@ if str(PROJECT_ROOT) not in sys.path:
         str(PROJECT_ROOT),
     )
 
+from app.services.volume_api import (
+    VolumeApiError,
+    load_volume_history,
+    load_volume_policy,
+    run_volume_check,
+    save_volume_policy,
+)
 from src.utils.ui import (
     inject_custom_css,
     render_metric_card,
     render_recommendation_box,
 )
-
-API_BASE_URL = os.getenv(
-    "API_BASE_URL",
-    "http://127.0.0.1:8000",
-)
-
-VOLUME_URL = (
-    f"{API_BASE_URL}/api/volume"
-)
-
-
-def load_volume_policy(
-    catalog_id: int,
-) -> dict[str, Any] | None:
-    response = requests.get(
-        (
-            f"{VOLUME_URL}/catalog/"
-            f"{catalog_id}/policy"
-        ),
-        timeout=10,
-    )
-
-    if response.status_code == 404:
-        return None
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
-
-
-def save_volume_policy(
-    *,
-    catalog_id: int,
-    drop_threshold_pct: float,
-    spike_threshold_pct: float,
-    is_enabled: bool,
-) -> dict[str, Any]:
-    response = requests.put(
-        (
-            f"{VOLUME_URL}/catalog/"
-            f"{catalog_id}/policy"
-        ),
-        json={
-            "drop_threshold_pct": (
-                drop_threshold_pct
-            ),
-            "spike_threshold_pct": (
-                spike_threshold_pct
-            ),
-            "is_enabled": is_enabled,
-        },
-        timeout=10,
-    )
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
-
-
-def load_volume_history(
-    catalog_id: int,
-    *,
-    limit: int = 100,
-) -> dict[str, Any]:
-    response = requests.get(
-        (
-            f"{VOLUME_URL}/catalog/"
-            f"{catalog_id}/history"
-        ),
-        params={
-            "limit": limit,
-        },
-        timeout=10,
-    )
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
-
-
-def run_volume_check(
-    catalog_id: int,
-) -> dict[str, Any]:
-    response = requests.post(
-        (
-            f"{VOLUME_URL}/catalog/"
-            f"{catalog_id}/check"
-        ),
-        timeout=15,
-    )
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
 
 
 def format_percentage(
@@ -283,7 +186,7 @@ try:
         )
     )
 
-except requests.RequestException as exc:
+except VolumeApiError as exc:
     st.error(
         "Không thể kết nối "
         "Dataset Volume API."
@@ -295,8 +198,8 @@ except requests.RequestException as exc:
     )
 
     st.info(
-        "Hãy kiểm tra FastAPI đang chạy "
-        f"tại {API_BASE_URL}."
+        "Hãy kiểm tra FastAPI service "
+        "và cấu hình API_BASE_URL."
     )
 
     st.stop()
@@ -648,7 +551,7 @@ if save_policy_button:
             )
         )
 
-    except requests.RequestException as exc:
+    except VolumeApiError as exc:
         st.error(
             "Không thể lưu "
             "Volume Policy."
@@ -710,7 +613,7 @@ if st.button(
             catalog_id
         )
 
-    except requests.RequestException as exc:
+    except VolumeApiError as exc:
         st.error(
             "Không thể chạy "
             "Volume Check."
