@@ -16,6 +16,7 @@ from api.routes.data_contracts import (
 )
 from api.routes.datasets import router as datasets_router
 from api.routes.freshness import router as freshness_router
+from api.routes.observability import router as observability_router
 from api.routes.operational_events import (
     router as operational_events_router,
 )
@@ -278,6 +279,7 @@ def api_info():
             "operational alerts API",
             "dataset freshness monitoring API",
             "dataset volume monitoring API",
+            "observability overview API",
         ],
         "note": "This API is a minimal backend layer. Streamlit can still run independently.",
     }
@@ -316,4 +318,9 @@ app.include_router(
     volume_router,
     prefix="/api/volume",
     tags=["volume"],
+)
+app.include_router(
+    observability_router,
+    prefix="/api/observability",
+    tags=["observability"],
 )
