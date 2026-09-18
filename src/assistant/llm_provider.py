@@ -12,7 +12,7 @@ SUPPORTED_LLM_PROVIDERS = {
 }
 
 DEFAULT_GEMINI_MODEL = (
-    "gemini-3.8-flash"
+    "gemini-3-flash-preview"
 )
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
