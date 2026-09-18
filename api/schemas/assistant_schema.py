@@ -18,3 +18,15 @@ class AssistantContextResponse(BaseModel):
     available_results: int
     missing_results: int
     context_summary: Dict[str, Any]
+
+
+class AssistantPlatformContextResponse(BaseModel):
+    catalog_id: int
+    grounded: bool = True
+    version: str = "2.6"
+    evidence_summary: Dict[str, Any] = Field(
+        default_factory=dict
+    )
+    context: Dict[str, Any] = Field(
+        default_factory=dict
+    )

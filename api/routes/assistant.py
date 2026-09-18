@@ -1,6 +1,17 @@
-from fastapi import APIRouter
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Path,
+)
 
-from api.schemas.assistant_schema import AssistantAskRequest, AssistantAskResponse
+from api.schemas.assistant_schema import (
+    AssistantAskRequest,
+    AssistantAskResponse,
+    AssistantPlatformContextResponse,
+)
+from src.assistant.platform_context import (
+    build_platform_context,
+)
 
 try:
     from src.assistant.ai_explainer import answer_question
@@ -31,6 +42,56 @@ def ask_assistant(payload: AssistantAskRequest):
         answer=answer,
         grounded=True,
         version="2.6",
+    )
+
+
+@router.get(
+    "/catalog/{catalog_id}/context",
+    response_model=AssistantPlatformContextResponse,
+)
+def get_catalog_assistant_context(
+    catalog_id: int = Path(
+        ...,
+        gt=0,
+    ),
+):
+    try:
+        context = build_platform_context(
+            catalog_id
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to build assistant "
+                "platform context."
+            ),
+        ) from exc
+
+    evidence_summary = context.get(
+        "evidence_summary",
+        {},
+    )
+
+    if not isinstance(
+        evidence_summary,
+        dict,
+    ):
+        evidence_summary = {}
+
+    return AssistantPlatformContextResponse(
+        catalog_id=catalog_id,
+        grounded=True,
+        version="2.6",
+        evidence_summary=evidence_summary,
+        context=context,
     )
 
 
