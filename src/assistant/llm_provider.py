@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from typing import Any, Protocol
@@ -15,6 +16,53 @@ DEFAULT_GEMINI_MODEL = (
 )
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
+GEMINI_MAX_ATTEMPTS = 3
+GEMINI_RETRY_BACKOFF_SECONDS = 1.0
+
+TRANSIENT_GEMINI_ERROR_CODES = {
+    503,
+    504,
+}
+
+TRANSIENT_GEMINI_ERROR_STATUSES = {
+    "UNAVAILABLE",
+    "DEADLINE_EXCEEDED",
+}
+
+
+def _is_transient_gemini_error(
+    exc: Exception,
+) -> bool:
+    code = getattr(
+        exc,
+        "code",
+        None,
+    )
+
+    try:
+        normalized_code = int(code)
+    except (TypeError, ValueError):
+        normalized_code = None
+
+    if (
+        normalized_code
+        in TRANSIENT_GEMINI_ERROR_CODES
+    ):
+        return True
+
+    status = str(
+        getattr(
+            exc,
+            "status",
+            "",
+        )
+        or ""
+    ).strip().upper()
+
+    return (
+        status
+        in TRANSIENT_GEMINI_ERROR_STATUSES
+    )
 
 
 @dataclass(
@@ -216,54 +264,6 @@ class GeminiLLMProvider:
                 )
             )
 
-            response = (
-                active_client
-                .models
-                .generate_content(
-                    model=self.config.model,
-                    contents=prompt,
-                )
-            )
-
-            response_text = getattr(
-                response,
-                "text",
-                None,
-            )
-
-            if response_text is None:
-                return LLMGenerationResult(
-                    provider="gemini",
-                    model=self.config.model,
-                    used_llm=False,
-                    text=None,
-                    fallback_reason=(
-                        "empty_response"
-                    ),
-                )
-
-            normalized_text = str(
-                response_text
-            ).strip()
-
-            if not normalized_text:
-                return LLMGenerationResult(
-                    provider="gemini",
-                    model=self.config.model,
-                    used_llm=False,
-                    text=None,
-                    fallback_reason=(
-                        "empty_response"
-                    ),
-                )
-
-            return LLMGenerationResult(
-                provider="gemini",
-                model=self.config.model,
-                used_llm=True,
-                text=normalized_text,
-            )
-
         except Exception as exc:
             return LLMGenerationResult(
                 provider="gemini",
@@ -277,6 +277,96 @@ class GeminiLLMProvider:
                     type(exc).__name__
                 ),
             )
+
+        for attempt in range(
+            1,
+            GEMINI_MAX_ATTEMPTS + 1,
+        ):
+            try:
+                response = (
+                    active_client
+                    .models
+                    .generate_content(
+                        model=self.config.model,
+                        contents=prompt,
+                    )
+                )
+
+                break
+
+            except Exception as exc:
+                should_retry = (
+                    _is_transient_gemini_error(
+                        exc
+                    )
+                    and attempt
+                    < GEMINI_MAX_ATTEMPTS
+                )
+
+                if not should_retry:
+                    return LLMGenerationResult(
+                        provider="gemini",
+                        model=self.config.model,
+                        used_llm=False,
+                        text=None,
+                        fallback_reason=(
+                            "provider_error"
+                        ),
+                        error_type=(
+                            type(exc).__name__
+                        ),
+                    )
+
+                delay_seconds = (
+                    GEMINI_RETRY_BACKOFF_SECONDS
+                    * (
+                        2
+                        ** (attempt - 1)
+                    )
+                )
+
+                time.sleep(
+                    delay_seconds
+                )
+
+        response_text = getattr(
+            response,
+            "text",
+            None,
+        )
+
+        if response_text is None:
+            return LLMGenerationResult(
+                provider="gemini",
+                model=self.config.model,
+                used_llm=False,
+                text=None,
+                fallback_reason=(
+                    "empty_response"
+                ),
+            )
+
+        normalized_text = str(
+            response_text
+        ).strip()
+
+        if not normalized_text:
+            return LLMGenerationResult(
+                provider="gemini",
+                model=self.config.model,
+                used_llm=False,
+                text=None,
+                fallback_reason=(
+                    "empty_response"
+                ),
+            )
+
+        return LLMGenerationResult(
+            provider="gemini",
+            model=self.config.model,
+            used_llm=True,
+            text=normalized_text,
+        )
 
 
 def build_llm_provider(

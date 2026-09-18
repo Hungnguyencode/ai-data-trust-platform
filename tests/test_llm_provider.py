@@ -412,6 +412,246 @@ def test_provider_exception_is_safe():
     )
 
 
+def test_gemini_retries_503_then_succeeds(
+    monkeypatch,
+):
+    sleep_calls = []
+
+    class FakeProviderError(Exception):
+        def __init__(
+            self,
+            *,
+            code,
+            status,
+        ):
+            super().__init__(status)
+            self.code = code
+            self.status = status
+
+    class FakeModels:
+        def __init__(self):
+            self.calls = 0
+
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            self.calls += 1
+
+            if self.calls == 1:
+                raise FakeProviderError(
+                    code=503,
+                    status="UNAVAILABLE",
+                )
+
+            return SimpleNamespace(
+                text=(
+                    "Recovered after retry."
+                )
+            )
+
+    models = FakeModels()
+
+    fake_client = SimpleNamespace(
+        models=models
+    )
+
+    monkeypatch.setattr(
+        "src.assistant.llm_provider.time.sleep",
+        lambda seconds: sleep_calls.append(
+            seconds
+        ),
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = generate_llm_text(
+        "Grounded evidence.",
+        config=config,
+        client=fake_client,
+    )
+
+    assert models.calls == 2
+    assert sleep_calls == [1.0]
+
+    assert result.used_llm is True
+
+    assert (
+        result.text
+        == "Recovered after retry."
+    )
+
+    assert result.fallback_reason is None
+
+
+def test_gemini_retries_504_with_backoff_then_succeeds(
+    monkeypatch,
+):
+    sleep_calls = []
+
+    class FakeProviderError(Exception):
+        def __init__(
+            self,
+            *,
+            code,
+            status,
+        ):
+            super().__init__(status)
+            self.code = code
+            self.status = status
+
+    class FakeModels:
+        def __init__(self):
+            self.calls = 0
+
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            self.calls += 1
+
+            if self.calls <= 2:
+                raise FakeProviderError(
+                    code=504,
+                    status=(
+                        "DEADLINE_EXCEEDED"
+                    ),
+                )
+
+            return SimpleNamespace(
+                text=(
+                    "Recovered on third attempt."
+                )
+            )
+
+    models = FakeModels()
+
+    fake_client = SimpleNamespace(
+        models=models
+    )
+
+    monkeypatch.setattr(
+        "src.assistant.llm_provider.time.sleep",
+        lambda seconds: sleep_calls.append(
+            seconds
+        ),
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = generate_llm_text(
+        "Grounded evidence.",
+        config=config,
+        client=fake_client,
+    )
+
+    assert models.calls == 3
+
+    assert sleep_calls == [
+        1.0,
+        2.0,
+    ]
+
+    assert result.used_llm is True
+
+    assert (
+        result.text
+        == "Recovered on third attempt."
+    )
+
+    assert result.fallback_reason is None
+
+
+def test_gemini_does_not_retry_non_transient_error(
+    monkeypatch,
+):
+    sleep_calls = []
+
+    class FakeProviderError(Exception):
+        def __init__(
+            self,
+            *,
+            code,
+            status,
+        ):
+            super().__init__(status)
+            self.code = code
+            self.status = status
+
+    class FakeModels:
+        def __init__(self):
+            self.calls = 0
+
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            self.calls += 1
+
+            raise FakeProviderError(
+                code=401,
+                status="UNAUTHENTICATED",
+            )
+
+    models = FakeModels()
+
+    fake_client = SimpleNamespace(
+        models=models
+    )
+
+    monkeypatch.setattr(
+        "src.assistant.llm_provider.time.sleep",
+        lambda seconds: sleep_calls.append(
+            seconds
+        ),
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = generate_llm_text(
+        "Grounded evidence.",
+        config=config,
+        client=fake_client,
+    )
+
+    assert models.calls == 1
+    assert sleep_calls == []
+
+    assert result.used_llm is False
+    assert result.text is None
+
+    assert (
+        result.fallback_reason
+        == "provider_error"
+    )
+
+    assert (
+        result.error_type
+        == "FakeProviderError"
+    )
+
+
 @pytest.mark.parametrize(
     "prompt",
     [
