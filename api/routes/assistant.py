@@ -9,9 +9,13 @@ from api.schemas.assistant_schema import (
     AssistantAskResponse,
     AssistantPlatformContextResponse,
     AssistantPlatformDiagnosisResponse,
+    AssistantPlatformExplanationResponse,
 )
 from src.assistant.platform_context import (
     build_platform_context,
+)
+from src.assistant.platform_explanation import (
+    explain_platform_diagnosis,
 )
 from src.assistant.platform_reasoning import (
     reason_about_platform_context,
@@ -139,6 +143,57 @@ def get_catalog_assistant_diagnosis(
 
     return AssistantPlatformDiagnosisResponse(
         **diagnosis,
+        grounded=True,
+        version="2.6",
+    )
+
+
+@router.get(
+    "/catalog/{catalog_id}/explanation",
+    response_model=(
+        AssistantPlatformExplanationResponse
+    ),
+)
+def get_catalog_assistant_explanation(
+    catalog_id: int = Path(
+        ...,
+        gt=0,
+    ),
+):
+    try:
+        context = build_platform_context(
+            catalog_id
+        )
+
+        diagnosis = (
+            reason_about_platform_context(
+                context
+            )
+        )
+
+        explanation = (
+            explain_platform_diagnosis(
+                diagnosis
+            )
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to build assistant "
+                "platform explanation."
+            ),
+        ) from exc
+
+    return AssistantPlatformExplanationResponse(
+        **explanation,
         grounded=True,
         version="2.6",
     )
