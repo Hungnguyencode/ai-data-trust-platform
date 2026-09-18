@@ -30,3 +30,59 @@ class AssistantPlatformContextResponse(BaseModel):
     context: Dict[str, Any] = Field(
         default_factory=dict
     )
+
+
+class AssistantFindingResponse(BaseModel):
+    code: str
+    category: str
+    severity: str
+    message: str
+    evidence: Dict[str, Any] = Field(
+        default_factory=dict
+    )
+
+
+class AssistantRecommendedActionResponse(
+    BaseModel
+):
+    code: str
+    priority: int
+    action: str
+    reason: str
+
+
+class AssistantReasoningSummaryResponse(
+    BaseModel
+):
+    finding_count: int
+    high_count: int
+    warning_count: int
+    info_count: int
+    action_count: int
+
+
+class AssistantPlatformDiagnosisResponse(
+    BaseModel
+):
+    catalog_id: int
+    grounded: bool = True
+    version: str = "2.6"
+
+    latest_version_id: int | None = None
+    overall_state: str
+
+    findings: list[
+        AssistantFindingResponse
+    ] = Field(
+        default_factory=list
+    )
+
+    recommended_actions: list[
+        AssistantRecommendedActionResponse
+    ] = Field(
+        default_factory=list
+    )
+
+    summary: (
+        AssistantReasoningSummaryResponse
+    )
