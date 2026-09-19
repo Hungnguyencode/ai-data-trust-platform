@@ -1,0 +1,400 @@
+from __future__ import annotations
+
+from fastapi.testclient import TestClient
+
+from api.main import app
+from src.assistant.llm_provider import (
+    LLMConfigurationError,
+)
+
+client = TestClient(app)
+
+
+def _context() -> dict:
+    return {
+        "catalog_id": 1,
+    }
+
+
+def _diagnosis() -> dict:
+    return {
+        "catalog_id": 1,
+        "latest_version_id": 3,
+        "overall_state": "ACTION_REQUIRED",
+        "findings": [
+            {
+                "code": "VALIDATION_REJECTED",
+                "category": "validation",
+                "severity": "HIGH",
+                "message": (
+                    "Validation rejected "
+                    "the dataset."
+                ),
+                "evidence": {
+                    "validation_status": (
+                        "REJECTED"
+                    ),
+                },
+            }
+        ],
+        "recommended_actions": [
+            {
+                "code": "REMEDIATE_VALIDATION",
+                "priority": 1,
+                "action": (
+                    "Remediate validation "
+                    "failures."
+                ),
+                "reason": (
+                    "Validation rejected "
+                    "the dataset."
+                ),
+            }
+        ],
+        "summary": {
+            "finding_count": 1,
+            "high_count": 1,
+            "warning_count": 0,
+            "info_count": 0,
+            "action_count": 1,
+        },
+    }
+
+
+def _explanation() -> dict:
+    return {
+        "catalog_id": 1,
+        "latest_version_id": 3,
+        "overall_state": "ACTION_REQUIRED",
+        "headline": (
+            "Dataset requires remediation."
+        ),
+        "summary": (
+            "Validation controls rejected "
+            "the dataset."
+        ),
+        "explanation": (
+            "Deterministic explanation."
+        ),
+        "source_finding_codes": [
+            "VALIDATION_REJECTED",
+        ],
+        "source_action_codes": [
+            "REMEDIATE_VALIDATION",
+        ],
+    }
+
+
+def _copilot_result() -> dict:
+    return {
+        "catalog_id": 1,
+        "latest_version_id": 3,
+        "overall_state": "ACTION_REQUIRED",
+        "answer": (
+            "Remediate the validation "
+            "failure first."
+        ),
+        "source_finding_codes": [
+            "VALIDATION_REJECTED",
+        ],
+        "source_action_codes": [
+            "REMEDIATE_VALIDATION",
+        ],
+        "provider": "gemini",
+        "model": "gemini-test-model",
+        "used_llm": True,
+        "fallback_reason": None,
+        "error_type": None,
+    }
+
+
+def test_copilot_endpoint_returns_grounded_answer(
+    monkeypatch,
+):
+    context = _context()
+    diagnosis = _diagnosis()
+    explanation = _explanation()
+    copilot_result = _copilot_result()
+
+    captured: dict = {}
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: context,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "reason_about_platform_context"
+        ),
+        lambda value: diagnosis,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "explain_platform_diagnosis"
+        ),
+        lambda value: explanation,
+    )
+
+    def fake_answer_copilot_question(
+        question,
+        diagnosis_value,
+        explanation_value,
+    ):
+        captured["question"] = question
+        captured["diagnosis"] = diagnosis_value
+        captured["explanation"] = (
+            explanation_value
+        )
+        return copilot_result
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "answer_copilot_question"
+        ),
+        fake_answer_copilot_question,
+    )
+
+    response = client.post(
+        (
+            "/api/assistant/catalog/"
+            "1/copilot"
+        ),
+        json={
+            "question": (
+                "What should I fix first?"
+            )
+        },
+    )
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert body["catalog_id"] == 1
+
+    assert (
+        body["overall_state"]
+        == "ACTION_REQUIRED"
+    )
+
+    assert (
+        body["answer"]
+        == (
+            "Remediate the validation "
+            "failure first."
+        )
+    )
+
+    assert body["grounded"] is True
+    assert body["version"] == "2.6"
+
+    assert body["provider"] == "gemini"
+
+    assert (
+        body["model"]
+        == "gemini-test-model"
+    )
+
+    assert body["used_llm"] is True
+
+    assert body[
+        "source_finding_codes"
+    ] == [
+        "VALIDATION_REJECTED",
+    ]
+
+    assert body[
+        "source_action_codes"
+    ] == [
+        "REMEDIATE_VALIDATION",
+    ]
+
+    assert (
+        captured["question"]
+        == "What should I fix first?"
+    )
+
+    assert captured["diagnosis"] is diagnosis
+
+    assert (
+        captured["explanation"]
+        is explanation
+    )
+
+
+def test_copilot_endpoint_returns_500_for_llm_config_error(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: _context(),
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "reason_about_platform_context"
+        ),
+        lambda value: _diagnosis(),
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "explain_platform_diagnosis"
+        ),
+        lambda value: _explanation(),
+    )
+
+    def raise_config_error(
+        question,
+        diagnosis,
+        explanation,
+    ):
+        del question
+        del diagnosis
+        del explanation
+
+        raise LLMConfigurationError(
+            "Unsupported LLM_PROVIDER: magic"
+        )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "answer_copilot_question"
+        ),
+        raise_config_error,
+    )
+
+    response = client.post(
+        (
+            "/api/assistant/catalog/"
+            "1/copilot"
+        ),
+        json={
+            "question": "What is wrong?"
+        },
+    )
+
+    assert response.status_code == 500
+
+    assert response.json() == {
+        "detail": (
+            "Assistant LLM configuration "
+            "is invalid."
+        )
+    }
+
+
+def test_copilot_endpoint_returns_400_for_value_error(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: (
+            (_ for _ in ()).throw(
+                ValueError(
+                    "Catalog evidence "
+                    "is invalid."
+                )
+            )
+        ),
+    )
+
+    response = client.post(
+        (
+            "/api/assistant/catalog/"
+            "1/copilot"
+        ),
+        json={
+            "question": "What is wrong?"
+        },
+    )
+
+    assert response.status_code == 400
+
+    assert response.json() == {
+        "detail": (
+            "Catalog evidence is invalid."
+        )
+    }
+
+
+def test_copilot_endpoint_returns_500_for_unexpected_error(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: (
+            (_ for _ in ()).throw(
+                RuntimeError(
+                    "database failed"
+                )
+            )
+        ),
+    )
+
+    response = client.post(
+        (
+            "/api/assistant/catalog/"
+            "1/copilot"
+        ),
+        json={
+            "question": "What is wrong?"
+        },
+    )
+
+    assert response.status_code == 500
+
+    assert response.json() == {
+        "detail": (
+            "Unable to answer assistant "
+            "copilot question."
+        )
+    }
+
+
+def test_copilot_endpoint_rejects_empty_question():
+    response = client.post(
+        (
+            "/api/assistant/catalog/"
+            "1/copilot"
+        ),
+        json={
+            "question": ""
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_copilot_endpoint_rejects_invalid_catalog_id():
+    response = client.post(
+        (
+            "/api/assistant/catalog/"
+            "0/copilot"
+        ),
+        json={
+            "question": "What is wrong?"
+        },
+    )
+
+    assert response.status_code == 422

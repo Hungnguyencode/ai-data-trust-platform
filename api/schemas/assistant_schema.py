@@ -141,3 +141,37 @@ class AssistantPlatformEnhancedExplanationResponse(
 
     fallback_reason: str | None = None
     error_type: str | None = None
+
+
+class AssistantCopilotRequest(BaseModel):
+    question: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+    )
+
+
+class AssistantCopilotResponse(BaseModel):
+    catalog_id: int
+    grounded: bool = True
+    version: str = "2.6"
+
+    latest_version_id: int | None = None
+    overall_state: str
+
+    answer: str
+
+    source_finding_codes: list[str] = Field(
+        default_factory=list
+    )
+
+    source_action_codes: list[str] = Field(
+        default_factory=list
+    )
+
+    provider: str
+    model: str | None = None
+    used_llm: bool
+
+    fallback_reason: str | None = None
+    error_type: str | None = None
