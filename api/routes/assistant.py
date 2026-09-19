@@ -311,6 +311,10 @@ def ask_catalog_copilot(
             payload.question,
             diagnosis,
             explanation,
+            history=[
+                message.model_dump()
+                for message in payload.history
+            ],
         )
 
     except LLMConfigurationError as exc:

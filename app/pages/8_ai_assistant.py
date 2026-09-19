@@ -890,9 +890,86 @@ def get_current_version_id() -> int | None:
     return version_id
 
 
+def build_copilot_history(
+    messages: List[Dict[str, Any]],
+) -> List[Dict[str, str]]:
+    start_index = 0
+
+    first_message = (
+        messages[0]
+        if messages
+        else None
+    )
+
+    if (
+        isinstance(
+            first_message,
+            dict,
+        )
+        and first_message.get(
+            "role"
+        )
+        == "assistant"
+        and "copilot_meta"
+        not in first_message
+    ):
+        start_index = 1
+
+    history: List[
+        Dict[str, str]
+    ] = []
+
+    for message in messages[
+        start_index:
+    ]:
+        if not isinstance(
+            message,
+            dict,
+        ):
+            continue
+
+        role = str(
+            message.get(
+                "role",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
+        if role not in {
+            "user",
+            "assistant",
+        }:
+            continue
+
+        content = str(
+            message.get(
+                "content",
+                "",
+            )
+            or ""
+        ).strip()
+
+        if not content:
+            continue
+
+        history.append(
+            {
+                "role": role,
+                "content": content[:2000],
+            }
+        )
+
+    return history[-10:]
+
+
 def ask_assistant_backend(
     question: str,
     catalog_id: int | None,
+    history: List[
+        Dict[str, str]
+    ]
+    | None = None,
 ) -> Dict[str, Any]:
     if catalog_id is None:
         return {
@@ -910,6 +987,7 @@ def ask_assistant_backend(
         data = ask_catalog_copilot(
             catalog_id=catalog_id,
             question=question,
+            history=history,
         )
 
     except AssistantApiError:
@@ -1075,7 +1153,7 @@ def main() -> None:
         """
         <div class="info-box">
             Phần Smart diagnosis và Quick insights dùng kết quả scan trong session để hiển thị nhanh.
-            Phần Grounded Copilot chỉ gửi câu hỏi và Catalog ID tới backend; backend tự dựng trusted platform evidence.
+            Phần Grounded Copilot gửi câu hỏi, Catalog ID và bounded conversation history tới backend; backend luôn tự dựng lại trusted platform evidence. Conversation history chỉ là untrusted context, không phải platform evidence.
             Deterministic reasoning vẫn là nguồn kết luận có thẩm quyền.
         </div>
         """,
@@ -1168,6 +1246,14 @@ def main() -> None:
     if ask_sample:
         question_to_answer = selected_question
 
+        conversation_history = (
+            build_copilot_history(
+                st.session_state[
+                    "assistant_messages"
+                ]
+            )
+        )
+
         st.session_state["assistant_messages"].append(
             {
                 "role": "user",
@@ -1178,6 +1264,7 @@ def main() -> None:
         backend_result = ask_assistant_backend(
             question_to_answer,
             catalog_id,
+            history=conversation_history,
         )
         answer = backend_result["answer"]
 
@@ -1214,6 +1301,13 @@ def main() -> None:
     )
 
     if manual_question:
+        conversation_history = (
+            build_copilot_history(
+                st.session_state[
+                    "assistant_messages"
+                ]
+            )
+        )
         st.session_state["assistant_messages"].append(
             {
                 "role": "user",
@@ -1224,6 +1318,7 @@ def main() -> None:
         backend_result = ask_assistant_backend(
             manual_question,
             catalog_id,
+            history=conversation_history,
         )
         answer = backend_result["answer"]
 
