@@ -286,9 +286,15 @@ When Gemini is enabled, the enhanced explanation is generated from the already-g
 
 If the LLM is unavailable, the platform can fall back to the deterministic explanation instead of losing the underlying diagnosis.
 
-The existing `/api/assistant/ask` endpoint remains available for the earlier scan-context assistant, while the catalog-level assistant endpoints expose the newer platform reasoning pipeline.
+The existing `/api/assistant/ask` endpoint remains available for the earlier scan-context assistant.
 
-Future work can extend this grounded foundation into a conversational Copilot and controlled tool-using assistant without moving governance decisions into the LLM.
+The newer `POST /api/assistant/catalog/{catalog_id}/copilot` endpoint accepts only a user question from the client. The backend rebuilds trusted catalog-level evidence for the supplied `catalog_id`, runs deterministic platform reasoning, and then uses the configured LLM provider only to phrase the grounded answer.
+
+Deterministic findings, overall state, recommended-action priorities, and source codes remain authoritative. The LLM does not replace governance or validation decisions.
+
+The Streamlit Data Trust Copilot now uses this catalog-level endpoint and surfaces grounding and provider metadata such as overall state, provider/model, fallback status, and source finding/action codes.
+
+Future work can extend the Copilot with broader persisted evidence, conversational history, local providers such as Ollama, and controlled tool use without moving governance decisions into the LLM.
 
 ---
 
@@ -312,6 +318,7 @@ Selected endpoints:
 | `GET /api/assistant/catalog/{catalog_id}/diagnosis` | Deterministic platform diagnosis |
 | `GET /api/assistant/catalog/{catalog_id}/explanation` | Deterministic grounded explanation |
 | `GET /api/assistant/catalog/{catalog_id}/enhanced-explanation` | Optional LLM-enhanced grounded explanation |
+| `POST /api/assistant/catalog/{catalog_id}/copilot` | Grounded single-turn Data Trust Copilot |
 | `GET /api/scans/history` | Persisted scan history |
 | `GET /api/pipeline-runs` | Pipeline run history |
 | `GET /api/operational-events` | Operational event history |
@@ -622,49 +629,30 @@ This repository is a **portfolio and learning-oriented platform prototype**, not
 
 It intentionally focuses on architecture, data-platform behavior, traceability and engineering practices rather than enterprise-scale infrastructure.
 
+
 ---
 
 ## Next development phase
 
-The next major technical phase is a **grounded Data Trust Copilot** built on top of the current deterministic reasoning and LLM provider layers.
+The **Grounded Data Trust Copilot** is now implemented as a single-turn catalog-level assistant with Streamlit UI integration.
 
-The platform already provides catalog-level evidence collection, deterministic diagnosis, grounded explanation, and optional LLM enhancement.
-
-The next step is to make that foundation conversational and tool-aware without transferring governance authority to the LLM.
-
-The target direction is:
+Its current request boundary is intentionally narrow:
 
 ```text
-Platform Evidence
-        ->
+Client
+    -> catalog_id + question
+    ->
+FastAPI Copilot endpoint
+    ->
+Trusted Platform Evidence
+    ->
 Deterministic Reasoning
-        ->
+    ->
 Grounded Explanation
-        ->
-LLM Provider
-        ->
-Conversational Copilot
-        ->
-Controlled Tool Use
-```
-
-The Copilot should be able to help users investigate questions such as:
-
-```text
-Why is this dataset currently unhealthy?
-
-What evidence caused the current diagnosis?
-
-Which issue should be investigated first?
-
-What changed across dataset versions?
-
-Which platform evidence supports the recommended action?
-```
-
-Later phases may introduce controlled tool execution, where the assistant can retrieve approved platform evidence or trigger explicitly permitted operations.
-
-The deterministic platform remains the source of truth. The LLM must not independently change governance decisions, validation outcomes, lifecycle state, finding severity, or action priority.
+    ->
+Configured LLM Provider
+    ->
+Grounded Answer + Traceability Metadata
 
 ---
 

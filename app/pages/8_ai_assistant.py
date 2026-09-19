@@ -17,8 +17,11 @@ API_BASE_URL = os.getenv(
     "API_BASE_URL",
     "http://127.0.0.1:8000",
 )
-ASSISTANT_ASK_URL = f"{API_BASE_URL}/api/assistant/ask"
 
+from app.services.assistant_api import (
+    AssistantApiError,
+    ask_catalog_copilot,
+)
 from src.assistant.ai_explainer import generate_quick_insight
 from src.assistant.fallback_rules import priority_action_plan, smart_diagnosis
 from src.assistant.prompt_builder import (
@@ -28,7 +31,7 @@ from src.assistant.prompt_builder import (
 )
 
 st.set_page_config(
-    page_title="AI Assistant",
+    page_title="Data Trust Copilot",
     page_icon="🤖",
     layout="wide",
 )
@@ -548,7 +551,7 @@ def render_api_status_badge(is_connected: bool) -> None:
         label = "FastAPI connected"
         class_name = "api-status-badge"
     else:
-        label = "FastAPI offline — local fallback"
+        label = "FastAPI offline — Copilot unavailable"
         class_name = "api-status-badge offline"
 
     st.markdown(
@@ -562,156 +565,422 @@ def render_api_status_badge(is_connected: bool) -> None:
     )
 
 
-def render_chat_message(role: str, message: str) -> None:
+def render_chat_message(
+    role: str,
+    message: str,
+    copilot_meta: Dict[str, Any] | None = None,
+) -> None:
     if role == "user":
-        with st.chat_message("user", avatar="🧑"):
+        with st.chat_message(
+            "user",
+            avatar="🧑",
+        ):
             st.markdown(message)
-    else:
-        with st.chat_message("assistant", avatar="🤖"):
-            st.markdown(message)
+
+        return
+
+    with st.chat_message(
+        "assistant",
+        avatar="🤖",
+    ):
+        st.markdown(message)
+
+        if not isinstance(
+            copilot_meta,
+            dict,
+        ):
+            return
+
+        if not copilot_meta.get(
+            "ok",
+            False,
+        ):
+            st.caption(
+                "Copilot unavailable"
+            )
+            return
+
+        overall_state = str(
+            copilot_meta.get(
+                "overall_state"
+            )
+            or "UNKNOWN"
+        )
+
+        provider = str(
+            copilot_meta.get(
+                "provider"
+            )
+            or "unknown"
+        )
+
+        grounded = bool(
+            copilot_meta.get(
+                "grounded",
+                False,
+            )
+        )
+
+        used_llm = bool(
+            copilot_meta.get(
+                "used_llm",
+                False,
+            )
+        )
+
+        execution_label = (
+            provider
+            if used_llm
+            else "deterministic fallback"
+        )
+
+        grounding_label = (
+            "grounded"
+            if grounded
+            else "not grounded"
+        )
+
+        st.caption(
+            f"{overall_state} · "
+            f"{execution_label} · "
+            f"{grounding_label}"
+        )
+
+        with st.expander(
+            "Evidence & provider details",
+            expanded=False,
+        ):
+            st.write(
+                "**Catalog ID:**",
+                copilot_meta.get(
+                    "catalog_id"
+                ),
+            )
+
+            st.write(
+                "**Latest version ID:**",
+                copilot_meta.get(
+                    "latest_version_id"
+                ),
+            )
+
+            st.write(
+                "**Provider:**",
+                provider,
+            )
+
+            st.write(
+                "**Model:**",
+                copilot_meta.get(
+                    "model"
+                )
+                or "N/A",
+            )
+
+            st.write(
+                "**LLM used:**",
+                used_llm,
+            )
+
+            fallback_reason = (
+                copilot_meta.get(
+                    "fallback_reason"
+                )
+            )
+
+            if fallback_reason:
+                st.write(
+                    "**Fallback reason:**",
+                    fallback_reason,
+                )
+
+            error_type = copilot_meta.get(
+                "error_type"
+            )
+
+            if error_type:
+                st.write(
+                    "**Provider error type:**",
+                    error_type,
+                )
+
+            finding_codes = (
+                copilot_meta.get(
+                    "source_finding_codes",
+                    [],
+                )
+                or []
+            )
+
+            action_codes = (
+                copilot_meta.get(
+                    "source_action_codes",
+                    [],
+                )
+                or []
+            )
+
+            st.write(
+                "**Finding codes:**",
+                (
+                    ", ".join(
+                        str(code)
+                        for code in finding_codes
+                    )
+                    if finding_codes
+                    else "None"
+                ),
+            )
+
+            st.write(
+                "**Action codes:**",
+                (
+                    ", ".join(
+                        str(code)
+                        for code in action_codes
+                    )
+                    if action_codes
+                    else "None"
+                ),
+            )
+
+
+def build_copilot_chat_message(
+    answer: str,
+    backend_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "role": "assistant",
+        "content": answer,
+        "copilot_meta": {
+            "ok": backend_result.get(
+                "ok",
+                False,
+            ),
+            "source": backend_result.get(
+                "source"
+            ),
+            "catalog_id": backend_result.get(
+                "catalog_id"
+            ),
+            "latest_version_id": (
+                backend_result.get(
+                    "latest_version_id"
+                )
+            ),
+            "overall_state": backend_result.get(
+                "overall_state"
+            ),
+            "grounded": backend_result.get(
+                "grounded"
+            ),
+            "provider": backend_result.get(
+                "provider"
+            ),
+            "model": backend_result.get(
+                "model"
+            ),
+            "used_llm": backend_result.get(
+                "used_llm"
+            ),
+            "fallback_reason": backend_result.get(
+                "fallback_reason"
+            ),
+            "error_type": backend_result.get(
+                "error_type"
+            ),
+            "source_finding_codes": (
+                backend_result.get(
+                    "source_finding_codes",
+                    [],
+                )
+            ),
+            "source_action_codes": (
+                backend_result.get(
+                    "source_action_codes",
+                    [],
+                )
+            ),
+        },
+    }
 
 
 def get_question_options() -> List[str]:
     return [
-        "Tóm tắt dataset hiện tại",
-        "Dataset này có ổn để phân tích không?",
-        "Giải thích Data Trust Score",
-        "Tại sao Trust Score chưa đạt 90?",
-        "Nhóm nào đang kéo điểm xuống nhiều nhất?",
-        "Muốn tăng điểm nhanh nhất thì sửa gì?",
-        "Lập cleaning plan theo từng cột",
-        "Tóm tắt quality issues",
-        "Sửa missing value như thế nào?",
-        "Sửa duplicate rows như thế nào?",
-        "Cột nào nên xử lý trước?",
-        "Phân tích anomaly/outlier",
-        "Outlier có nên xóa không?",
-        "Đánh giá privacy risk",
-        "Vì sao Privacy Risk là High?",
-        "Dataset này có nên public không?",
-        "Phân tích drift detection",
-        "Drift cao thì có dùng current dataset được không?",
-        "Giải thích AI readiness",
-        "Rủi ro lớn nhất hiện tại là gì?",
-        "Nếu chỉ sửa 3 vấn đề thì nên sửa gì?",
+        "Tóm tắt trạng thái Data Trust hiện tại",
+        "Dataset hiện tại đang ở trạng thái nào?",
+        "Vấn đề quan trọng nhất hiện tại là gì?",
+        "Mình nên xử lý việc gì trước?",
+        "Có action nào cần thực hiện không?",
+        "Validation hiện tại có vấn đề gì không?",
+        "Governance hiện tại đang ở trạng thái nào?",
+        "Lifecycle của dataset hiện tại ra sao?",
+        "Freshness của dataset có cần chú ý không?",
+        "Volume hiện tại có dấu hiệu bất thường không?",
+        "Pipeline gần nhất có vấn đề gì không?",
+        "Evidence nào dẫn tới kết luận hiện tại?",
     ]
 
 
-def map_sample_question(option: str) -> str:
-    mapping = {
-        "Tóm tắt dataset hiện tại": "Tóm tắt dataset hiện tại",
-        "Dataset này có ổn để phân tích không?": "Dataset này có ổn không, đánh giá tổng thể giúp mình",
-        "Giải thích Data Trust Score": "Giải thích Data Trust Score",
-        "Tại sao Trust Score chưa đạt 90?": "Tại sao Trust Score chưa đạt 90?",
-        "Nhóm nào đang kéo điểm xuống nhiều nhất?": "Nhóm nào đang kéo điểm xuống nhiều nhất?",
-        "Muốn tăng điểm nhanh nhất thì sửa gì?": "Muốn tăng điểm nhanh nhất thì sửa gì?",
-        "Lập cleaning plan theo từng cột": "Lập cleaning plan theo từng cột",
-        "Tóm tắt quality issues": "Tóm tắt quality issues",
-        "Sửa missing value như thế nào?": "Sửa missing value như thế nào?",
-        "Sửa duplicate rows như thế nào?": "Sửa duplicate rows như thế nào?",
-        "Cột nào nên xử lý trước?": "Cột nào nên xử lý trước?",
-        "Phân tích anomaly/outlier": "Phân tích anomaly/outlier",
-        "Outlier có nên xóa không?": "Outlier có nên xóa không?",
-        "Đánh giá privacy risk": "Đánh giá privacy risk",
-        "Vì sao Privacy Risk là High?": "Vì sao Privacy Risk là High?",
-        "Dataset này có nên public không?": "Dataset này có nên public không?",
-        "Phân tích drift detection": "Phân tích drift detection",
-        "Drift cao thì có dùng current dataset được không?": "Drift cao thì có dùng current dataset được không?",
-        "Giải thích AI readiness": "Giải thích AI readiness",
-        "Rủi ro lớn nhất hiện tại là gì?": "Rủi ro lớn nhất hiện tại là gì?",
-        "Nếu chỉ sửa 3 vấn đề thì nên sửa gì?": "Nếu chỉ sửa 3 vấn đề thì nên sửa gì?",
-    }
+def get_current_catalog_id() -> int | None:
+    registration = st.session_state.get(
+        "current_catalog_registration"
+    )
 
-    return mapping.get(option, option)
-
-
-def make_json_safe(value: Any) -> Any:
-    if value is None:
+    if not isinstance(
+        registration,
+        dict,
+    ):
         return None
 
-    if isinstance(value, pd.DataFrame):
-        return value.where(pd.notnull(value), None).to_dict(orient="records")
+    raw_catalog_id = registration.get(
+        "catalog_id"
+    )
 
-    if isinstance(value, dict):
-        return {str(k): make_json_safe(v) for k, v in value.items()}
-
-    if isinstance(value, list):
-        return [make_json_safe(item) for item in value]
-
-    if isinstance(value, tuple):
-        return [make_json_safe(item) for item in value]
-
-    if isinstance(value, set):
-        return [make_json_safe(item) for item in value]
+    if raw_catalog_id is None:
+        return None
 
     try:
-        import numpy as np
-
-        if isinstance(value, np.integer):
-            return int(value)
-
-        if isinstance(value, np.floating):
-            return float(value)
-
-        if isinstance(value, np.ndarray):
-            return value.tolist()
-    except Exception:
-        pass
-
-    if hasattr(value, "item"):
-        try:
-            return value.item()
-        except Exception:
-            pass
-
-    return value
-
-
-def ask_assistant_backend(question: str, context: Dict[str, Any]) -> Dict[str, Any]:
-    payload = {
-        "question": question,
-        "context": make_json_safe(context),
-    }
-
-    try:
-        response = requests.post(
-            ASSISTANT_ASK_URL,
-            json=payload,
-            timeout=10,
+        catalog_id = int(
+            raw_catalog_id
         )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return None
 
-        response.raise_for_status()
-        data = response.json()
+    if catalog_id <= 0:
+        return None
 
-        return {
-            "ok": True,
-            "answer": data.get("answer", "Backend không trả về answer."),
-            "source": "FastAPI",
-        }
+    return catalog_id
 
-    except requests.exceptions.ConnectionError:
+
+def get_current_version_id() -> int | None:
+    registration = st.session_state.get(
+        "current_catalog_registration"
+    )
+
+    if not isinstance(
+        registration,
+        dict,
+    ):
+        return None
+
+    raw_version_id = registration.get(
+        "version_id"
+    )
+
+    if raw_version_id is None:
+        return None
+
+    try:
+        version_id = int(
+            raw_version_id
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return None
+
+    if version_id <= 0:
+        return None
+
+    return version_id
+
+
+def ask_assistant_backend(
+    question: str,
+    catalog_id: int | None,
+) -> Dict[str, Any]:
+    if catalog_id is None:
         return {
             "ok": False,
             "answer": (
-                "Không kết nối được FastAPI backend. "
-                "Hãy chạy lệnh: `uvicorn api.main:app --reload --port 8000`."
+                "Grounded Copilot cần một dataset "
+                "đã được đăng ký trong Dataset Catalog. "
+                "Hãy upload dataset và hoàn tất "
+                "dataset workflow trước."
             ),
-            "source": "Local fallback",
+            "source": "Copilot unavailable",
         }
 
-    except requests.exceptions.Timeout:
+    try:
+        data = ask_catalog_copilot(
+            catalog_id=catalog_id,
+            question=question,
+        )
+
+    except AssistantApiError:
         return {
             "ok": False,
-            "answer": "FastAPI backend phản hồi quá lâu. Hãy kiểm tra terminal Uvicorn.",
-            "source": "Local fallback",
+            "answer": (
+                "Không gọi được Grounded Copilot backend. "
+                "Hãy kiểm tra FastAPI/Uvicorn "
+                "và thử lại."
+            ),
+            "source": "Copilot unavailable",
         }
 
-    except Exception as exc:
-        return {
-            "ok": False,
-            "answer": f"Lỗi khi gọi FastAPI backend: `{exc}`",
-            "source": "Local fallback",
-        }
+    answer = data.get(
+        "answer"
+    )
+
+    return {
+        "ok": True,
+        "answer": (
+            str(answer)
+            if answer
+            else "Backend không trả về answer."
+        ),
+        "source": "FastAPI Copilot",
+        "catalog_id": data.get(
+            "catalog_id"
+        ),
+        "latest_version_id": data.get(
+            "latest_version_id"
+        ),
+        "overall_state": data.get(
+            "overall_state"
+        ),
+        "grounded": data.get(
+            "grounded",
+            True,
+        ),
+        "provider": data.get(
+            "provider"
+        ),
+        "model": data.get(
+            "model"
+        ),
+        "used_llm": bool(
+            data.get(
+                "used_llm",
+                False,
+            )
+        ),
+        "fallback_reason": data.get(
+            "fallback_reason"
+        ),
+        "error_type": data.get(
+            "error_type"
+        ),
+        "source_finding_codes": list(
+            data.get(
+                "source_finding_codes",
+                [],
+            )
+            or []
+        ),
+        "source_action_codes": list(
+            data.get(
+                "source_action_codes",
+                [],
+            )
+            or []
+        ),
+    }
 
 
 def main() -> None:
@@ -719,9 +988,9 @@ def main() -> None:
 
     st.markdown(
         """
-        <div class="assistant-page-title">🤖 AI Assistant</div>
+        <div class="assistant-page-title">🤖 Grounded Data Trust Copilot</div>
         <div class="assistant-subtitle">
-            Rule-grounded assistant giúp giải thích report, tóm tắt lỗi, gợi ý xử lý và diễn giải AI readiness.
+            Copilot trả lời câu hỏi dựa trên trusted platform evidence và deterministic reasoning của dataset hiện tại.
         </div>
         """,
         unsafe_allow_html=True,
@@ -733,6 +1002,14 @@ def main() -> None:
 
     dataset = context.get("dataset", {}) or {}
     trust = context.get("trust_score", {}) or {}
+
+    catalog_id = get_current_catalog_id()
+    version_id = get_current_version_id()
+
+    assistant_dataset_binding = (
+        catalog_id,
+        version_id,
+    )
 
     st.subheader("1. Assistant grounding status")
 
@@ -797,7 +1074,9 @@ def main() -> None:
     st.markdown(
         """
         <div class="info-box">
-           AI Assistant Version 2.6 hoạt động theo cơ chế rule-grounded: chỉ giải thích dựa trên kết quả scan đã có trong session hiện tại, không tự suy diễn dữ liệu ngoài báo cáo.
+            Phần Smart diagnosis và Quick insights dùng kết quả scan trong session để hiển thị nhanh.
+            Phần Grounded Copilot chỉ gửi câu hỏi và Catalog ID tới backend; backend tự dựng trusted platform evidence.
+            Deterministic reasoning vẫn là nguồn kết luận có thẩm quyền.
         </div>
         """,
         unsafe_allow_html=True,
@@ -845,15 +1124,31 @@ def main() -> None:
         with tab:
             st.markdown(generate_quick_insight(topic, context))
 
-    st.subheader("4. Ask the assistant")
+    st.subheader("4. Ask the Grounded Copilot")
 
-    if "assistant_messages" not in st.session_state:
+    if (
+        "assistant_messages"
+        not in st.session_state
+        or st.session_state.get(
+            "assistant_dataset_binding"
+        )
+        != assistant_dataset_binding
+    ):
+        st.session_state[
+            "assistant_dataset_binding"
+        ] = assistant_dataset_binding
+
         st.session_state["assistant_messages"] = [
             {
                 "role": "assistant",
                 "content": (
-                    "Mình là AI Assistant Version 2.6. Mình chỉ trả lời dựa trên kết quả scan hiện có. "
-                    "Bạn có thể hỏi về quality issues, trust score, anomaly, privacy risk, drift detection hoặc AI readiness."
+                    (
+                        "Mình là Grounded Data Trust Copilot. "
+                        "Mình trả lời dựa trên platform evidence "
+                        "được backend dựng cho dataset hiện tại. "
+                        "Nếu evidence không đủ để trả lời một câu hỏi, "
+                        "mình sẽ nói rõ giới hạn đó."
+                    )
                 ),
             }
         ]
@@ -871,7 +1166,7 @@ def main() -> None:
         ask_sample = st.button("Ask", use_container_width=True)
 
     if ask_sample:
-        question_to_answer = map_sample_question(selected_question)
+        question_to_answer = selected_question
 
         st.session_state["assistant_messages"].append(
             {
@@ -880,22 +1175,43 @@ def main() -> None:
             }
         )
 
-        backend_result = ask_assistant_backend(question_to_answer, context)
+        backend_result = ask_assistant_backend(
+            question_to_answer,
+            catalog_id,
+        )
         answer = backend_result["answer"]
 
         st.session_state["assistant_messages"].append(
-            {
-                "role": "assistant",
-                "content": answer,
-            }
+            build_copilot_chat_message(
+                answer,
+                backend_result,
+            )
         )
 
     for message in st.session_state["assistant_messages"]:
-        role = message.get("role", "assistant")
-        content = message.get("content", "")
-        render_chat_message(role, content)
+        role = message.get(
+            "role",
+            "assistant",
+        )
 
-    manual_question = st.chat_input("Hỏi assistant về kết quả scan hiện tại...")
+        content = message.get(
+            "content",
+            "",
+        )
+
+        copilot_meta = message.get(
+            "copilot_meta"
+        )
+
+        render_chat_message(
+            role,
+            content,
+            copilot_meta,
+        )
+
+    manual_question = st.chat_input(
+        "Hỏi Copilot về dataset hiện tại..."
+    )
 
     if manual_question:
         st.session_state["assistant_messages"].append(
@@ -905,14 +1221,17 @@ def main() -> None:
             }
         )
 
-        backend_result = ask_assistant_backend(manual_question, context)
+        backend_result = ask_assistant_backend(
+            manual_question,
+            catalog_id,
+        )
         answer = backend_result["answer"]
 
         st.session_state["assistant_messages"].append(
-            {
-                "role": "assistant",
-                "content": answer,
-            }
+            build_copilot_chat_message(
+                answer,
+                backend_result,
+            )
         )
 
         st.rerun()
