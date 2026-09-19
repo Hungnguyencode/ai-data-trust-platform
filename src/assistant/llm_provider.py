@@ -12,7 +12,7 @@ SUPPORTED_LLM_PROVIDERS = {
 }
 
 DEFAULT_GEMINI_MODEL = (
-    "gemini-3-flash-preview"
+    "gemini-3.6-flash"
 )
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
@@ -65,6 +65,10 @@ def _is_transient_gemini_error(
     )
 
 
+class LLMConfigurationError(ValueError):
+    """Raised when LLM environment configuration is invalid."""
+
+
 @dataclass(
     frozen=True
 )
@@ -113,7 +117,7 @@ def load_llm_config(
         provider
         not in SUPPORTED_LLM_PROVIDERS
     ):
-        raise ValueError(
+        raise LLMConfigurationError(
             "Unsupported LLM_PROVIDER: "
             f"{provider}"
         )
@@ -130,13 +134,13 @@ def load_llm_config(
             raw_timeout
         )
     except ValueError as exc:
-        raise ValueError(
+        raise LLMConfigurationError(
             "LLM_TIMEOUT_SECONDS must "
             "be a positive number."
         ) from exc
 
     if timeout_seconds <= 0:
-        raise ValueError(
+        raise LLMConfigurationError(
             "LLM_TIMEOUT_SECONDS must "
             "be a positive number."
         )

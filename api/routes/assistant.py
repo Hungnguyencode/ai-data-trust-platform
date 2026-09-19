@@ -12,6 +12,9 @@ from api.schemas.assistant_schema import (
     AssistantPlatformEnhancedExplanationResponse,
     AssistantPlatformExplanationResponse,
 )
+from src.assistant.llm_provider import (
+    LLMConfigurationError,
+)
 from src.assistant.platform_context import (
     build_platform_context,
 )
@@ -237,6 +240,15 @@ def get_catalog_assistant_enhanced_explanation(
                 explanation
             )
         )
+
+    except LLMConfigurationError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Assistant LLM configuration "
+                "is invalid."
+            ),
+        ) from exc
 
     except ValueError as exc:
         raise HTTPException(

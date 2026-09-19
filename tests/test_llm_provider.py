@@ -8,6 +8,7 @@ from src.assistant.llm_provider import (
     DEFAULT_GEMINI_MODEL,
     DisabledLLMProvider,
     GeminiLLMProvider,
+    LLMConfigurationError,
     LLMProviderConfig,
     _build_gemini_client,
     build_llm_provider,
@@ -84,7 +85,7 @@ def test_gemini_default_model():
 
 def test_invalid_provider_is_rejected():
     with pytest.raises(
-        ValueError,
+        LLMConfigurationError,
         match=(
             "Unsupported LLM_PROVIDER"
         ),
@@ -110,7 +111,7 @@ def test_invalid_timeout_is_rejected(
     timeout,
 ):
     with pytest.raises(
-        ValueError,
+        LLMConfigurationError,
         match=(
             "LLM_TIMEOUT_SECONDS"
         ),

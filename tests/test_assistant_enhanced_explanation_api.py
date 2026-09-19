@@ -3,6 +3,9 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from api.main import app
+from src.assistant.llm_provider import (
+    LLMConfigurationError,
+)
 
 client = TestClient(app)
 
@@ -216,4 +219,94 @@ def test_enhanced_explanation_endpoint_fallback(
     assert (
         body["enhanced_explanation"]
         == body["explanation"]
+    )
+
+
+def test_enhanced_explanation_endpoint_returns_500_for_llm_config_error(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: {
+            "catalog_id": catalog_id,
+        },
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "reason_about_platform_context"
+        ),
+        lambda value: {
+            "catalog_id": 1,
+        },
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "explain_platform_diagnosis"
+        ),
+        lambda value: {
+            "catalog_id": 1,
+        },
+    )
+
+    def fail_enhancement(value):
+        raise LLMConfigurationError(
+            "Unsupported LLM_PROVIDER: magic"
+        )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "enhance_platform_explanation"
+        ),
+        fail_enhancement,
+    )
+
+    response = client.get(
+        (
+            "/api/assistant/catalog/"
+            "1/enhanced-explanation"
+        )
+    )
+
+    assert response.status_code == 500
+
+    assert response.json()["detail"] == (
+        "Assistant LLM configuration "
+        "is invalid."
+    )
+
+
+def test_enhanced_explanation_endpoint_returns_400_for_value_error(
+    monkeypatch,
+):
+    def fail_context(catalog_id):
+        raise ValueError(
+            "Catalog evidence is invalid."
+        )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        fail_context,
+    )
+
+    response = client.get(
+        (
+            "/api/assistant/catalog/"
+            "1/enhanced-explanation"
+        )
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "Catalog evidence is invalid."
     )
