@@ -183,6 +183,61 @@ def _evaluate_validation(
         "status",
     )
 
+    quality_evidence = {
+        "version_id": version_id,
+        "validation_id": record.get(
+            "validation_id"
+        ),
+        "total_issues": record.get(
+            "total_issues"
+        ),
+        "high_issues": record.get(
+            "high_issues"
+        ),
+        "medium_issues": record.get(
+            "medium_issues"
+        ),
+        "low_issues": record.get(
+            "low_issues"
+        ),
+        "blocking_issue_count": record.get(
+            "blocking_issue_count"
+        ),
+    }
+
+    quality_count_keys = (
+        "total_issues",
+        "high_issues",
+        "medium_issues",
+        "low_issues",
+        "blocking_issue_count",
+    )
+
+    has_quality_summary = any(
+        quality_evidence[key] is not None
+        for key in quality_count_keys
+    )
+
+    if has_quality_summary:
+        _add_finding(
+            findings,
+            code="QUALITY_SUMMARY_RECORDED",
+            category="QUALITY",
+            severity="INFO",
+            message=(
+                "The latest dataset version "
+                "has persisted quality summary: "
+                f"{quality_evidence['total_issues']} total issues, "
+                f"{quality_evidence['high_issues']} high, "
+                f"{quality_evidence['medium_issues']} medium, "
+                f"{quality_evidence['low_issues']} low, "
+                f"and "
+                f"{quality_evidence['blocking_issue_count']} "
+                "blocking."
+            ),
+            evidence=quality_evidence,
+        )
+
     if status == "REJECTED":
         _add_finding(
             findings,
@@ -286,6 +341,68 @@ def _evaluate_governance(
         "decision",
         "governance_decision",
     )
+
+    raw_trust_score = record.get(
+        "trust_score"
+    )
+
+    if raw_trust_score is not None:
+        try:
+            trust_score = float(
+                raw_trust_score
+            )
+        except (
+            TypeError,
+            ValueError,
+        ):
+            trust_score = None
+
+        if trust_score is not None:
+            _add_finding(
+                findings,
+                code="TRUST_SCORE_RECORDED",
+                category="TRUST_SCORE",
+                severity="INFO",
+                message=(
+                    "The latest dataset version "
+                    "has persisted Data Trust Score "
+                    f"{trust_score:.2f}."
+                ),
+                evidence={
+                    "version_id": version_id,
+                    "governance_id": record.get(
+                        "governance_id"
+                    ),
+                    "trust_score": trust_score,
+                },
+            )
+
+    privacy_status = _status(
+        record,
+        "privacy_status",
+    )
+
+    if privacy_status is not None:
+        _add_finding(
+            findings,
+            code="PRIVACY_STATUS_RECORDED",
+            category="PRIVACY",
+            severity="INFO",
+            message=(
+                "The latest dataset version "
+                "has persisted privacy status "
+                f"{privacy_status}."
+            ),
+            evidence={
+                "version_id": version_id,
+                "governance_id": record.get(
+                    "governance_id"
+                ),
+                "privacy_status": (
+                    privacy_status
+                ),
+            },
+        )
 
     if decision == "REJECTED":
         _add_finding(
