@@ -51,7 +51,7 @@ Before data is promoted for downstream use, a data platform may need to answer q
 | Orchestration | Apache Airflow DAGs for pipeline execution and scheduled monitors |
 | Observability | Pipeline runs, operational events, Freshness and Volume monitoring |
 | Monitoring | Prometheus metrics and Grafana dashboards |
-| AI | Rule-grounded assistant that explains supplied platform evidence |
+| AI | Evidence-grounded assistant with deterministic reasoning and optional LLM enhancement |
 | Engineering | Docker Compose, GitHub Actions, Ruff, pytest and health/readiness probes |
 
 ---
@@ -95,7 +95,7 @@ flowchart TB
     CORE --> SQL[(SQL Server)]
     CORE --> STORAGE[(Raw / Processed / Quarantine Artifacts)]
 
-    API --> AI[Rule-grounded AI Assistant]
+    API --> AI[Evidence-grounded AI Assistant]
 
     API --> METRICS[/Prometheus Metrics/]
     METRICS --> PROM[Prometheus]
@@ -221,37 +221,74 @@ Freshness and Volume monitors are designed to be safe to execute repeatedly with
 
 ## AI Assistant
 
-The current assistant is intentionally **rule-grounded and evidence-driven**.
+The platform now has an **evidence-grounded assistant pipeline** built on deterministic platform state.
 
-It does not act as an unrestricted chatbot.
+The AI layer is deliberately separated into two responsibilities:
 
-The assistant receives structured scan context and can explain information such as:
+1. **Deterministic platform reasoning** decides the actual platform state.
+2. **Optional LLM enhancement** improves how that grounded result is explained to a human.
 
-- Data Trust Score,
-- quality issues,
-- detected risks,
-- priorities,
-- recommended actions.
-
-Its current principle is:
-
-> Only answer from provided scan context.
-
-This reduces unsupported conclusions and keeps AI output connected to platform evidence.
-
-A future phase will extend this idea into an **Observability Assistant** capable of reasoning over Trust Score, governance, Freshness, Volume, pipeline failures, operational events and lineage.
+The current catalog-level reasoning flow is:
 
 ```text
-Platform Evidence
-        ↓
-Quality + Trust + Governance
-        ↓
-Freshness + Volume + Pipeline Events
-        ↓
-AI Observability Assistant
-        ↓
-Explain → Diagnose → Recommend
+SQL Server / Platform Evidence
+        ->
+Platform Context
+        ->
+Deterministic Platform Reasoning
+        ->
+Structured Diagnosis
+        ->
+Grounded Explanation
+        ->
+Optional LLM Enhancement
 ```
+
+Platform Context can include evidence from:
+
+- dataset version and lifecycle,
+- lineage,
+- Data Contracts,
+- validation results,
+- governance decisions,
+- Freshness monitoring,
+- Volume monitoring,
+- pipeline runs,
+- operational events.
+
+The deterministic reasoning layer remains the source of truth for:
+
+- overall state such as `HEALTHY`, `ATTENTION`, or `ACTION_REQUIRED`,
+- finding codes,
+- severity,
+- recommended-action codes,
+- action priority.
+
+The LLM is **not allowed to override these conclusions**.
+
+Its role is limited to improving natural-language explanation while preserving the deterministic evidence and traceability produced by the platform.
+
+The provider layer is pluggable:
+
+```text
+Grounded Explanation
+        ->
+LLM Provider
+        |-- disabled
+        |-- gemini
+        |-- ollama  (future)
+        `-- openai  (optional future)
+```
+
+`disabled` is the safe default, so the platform remains fully usable without an external AI provider.
+
+When Gemini is enabled, the enhanced explanation is generated from the already-grounded deterministic result rather than directly from raw database state.
+
+If the LLM is unavailable, the platform can fall back to the deterministic explanation instead of losing the underlying diagnosis.
+
+The existing `/api/assistant/ask` endpoint remains available for the earlier scan-context assistant, while the catalog-level assistant endpoints expose the newer platform reasoning pipeline.
+
+Future work can extend this grounded foundation into a conversational Copilot and controlled tool-using assistant without moving governance decisions into the LLM.
 
 ---
 
@@ -270,7 +307,11 @@ Selected endpoints:
 | `POST /api/workflows/run` | Governed dataset workflow |
 | `GET /api/datasets/{version_id}/lineage` | Dataset lineage |
 | `POST /api/datasets/{version_id}/promote` | Governed promotion |
-| `POST /api/assistant/ask` | Rule-grounded assistant |
+| `POST /api/assistant/ask` | Earlier scan-context assistant |
+| `GET /api/assistant/catalog/{catalog_id}/context` | Grounded platform evidence context |
+| `GET /api/assistant/catalog/{catalog_id}/diagnosis` | Deterministic platform diagnosis |
+| `GET /api/assistant/catalog/{catalog_id}/explanation` | Deterministic grounded explanation |
+| `GET /api/assistant/catalog/{catalog_id}/enhanced-explanation` | Optional LLM-enhanced grounded explanation |
 | `GET /api/scans/history` | Persisted scan history |
 | `GET /api/pipeline-runs` | Pipeline run history |
 | `GET /api/operational-events` | Operational event history |
@@ -441,6 +482,41 @@ to:
 
 and configure the required local values.
 
+The LLM integration is optional. The default configuration keeps external LLM usage disabled:
+
+```env
+LLM_PROVIDER=disabled
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.6-flash
+LLM_TIMEOUT_SECONDS=30
+```
+
+Supported provider values currently include:
+
+- `disabled` - safe deterministic mode with no external LLM call,
+- `gemini` - Google Gemini provider.
+
+To enable Gemini locally:
+
+```env
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=<your-local-api-key>
+GEMINI_MODEL=gemini-3.6-flash
+LLM_TIMEOUT_SECONDS=30
+```
+
+Create the Gemini API key from your Google AI project / Google AI Studio account, then store it only in your local `.env` or another secure environment-variable source.
+
+Never paste real API keys into source files, tests, documentation, commits, or pull requests.
+
+The provider behavior is intentionally defensive:
+
+- `disabled` returns the deterministic grounded explanation,
+- a missing Gemini API key falls back to the deterministic explanation,
+- provider runtime failures fall back safely without exposing provider secrets,
+- malformed LLM environment configuration is treated as server configuration error,
+- CI tests mock the provider and do not require a real API key, network request, or paid LLM call.
+
 Do not commit `.env`.
 
 ### 3. Start the core platform
@@ -550,36 +626,45 @@ It intentionally focuses on architecture, data-platform behavior, traceability a
 
 ## Next development phase
 
-The next major technical phase is an **AI Observability Assistant**.
+The next major technical phase is a **grounded Data Trust Copilot** built on top of the current deterministic reasoning and LLM provider layers.
 
-The goal is to let the assistant combine platform evidence such as:
+The platform already provides catalog-level evidence collection, deterministic diagnosis, grounded explanation, and optional LLM enhancement.
+
+The next step is to make that foundation conversational and tool-aware without transferring governance authority to the LLM.
+
+The target direction is:
 
 ```text
-Data Quality
-Trust Score
-Governance
-Lineage
-Freshness
-Volume
-Pipeline Runs
-Operational Events
+Platform Evidence
+        ->
+Deterministic Reasoning
+        ->
+Grounded Explanation
+        ->
+LLM Provider
+        ->
+Conversational Copilot
+        ->
+Controlled Tool Use
 ```
 
-and answer questions such as:
+The Copilot should be able to help users investigate questions such as:
 
 ```text
 Why is this dataset currently unhealthy?
 
-Why should this version not be promoted?
+What evidence caused the current diagnosis?
 
-What changed since the previous ingestion?
+Which issue should be investigated first?
 
-Which problem should be investigated first?
+What changed across dataset versions?
 
-What evidence supports this recommendation?
+Which platform evidence supports the recommended action?
 ```
 
-The assistant will remain evidence-grounded: explanations and recommendations must be traceable to actual platform state.
+Later phases may introduce controlled tool execution, where the assistant can retrieve approved platform evidence or trigger explicitly permitted operations.
+
+The deterministic platform remains the source of truth. The LLM must not independently change governance decisions, validation outcomes, lifecycle state, finding severity, or action priority.
 
 ---
 
