@@ -109,3 +109,35 @@ class AssistantPlatformExplanationResponse(
     source_action_codes: list[str] = Field(
         default_factory=list
     )
+
+
+class AssistantPlatformEnhancedExplanationResponse(
+    BaseModel
+):
+    catalog_id: int
+    grounded: bool = True
+    version: str = "2.6"
+
+    latest_version_id: int | None = None
+    overall_state: str
+
+    headline: str
+    summary: str
+
+    explanation: str
+    enhanced_explanation: str
+
+    source_finding_codes: list[str] = Field(
+        default_factory=list
+    )
+
+    source_action_codes: list[str] = Field(
+        default_factory=list
+    )
+
+    provider: str
+    model: str | None = None
+    used_llm: bool
+
+    fallback_reason: str | None = None
+    error_type: str | None = None

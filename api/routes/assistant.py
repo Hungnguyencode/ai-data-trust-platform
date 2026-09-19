@@ -9,13 +9,20 @@ from api.schemas.assistant_schema import (
     AssistantAskResponse,
     AssistantPlatformContextResponse,
     AssistantPlatformDiagnosisResponse,
+    AssistantPlatformEnhancedExplanationResponse,
     AssistantPlatformExplanationResponse,
+)
+from src.assistant.llm_provider import (
+    LLMConfigurationError,
 )
 from src.assistant.platform_context import (
     build_platform_context,
 )
 from src.assistant.platform_explanation import (
     explain_platform_diagnosis,
+)
+from src.assistant.platform_llm import (
+    enhance_platform_explanation,
 )
 from src.assistant.platform_reasoning import (
     reason_about_platform_context,
@@ -196,6 +203,74 @@ def get_catalog_assistant_explanation(
         **explanation,
         grounded=True,
         version="2.6",
+    )
+
+
+@router.get(
+    "/catalog/{catalog_id}/enhanced-explanation",
+    response_model=(
+        AssistantPlatformEnhancedExplanationResponse
+    ),
+)
+def get_catalog_assistant_enhanced_explanation(
+    catalog_id: int = Path(
+        ...,
+        gt=0,
+    ),
+):
+    try:
+        context = build_platform_context(
+            catalog_id
+        )
+
+        diagnosis = (
+            reason_about_platform_context(
+                context
+            )
+        )
+
+        explanation = (
+            explain_platform_diagnosis(
+                diagnosis
+            )
+        )
+
+        enhanced = (
+            enhance_platform_explanation(
+                explanation
+            )
+        )
+
+    except LLMConfigurationError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Assistant LLM configuration "
+                "is invalid."
+            ),
+        ) from exc
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to build assistant "
+                "enhanced platform explanation."
+            ),
+        ) from exc
+
+    return (
+        AssistantPlatformEnhancedExplanationResponse(
+            **enhanced,
+            grounded=True,
+            version="2.6",
+        )
     )
 
 
