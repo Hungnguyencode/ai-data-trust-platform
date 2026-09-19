@@ -7,6 +7,8 @@ from fastapi import (
 from api.schemas.assistant_schema import (
     AssistantAskRequest,
     AssistantAskResponse,
+    AssistantCopilotRequest,
+    AssistantCopilotResponse,
     AssistantPlatformContextResponse,
     AssistantPlatformDiagnosisResponse,
     AssistantPlatformEnhancedExplanationResponse,
@@ -17,6 +19,9 @@ from src.assistant.llm_provider import (
 )
 from src.assistant.platform_context import (
     build_platform_context,
+)
+from src.assistant.platform_copilot import (
+    answer_copilot_question,
 )
 from src.assistant.platform_explanation import (
     explain_platform_diagnosis,
@@ -271,6 +276,71 @@ def get_catalog_assistant_enhanced_explanation(
             grounded=True,
             version="2.6",
         )
+    )
+
+
+@router.post(
+    "/catalog/{catalog_id}/copilot",
+    response_model=AssistantCopilotResponse,
+)
+def ask_catalog_copilot(
+    payload: AssistantCopilotRequest,
+    catalog_id: int = Path(
+        ...,
+        gt=0,
+    ),
+):
+    try:
+        context = build_platform_context(
+            catalog_id
+        )
+
+        diagnosis = (
+            reason_about_platform_context(
+                context
+            )
+        )
+
+        explanation = (
+            explain_platform_diagnosis(
+                diagnosis
+            )
+        )
+
+        copilot = answer_copilot_question(
+            payload.question,
+            diagnosis,
+            explanation,
+        )
+
+    except LLMConfigurationError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Assistant LLM configuration "
+                "is invalid."
+            ),
+        ) from exc
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to answer assistant "
+                "copilot question."
+            ),
+        ) from exc
+
+    return AssistantCopilotResponse(
+        **copilot,
+        grounded=True,
+        version="2.6",
     )
 
 
