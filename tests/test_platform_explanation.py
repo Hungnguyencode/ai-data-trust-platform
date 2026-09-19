@@ -307,3 +307,133 @@ def test_unrecognized_state_becomes_unknown():
         result["overall_state"]
         == "UNKNOWN"
     )
+
+
+def test_explanation_surfaces_trust_and_privacy_findings():
+    diagnosis = {
+        "catalog_id": 1,
+        "latest_version_id": 3,
+        "overall_state": "HEALTHY",
+        "findings": [
+            {
+                "code": "TRUST_SCORE_RECORDED",
+                "category": "TRUST_SCORE",
+                "severity": "INFO",
+                "message": (
+                    "The latest dataset version "
+                    "has persisted Data Trust Score "
+                    "92.50."
+                ),
+                "evidence": {
+                    "version_id": 3,
+                    "governance_id": 21,
+                    "trust_score": 92.5,
+                },
+            },
+            {
+                "code": "PRIVACY_STATUS_RECORDED",
+                "category": "PRIVACY",
+                "severity": "INFO",
+                "message": (
+                    "The latest dataset version "
+                    "has persisted privacy status LOW."
+                ),
+                "evidence": {
+                    "version_id": 3,
+                    "governance_id": 21,
+                    "privacy_status": "LOW",
+                },
+            },
+        ],
+        "recommended_actions": [],
+        "summary": {
+            "finding_count": 2,
+            "high_count": 0,
+            "warning_count": 0,
+            "info_count": 2,
+            "action_count": 0,
+        },
+    }
+
+    result = explain_platform_diagnosis(
+        diagnosis
+    )
+
+    assert "92.50" in result["explanation"]
+    assert "privacy status LOW" in result["explanation"]
+
+    assert (
+        "TRUST_SCORE_RECORDED"
+        in result["source_finding_codes"]
+    )
+    assert (
+        "PRIVACY_STATUS_RECORDED"
+        in result["source_finding_codes"]
+    )
+
+    assert result["overall_state"] == "HEALTHY"
+    assert result["source_action_codes"] == []
+
+
+def test_explanation_surfaces_persisted_quality_summary():
+    diagnosis = {
+        "catalog_id": 1,
+        "latest_version_id": 3,
+        "overall_state": "HEALTHY",
+        "findings": [
+            {
+                "code": "QUALITY_SUMMARY_RECORDED",
+                "category": "QUALITY",
+                "severity": "INFO",
+                "message": (
+                    "The latest dataset version "
+                    "has persisted quality summary: "
+                    "4 total issues, 0 high, "
+                    "3 medium, 1 low, and "
+                    "0 blocking."
+                ),
+                "evidence": {
+                    "version_id": 3,
+                    "validation_id": 31,
+                    "total_issues": 4,
+                    "high_issues": 0,
+                    "medium_issues": 3,
+                    "low_issues": 1,
+                    "blocking_issue_count": 0,
+                },
+            },
+        ],
+        "recommended_actions": [],
+        "summary": {
+            "finding_count": 1,
+            "high_count": 0,
+            "warning_count": 0,
+            "info_count": 1,
+            "action_count": 0,
+        },
+    }
+
+    result = explain_platform_diagnosis(
+        diagnosis
+    )
+
+    assert (
+        "4 total issues"
+        in result["explanation"]
+    )
+    assert (
+        "3 medium"
+        in result["explanation"]
+    )
+    assert (
+        "0 blocking"
+        in result["explanation"]
+    )
+
+    assert (
+        "QUALITY_SUMMARY_RECORDED"
+        in result["source_finding_codes"]
+    )
+
+    assert result["overall_state"] == "HEALTHY"
+    assert result["source_action_codes"] == []

@@ -353,3 +353,178 @@ def test_reasoning_marks_review_required_as_attention():
         "GOVERNANCE_REVIEW_REQUIRED"
         in codes
     )
+
+
+def test_reasoning_surfaces_persisted_trust_score_evidence():
+    context = _base_context()
+
+    context["governance"]["latest_version"] = {
+        "governance_id": 21,
+        "version_id": 3,
+        "decision": "APPROVED",
+        "trust_score": 92.5,
+        "privacy_status": "LOW",
+    }
+
+    result = reason_about_platform_context(
+        context
+    )
+
+    findings = {
+        finding["code"]: finding
+        for finding in result["findings"]
+    }
+
+    assert (
+        "TRUST_SCORE_RECORDED"
+        in findings
+    )
+
+    trust_finding = findings[
+        "TRUST_SCORE_RECORDED"
+    ]
+
+    assert (
+        trust_finding["category"]
+        == "TRUST_SCORE"
+    )
+    assert (
+        trust_finding["severity"]
+        == "INFO"
+    )
+    assert trust_finding["evidence"] == {
+        "version_id": 3,
+        "governance_id": 21,
+        "trust_score": 92.5,
+    }
+
+    assert (
+        result["overall_state"]
+        == "HEALTHY"
+    )
+    assert (
+        result["recommended_actions"]
+        == []
+    )
+
+
+def test_reasoning_surfaces_persisted_privacy_status_evidence():
+    context = _base_context()
+
+    context["governance"]["latest_version"] = {
+        "governance_id": 22,
+        "version_id": 3,
+        "decision": "REVIEW_REQUIRED",
+        "trust_score": 95.0,
+        "privacy_status": "HIGH",
+    }
+
+    result = reason_about_platform_context(
+        context
+    )
+
+    findings = {
+        finding["code"]: finding
+        for finding in result["findings"]
+    }
+
+    assert (
+        "PRIVACY_STATUS_RECORDED"
+        in findings
+    )
+
+    privacy_finding = findings[
+        "PRIVACY_STATUS_RECORDED"
+    ]
+
+    assert (
+        privacy_finding["category"]
+        == "PRIVACY"
+    )
+    assert (
+        privacy_finding["severity"]
+        == "INFO"
+    )
+    assert privacy_finding["evidence"] == {
+        "version_id": 3,
+        "governance_id": 22,
+        "privacy_status": "HIGH",
+    }
+
+    assert (
+        result["overall_state"]
+        == "ATTENTION"
+    )
+
+    action_codes = {
+        action["code"]
+        for action in result[
+            "recommended_actions"
+        ]
+    }
+
+    assert action_codes == {
+        "REVIEW_GOVERNANCE"
+    }
+
+
+def test_reasoning_surfaces_persisted_quality_summary():
+    context = _base_context()
+
+    context["validation"]["latest_version"] = {
+        "validation_id": 31,
+        "version_id": 3,
+        "validation_status": "ACCEPTED",
+        "total_issues": 4,
+        "high_issues": 0,
+        "medium_issues": 3,
+        "low_issues": 1,
+        "blocking_issue_count": 0,
+    }
+
+    result = reason_about_platform_context(
+        context
+    )
+
+    findings = {
+        finding["code"]: finding
+        for finding in result["findings"]
+    }
+
+    assert (
+        "QUALITY_SUMMARY_RECORDED"
+        in findings
+    )
+
+    quality_finding = findings[
+        "QUALITY_SUMMARY_RECORDED"
+    ]
+
+    assert (
+        quality_finding["category"]
+        == "QUALITY"
+    )
+    assert (
+        quality_finding["severity"]
+        == "INFO"
+    )
+
+    assert quality_finding["evidence"] == {
+        "version_id": 3,
+        "validation_id": 31,
+        "total_issues": 4,
+        "high_issues": 0,
+        "medium_issues": 3,
+        "low_issues": 1,
+        "blocking_issue_count": 0,
+    }
+
+    assert (
+        result["overall_state"]
+        == "HEALTHY"
+    )
+
+    assert (
+        result["recommended_actions"]
+        == []
+    )
