@@ -193,3 +193,83 @@ def test_ask_catalog_copilot_rejects_invalid_json(
             catalog_id=1,
             question="What is wrong?",
         )
+
+
+def test_ask_catalog_copilot_forwards_history(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, Any] = {}
+
+    def fake_post(
+        url: str,
+        *,
+        json: dict[str, Any],
+        timeout: int,
+    ):
+        captured["url"] = url
+        captured["json"] = json
+        captured["timeout"] = timeout
+
+        return FakeResponse(
+            {
+                "catalog_id": 1,
+                "grounded": True,
+                "version": "2.6",
+                "latest_version_id": 6,
+                "overall_state": "HEALTHY",
+                "answer": (
+                    "Current grounded answer."
+                ),
+                "source_finding_codes": [],
+                "source_action_codes": [],
+                "provider": "disabled",
+                "model": None,
+                "used_llm": False,
+                "fallback_reason": (
+                    "provider_disabled"
+                ),
+                "error_type": None,
+            }
+        )
+
+    monkeypatch.setattr(
+        assistant_api.requests,
+        "post",
+        fake_post,
+    )
+
+    history = [
+        {
+            "role": "user",
+            "content": (
+                "What is the trust score?"
+            ),
+        },
+        {
+            "role": "assistant",
+            "content": (
+                "The previous grounded answer."
+            ),
+        },
+    ]
+
+    result = (
+        assistant_api.ask_catalog_copilot(
+            catalog_id=1,
+            question=(
+                "What about privacy?"
+            ),
+            history=history,
+        )
+    )
+
+    assert result["catalog_id"] == 1
+
+    assert captured["json"] == {
+        "question": (
+            "What about privacy?"
+        ),
+        "history": history,
+    }
+
+    assert captured["timeout"] == 120

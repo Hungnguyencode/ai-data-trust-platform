@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Literal
 
 from pydantic import BaseModel, Field
 
@@ -143,11 +143,31 @@ class AssistantPlatformEnhancedExplanationResponse(
     error_type: str | None = None
 
 
+class AssistantCopilotHistoryMessage(BaseModel):
+    role: Literal[
+        "user",
+        "assistant",
+    ]
+
+    content: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+    )
+
+
 class AssistantCopilotRequest(BaseModel):
     question: str = Field(
         ...,
         min_length=1,
         max_length=2000,
+    )
+
+    history: list[
+        AssistantCopilotHistoryMessage
+    ] = Field(
+        default_factory=list,
+        max_length=10,
     )
 
 
