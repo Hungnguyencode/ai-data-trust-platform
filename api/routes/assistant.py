@@ -14,6 +14,10 @@ from api.schemas.assistant_schema import (
     AssistantPlatformEnhancedExplanationResponse,
     AssistantPlatformExplanationResponse,
 )
+from src.assistant.controlled_tools import (
+    execute_controlled_tool,
+    select_controlled_tool_request,
+)
 from src.assistant.llm_provider import (
     LLMConfigurationError,
 )
@@ -307,15 +311,74 @@ def ask_catalog_copilot(
             )
         )
 
-        copilot = answer_copilot_question(
-            payload.question,
-            diagnosis,
-            explanation,
-            history=[
-                message.model_dump()
-                for message in payload.history
-            ],
+        history = [
+            message.model_dump()
+            for message in payload.history
+        ]
+
+        controlled_tool_results = []
+
+        latest_version_id = diagnosis.get(
+            "latest_version_id"
         )
+
+        if (
+            isinstance(
+                latest_version_id,
+                int,
+            )
+            and not isinstance(
+                latest_version_id,
+                bool,
+            )
+            and latest_version_id > 0
+        ):
+            tool_request = (
+                select_controlled_tool_request(
+                    payload.question,
+                    trusted_version_id=(
+                        latest_version_id
+                    ),
+                )
+            )
+
+            if tool_request is not None:
+                try:
+                    tool_result = (
+                        execute_controlled_tool(
+                            tool_request["name"],
+                            tool_request[
+                                "arguments"
+                            ],
+                        )
+                    )
+
+                except Exception:
+                    tool_result = None
+
+                if tool_result is not None:
+                    controlled_tool_results.append(
+                        tool_result
+                    )
+
+        if controlled_tool_results:
+            copilot = answer_copilot_question(
+                payload.question,
+                diagnosis,
+                explanation,
+                history=history,
+                controlled_tool_results=(
+                    controlled_tool_results
+                ),
+            )
+
+        else:
+            copilot = answer_copilot_question(
+                payload.question,
+                diagnosis,
+                explanation,
+                history=history,
+            )
 
     except LLMConfigurationError as exc:
         raise HTTPException(

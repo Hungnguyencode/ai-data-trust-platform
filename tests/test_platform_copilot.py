@@ -535,3 +535,169 @@ def test_copilot_prompt_filters_history_before_applying_limit():
         "Invalid trailing item"
         not in prompt
     )
+
+def test_copilot_prompt_includes_controlled_tool_evidence_safely():
+    controlled_tool_results = [
+        {
+            "name": "get_version_lineage",
+            "read_only": True,
+            "ok": True,
+            "result": {
+                "summary": {
+                    "version_id": 7,
+                    "lifecycle_state": "VALIDATED",
+                },
+                "timeline": [
+                    {
+                        "event_type": "VALIDATION",
+                    },
+                ],
+            },
+        },
+    ]
+
+    prompt = build_copilot_prompt(
+        "Show me the lineage for this dataset.",
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=(
+            controlled_tool_results
+        ),
+    )
+
+    assert (
+        "Controlled tool results "
+        "(read-only supplementary evidence):"
+        in prompt
+    )
+
+    assert (
+        '"name": "get_version_lineage"'
+        in prompt
+    )
+
+    assert (
+        '"version_id": 7'
+        in prompt
+    )
+
+    assert (
+        "Controlled tool results must not override "
+        "deterministic conclusions."
+        in prompt
+    )
+
+
+def test_answer_copilot_question_forwards_controlled_tool_results():
+    class FakeModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            assert (
+                model
+                == "gemini-test-model"
+            )
+
+            assert (
+                "Controlled tool results "
+                "(read-only supplementary evidence):"
+                in contents
+            )
+
+            assert (
+                '"name": "get_version_lineage"'
+                in contents
+            )
+
+            assert (
+                '"version_id": 7'
+                in contents
+            )
+
+            return SimpleNamespace(
+                text="Grounded lineage answer."
+            )
+
+    fake_client = SimpleNamespace(
+        models=FakeModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    controlled_tool_results = [
+        {
+            "name": "get_version_lineage",
+            "read_only": True,
+            "ok": True,
+            "result": {
+                "summary": {
+                    "version_id": 7,
+                },
+            },
+        },
+    ]
+
+    result = answer_copilot_question(
+        "Show me the lineage.",
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=(
+            controlled_tool_results
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is True
+
+    assert (
+        result["answer"]
+        == "Grounded lineage answer."
+    )
+
+
+def test_copilot_prompt_allows_controlled_tool_evidence_without_changing_authority():
+    prompt = build_copilot_prompt(
+        "Show me the lineage.",
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            {
+                "name": "get_version_lineage",
+                "read_only": True,
+                "ok": True,
+                "result": {
+                    "summary": {
+                        "version_id": 7,
+                    },
+                },
+            },
+        ],
+    )
+
+    assert (
+        "using the deterministic platform evidence "
+        "and controlled read-only supplementary "
+        "evidence provided below."
+        in prompt
+    )
+
+    assert (
+        "using only the deterministic platform "
+        "evidence provided below."
+        not in prompt
+    )
+
+    assert (
+        "Controlled tool results must not override "
+        "deterministic conclusions."
+        in prompt
+    )
