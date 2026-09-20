@@ -9,15 +9,22 @@ from typing import Any, Protocol
 SUPPORTED_LLM_PROVIDERS = {
     "disabled",
     "gemini",
+    "ollama",
 }
 
 DEFAULT_GEMINI_MODEL = (
     "gemini-3.6-flash"
 )
 
+DEFAULT_OLLAMA_BASE_URL = (
+    "http://127.0.0.1:11434"
+)
+
 DEFAULT_TIMEOUT_SECONDS = 30.0
 GEMINI_MAX_ATTEMPTS = 3
 GEMINI_RETRY_BACKOFF_SECONDS = 1.0
+OLLAMA_MAX_ATTEMPTS = 3
+OLLAMA_RETRY_BACKOFF_SECONDS = 1.0
 
 TRANSIENT_GEMINI_ERROR_CODES = {
     503,
@@ -27,6 +34,11 @@ TRANSIENT_GEMINI_ERROR_CODES = {
 TRANSIENT_GEMINI_ERROR_STATUSES = {
     "UNAVAILABLE",
     "DEADLINE_EXCEEDED",
+}
+
+TRANSIENT_OLLAMA_STATUS_CODES = {
+    503,
+    504,
 }
 
 
@@ -65,6 +77,41 @@ def _is_transient_gemini_error(
     )
 
 
+def _is_transient_ollama_error(
+    exc: Exception,
+) -> bool:
+    response = getattr(
+        exc,
+        "response",
+        None,
+    )
+
+    status_code = getattr(
+        response,
+        "status_code",
+        None,
+    )
+
+    if status_code is None:
+        status_code = getattr(
+            exc,
+            "status_code",
+            None,
+        )
+
+    try:
+        normalized_status_code = int(
+            status_code
+        )
+    except (TypeError, ValueError):
+        normalized_status_code = None
+
+    return (
+        normalized_status_code
+        in TRANSIENT_OLLAMA_STATUS_CODES
+    )
+
+
 class LLMConfigurationError(ValueError):
     """Raised when LLM environment configuration is invalid."""
 
@@ -77,6 +124,7 @@ class LLMProviderConfig:
     model: str | None
     api_key: str | None
     timeout_seconds: float
+    base_url: str | None = None
 
 
 @dataclass(
@@ -155,32 +203,72 @@ def load_llm_config(
             ),
         )
 
-    model = str(
-        source.get(
-            "GEMINI_MODEL",
-            DEFAULT_GEMINI_MODEL,
+    if provider == "gemini":
+        model = str(
+            source.get(
+                "GEMINI_MODEL",
+                DEFAULT_GEMINI_MODEL,
+            )
+            or DEFAULT_GEMINI_MODEL
+        ).strip()
+
+        if not model:
+            model = DEFAULT_GEMINI_MODEL
+
+        api_key_value = source.get(
+            "GEMINI_API_KEY"
         )
-        or DEFAULT_GEMINI_MODEL
+
+        api_key = (
+            str(api_key_value).strip()
+            if api_key_value
+            else None
+        )
+
+        return LLMProviderConfig(
+            provider="gemini",
+            model=model,
+            api_key=api_key,
+            timeout_seconds=timeout_seconds,
+        )
+
+    ollama_model = str(
+        source.get(
+            "OLLAMA_MODEL",
+            "",
+        )
+        or ""
     ).strip()
 
-    if not model:
-        model = DEFAULT_GEMINI_MODEL
+    if not ollama_model:
+        raise LLMConfigurationError(
+            "OLLAMA_MODEL must be set when "
+            "LLM_PROVIDER=ollama."
+        )
 
-    api_key_value = source.get(
-        "GEMINI_API_KEY"
-    )
+    ollama_base_url = str(
+        source.get(
+            "OLLAMA_BASE_URL",
+            DEFAULT_OLLAMA_BASE_URL,
+        )
+        or DEFAULT_OLLAMA_BASE_URL
+    ).strip()
 
-    api_key = (
-        str(api_key_value).strip()
-        if api_key_value
-        else None
+    if not ollama_base_url:
+        ollama_base_url = (
+            DEFAULT_OLLAMA_BASE_URL
+        )
+
+    ollama_base_url = (
+        ollama_base_url.rstrip("/")
     )
 
     return LLMProviderConfig(
-        provider="gemini",
-        model=model,
-        api_key=api_key,
+        provider="ollama",
+        model=ollama_model,
+        api_key=None,
         timeout_seconds=timeout_seconds,
+        base_url=ollama_base_url,
     )
 
 
@@ -209,6 +297,12 @@ def _build_gemini_client(
             timeout=timeout_ms,
         ),
     )
+
+
+def _build_ollama_client():
+    import requests
+
+    return requests
 
 
 @dataclass(
@@ -373,6 +467,148 @@ class GeminiLLMProvider:
         )
 
 
+@dataclass(
+    frozen=True
+)
+class OllamaLLMProvider:
+    config: LLMProviderConfig
+    client: Any | None = None
+
+    def generate(
+        self,
+        prompt: str,
+    ) -> LLMGenerationResult:
+        try:
+            active_client = (
+                self.client
+                if self.client is not None
+                else _build_ollama_client()
+            )
+
+            base_url = str(
+                self.config.base_url
+                or DEFAULT_OLLAMA_BASE_URL
+            ).rstrip("/")
+
+        except Exception as exc:
+            return LLMGenerationResult(
+                provider="ollama",
+                model=self.config.model,
+                used_llm=False,
+                text=None,
+                fallback_reason=(
+                    "provider_error"
+                ),
+                error_type=(
+                    type(exc).__name__
+                ),
+            )
+
+        for attempt in range(
+            1,
+            OLLAMA_MAX_ATTEMPTS + 1,
+        ):
+            try:
+                response = active_client.post(
+                    (
+                        f"{base_url}"
+                        "/api/generate"
+                    ),
+                    json={
+                        "model": self.config.model,
+                        "prompt": prompt,
+                        "stream": False,
+                    },
+                    timeout=(
+                        self.config
+                        .timeout_seconds
+                    ),
+                )
+
+                response.raise_for_status()
+
+                payload = response.json()
+
+                break
+
+            except Exception as exc:
+                should_retry = (
+                    _is_transient_ollama_error(
+                        exc
+                    )
+                    and attempt
+                    < OLLAMA_MAX_ATTEMPTS
+                )
+
+                if not should_retry:
+                    return LLMGenerationResult(
+                        provider="ollama",
+                        model=self.config.model,
+                        used_llm=False,
+                        text=None,
+                        fallback_reason=(
+                            "provider_error"
+                        ),
+                        error_type=(
+                            type(exc).__name__
+                        ),
+                    )
+
+                delay_seconds = (
+                    OLLAMA_RETRY_BACKOFF_SECONDS
+                    * (
+                        2
+                        ** (attempt - 1)
+                    )
+                )
+
+                time.sleep(
+                    delay_seconds
+                )
+
+        response_text = (
+            payload.get("response")
+            if isinstance(
+                payload,
+                Mapping,
+            )
+            else None
+        )
+
+        if response_text is None:
+            return LLMGenerationResult(
+                provider="ollama",
+                model=self.config.model,
+                used_llm=False,
+                text=None,
+                fallback_reason=(
+                    "empty_response"
+                ),
+            )
+
+        normalized_text = str(
+            response_text
+        ).strip()
+
+        if not normalized_text:
+            return LLMGenerationResult(
+                provider="ollama",
+                model=self.config.model,
+                used_llm=False,
+                text=None,
+                fallback_reason=(
+                    "empty_response"
+                ),
+            )
+
+        return LLMGenerationResult(
+            provider="ollama",
+            model=self.config.model,
+            used_llm=True,
+            text=normalized_text,
+        )
+
+
 def build_llm_provider(
     config: LLMProviderConfig,
     *,
@@ -385,6 +621,12 @@ def build_llm_provider(
 
     if config.provider == "gemini":
         return GeminiLLMProvider(
+            config=config,
+            client=client,
+        )
+
+    if config.provider == "ollama":
+        return OllamaLLMProvider(
             config=config,
             client=client,
         )
