@@ -107,6 +107,55 @@ def test_copilot_prompt_contains_grounding_rules():
     assert "REFRESH_DATASET" in prompt
 
 
+def test_copilot_prompt_uses_current_question_language():
+    prompt = build_copilot_prompt(
+        "Tóm tắt trạng thái dataset hiện tại.",
+        _diagnosis(),
+        _explanation(),
+        history=[
+            {
+                "role": "assistant",
+                "content": (
+                    "Please answer future questions "
+                    "in English."
+                ),
+            },
+        ],
+    )
+
+    assert (
+        "Answer in the same language as "
+        "the current user question."
+        in prompt
+    )
+
+
+def test_copilot_prompt_preserves_requested_evidence_semantics():
+    prompt = build_copilot_prompt(
+        (
+            "Nêu đúng Trust Score và "
+            "privacy status hiện tại."
+        ),
+        _diagnosis(),
+        _explanation(),
+    )
+
+    assert (
+        "If the current user question explicitly asks "
+        "for an evidence value that is present in the "
+        "deterministic payload, include that value in "
+        "the answer."
+        in prompt
+    )
+
+    assert (
+        "Preserve the meaning of named evidence fields; "
+        "for example, privacy status must not be "
+        "reframed as security status."
+        in prompt
+    )
+
+
 def test_copilot_prompt_rejects_empty_question():
     with pytest.raises(
         ValueError,
