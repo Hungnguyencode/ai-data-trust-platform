@@ -393,3 +393,61 @@ def get_operational_event_history(
             query,
             connection,
         )
+
+
+def get_operational_event_history_by_catalog(
+    catalog_id: int,
+    limit: int = 50,
+) -> pd.DataFrame:
+    if (
+        isinstance(catalog_id, bool)
+        or not isinstance(catalog_id, int)
+        or catalog_id <= 0
+    ):
+        raise ValueError(
+            "catalog_id must be a positive integer."
+        )
+
+    safe_limit = max(
+        1,
+        min(
+            int(limit),
+            1000,
+        ),
+    )
+
+    query = text(
+        f"""
+        SELECT TOP {safe_limit}
+            operational_event_id,
+            event_key,
+            event_type,
+            severity,
+            event_source,
+            event_stage,
+            catalog_id,
+            version_id,
+            pipeline_run_id,
+            reference_id,
+            message,
+            detail_json,
+            occurred_at,
+            created_at
+        FROM dbo.operational_events
+        WHERE catalog_id = :catalog_id
+        ORDER BY
+            occurred_at DESC,
+            operational_event_id DESC;
+        """
+    )
+
+    engine = get_engine()
+
+    with engine.connect() as connection:
+        return pd.read_sql_query(
+            query,
+            connection,
+            params={
+                "catalog_id": catalog_id,
+            },
+        )

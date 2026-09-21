@@ -10,6 +10,9 @@ from database.repositories.freshness_repository import (
 from database.repositories.lineage_repository import (
     get_version_lineage,
 )
+from database.repositories.operational_event_repository import (
+    get_operational_event_history_by_catalog,
+)
 from database.repositories.pipeline_run_repository import (
     get_pipeline_run_history_by_catalog,
 )
@@ -39,6 +42,7 @@ def _require_positive_int(
 
 
 FRESHNESS_HISTORY_LIMIT = 20
+OPERATIONAL_EVENT_HISTORY_LIMIT = 20
 PIPELINE_RUN_HISTORY_LIMIT = 20
 VOLUME_HISTORY_LIMIT = 20
 
@@ -179,6 +183,27 @@ def get_controlled_tool_definitions() -> list[
                 "additionalProperties": False,
             },
         },
+        {
+            "name": "get_operational_event_history",
+            "description": (
+                "Read persisted operational event history "
+                "for one dataset catalog."
+            ),
+            "read_only": True,
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "catalog_id": {
+                        "type": "integer",
+                        "minimum": 1,
+                    },
+                },
+                "required": [
+                    "catalog_id",
+                ],
+                "additionalProperties": False,
+            },
+        },
     ]
 
 
@@ -241,6 +266,7 @@ def parse_controlled_tool_request(
         "get_freshness_history",
         "get_volume_history",
         "get_pipeline_run_history",
+        "get_operational_event_history",
     }:
         raise ValueError(
             "Unsupported controlled tool: "
@@ -446,6 +472,41 @@ def select_controlled_tool_request(
             },
         }
 
+    operational_event_terms = (
+        "operational event",
+        "operational events",
+        "operational alert",
+        "operational alerts",
+        "alert",
+        "incident",
+        "sự kiện vận hành",
+        "cảnh báo vận hành",
+        "cảnh báo",
+        "sự cố vận hành",
+        "sự cố",
+    )
+
+    if any(
+        term in normalized_question
+        for term in operational_event_terms
+    ):
+        if trusted_catalog_id is None:
+            return None
+
+        trusted_catalog = (
+            _require_positive_int(
+                trusted_catalog_id,
+                field_name="trusted_catalog_id",
+            )
+        )
+
+        return {
+            "name": "get_operational_event_history",
+            "arguments": {
+                "catalog_id": trusted_catalog,
+            },
+        }
+
     return None
 
 
@@ -538,6 +599,7 @@ def execute_controlled_tool(
         "get_freshness_history",
         "get_volume_history",
         "get_pipeline_run_history",
+        "get_operational_event_history",
     }:
         raise ValueError(
             "Unsupported controlled tool: "
@@ -712,6 +774,60 @@ def execute_controlled_tool(
             "read_only": True,
             "ok": True,
             "result": pipeline_result,
+        }
+
+    if normalized_name == "get_operational_event_history":
+        allowed_arguments = {
+            "catalog_id",
+        }
+
+        unexpected_arguments = (
+            set(arguments)
+            - allowed_arguments
+        )
+
+        if unexpected_arguments:
+            unsupported_argument = sorted(
+                str(argument)
+                for argument
+                in unexpected_arguments
+            )[0]
+
+            raise ValueError(
+                "Unsupported tool argument: "
+                f"{unsupported_argument}."
+            )
+
+        catalog_id = _require_positive_int(
+            arguments.get("catalog_id"),
+            field_name="catalog_id",
+        )
+
+        event_history = (
+            get_operational_event_history_by_catalog(
+                catalog_id,
+                limit=OPERATIONAL_EVENT_HISTORY_LIMIT,
+            )
+        )
+
+        event_result = _json_safe(
+            event_history
+        )
+
+        if not isinstance(
+            event_result,
+            list,
+        ):
+            raise ValueError(
+                "Operational event history result must "
+                "be a list."
+            )
+
+        return {
+            "name": "get_operational_event_history",
+            "read_only": True,
+            "ok": True,
+            "result": event_result,
         }
 
     allowed_arguments = {
