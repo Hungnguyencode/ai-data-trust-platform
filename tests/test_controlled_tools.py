@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 
+import pandas as pd
 import pytest
 
 from src.assistant import controlled_tools
@@ -155,6 +156,27 @@ def test_controlled_tool_registry_exposes_read_only_schema():
                 },
                 "required": [
                     "version_id",
+                ],
+                "additionalProperties": False,
+            },
+        },
+                {
+            "name": "get_freshness_history",
+            "description": (
+                "Read persisted freshness history "
+                "for one dataset catalog."
+            ),
+            "read_only": True,
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "catalog_id": {
+                        "type": "integer",
+                        "minimum": 1,
+                    },
+                },
+                "required": [
+                    "catalog_id",
                 ],
                 "additionalProperties": False,
             },
@@ -360,3 +382,219 @@ def test_controlled_tool_selection_is_backend_owned():
     )
 
     assert write_request is None
+
+def test_get_freshness_history_tool_returns_json_safe_read_only_evidence(
+    monkeypatch,
+):
+    freshness_frame = pd.DataFrame(
+        [
+            {
+                "freshness_check_id": 12,
+                "catalog_id": 4,
+                "version_id": 9,
+                "age_minutes": float("nan"),
+                "freshness_status": "FRESH",
+                "checked_at": datetime(
+                    2026,
+                    9,
+                    21,
+                    1,
+                    30,
+                    0,
+                ),
+            },
+            {
+                "freshness_check_id": 11,
+                "catalog_id": 4,
+                "version_id": 8,
+                "age_minutes": 42,
+                "freshness_status": "STALE",
+                "checked_at": datetime(
+                    2026,
+                    9,
+                    20,
+                    23,
+                    0,
+                    0,
+                ),
+            },
+        ]
+    )
+
+    captured: dict = {}
+
+    def fake_get_freshness_history(
+        catalog_id,
+        limit=50,
+    ):
+        captured["catalog_id"] = catalog_id
+        captured["limit"] = limit
+
+        return freshness_frame
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "get_freshness_history",
+        fake_get_freshness_history,
+        raising=False,
+    )
+
+    result = execute_controlled_tool(
+        "get_freshness_history",
+        {
+            "catalog_id": 4,
+        },
+    )
+
+    assert captured == {
+        "catalog_id": 4,
+        "limit": 20,
+    }
+
+    assert result["name"] == (
+        "get_freshness_history"
+    )
+
+    assert result["read_only"] is True
+    assert result["ok"] is True
+
+    assert result["result"] == [
+        {
+            "freshness_check_id": 12,
+            "catalog_id": 4,
+            "version_id": 9,
+            "age_minutes": None,
+            "freshness_status": "FRESH",
+            "checked_at": (
+                "2026-09-21T01:30:00"
+            ),
+        },
+        {
+            "freshness_check_id": 11,
+            "catalog_id": 4,
+            "version_id": 8,
+            "age_minutes": 42,
+            "freshness_status": "STALE",
+            "checked_at": (
+                "2026-09-20T23:00:00"
+            ),
+        },
+    ]
+
+    json.dumps(
+        result,
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+
+def test_freshness_tool_definition_is_read_only_and_catalog_scoped():
+    definitions = (
+        controlled_tools
+        .get_controlled_tool_definitions()
+    )
+
+    freshness_definition = next(
+        item
+        for item in definitions
+        if item["name"]
+        == "get_freshness_history"
+    )
+
+    assert freshness_definition == {
+        "name": "get_freshness_history",
+        "description": (
+            "Read persisted freshness history "
+            "for one dataset catalog."
+        ),
+        "read_only": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "catalog_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                },
+            },
+            "required": [
+                "catalog_id",
+            ],
+            "additionalProperties": False,
+        },
+    }
+
+
+def test_freshness_tool_request_protocol_accepts_catalog_scope():
+    parsed = (
+        controlled_tools
+        .parse_controlled_tool_request(
+            (
+                '{"name":"get_freshness_history",'
+                '"arguments":{"catalog_id":4}}'
+            )
+        )
+    )
+
+    assert parsed == {
+        "name": "get_freshness_history",
+        "arguments": {
+            "catalog_id": 4,
+        },
+    }
+
+
+def test_freshness_request_cannot_override_trusted_catalog():
+    bound_request = (
+        controlled_tools
+        .bind_controlled_tool_request(
+            (
+                '{"name":"get_freshness_history",'
+                '"arguments":{"catalog_id":4}}'
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert bound_request == {
+        "name": "get_freshness_history",
+        "arguments": {
+            "catalog_id": 4,
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="trusted catalog",
+    ):
+        (
+            controlled_tools
+            .bind_controlled_tool_request(
+                (
+                    '{"name":"get_freshness_history",'
+                    '"arguments":{"catalog_id":999}}'
+                ),
+                trusted_version_id=6,
+                trusted_catalog_id=4,
+            )
+        )
+
+
+def test_controlled_tool_selection_uses_trusted_catalog_for_freshness():
+    freshness_request = (
+        controlled_tools
+        .select_controlled_tool_request(
+            (
+                "Show freshness history "
+                "for catalog 999."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert freshness_request == {
+        "name": "get_freshness_history",
+        "arguments": {
+            "catalog_id": 4,
+        },
+    }
