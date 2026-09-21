@@ -160,10 +160,31 @@ def test_controlled_tool_registry_exposes_read_only_schema():
                 "additionalProperties": False,
             },
         },
-                {
+        {
             "name": "get_freshness_history",
             "description": (
                 "Read persisted freshness history "
+                "for one dataset catalog."
+            ),
+            "read_only": True,
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "catalog_id": {
+                        "type": "integer",
+                        "minimum": 1,
+                    },
+                },
+                "required": [
+                    "catalog_id",
+                ],
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "get_volume_history",
+            "description": (
+                "Read persisted volume history "
                 "for one dataset catalog."
             ),
             "read_only": True,
@@ -542,6 +563,41 @@ def test_freshness_tool_request_protocol_accepts_catalog_scope():
     }
 
 
+def test_volume_tool_request_protocol_accepts_catalog_scope():
+    parsed = (
+        controlled_tools
+        .parse_controlled_tool_request(
+            (
+                '{"name":"get_volume_history",'
+                '"arguments":{"catalog_id":4}}'
+            )
+        )
+    )
+
+    assert parsed == {
+        "name": "get_volume_history",
+        "arguments": {
+            "catalog_id": 4,
+        },
+    }
+
+
+def test_volume_tool_request_protocol_rejects_user_limit():
+    with pytest.raises(
+        ValueError,
+        match="Unsupported tool argument: limit",
+    ):
+        controlled_tools.parse_controlled_tool_request(
+            (
+                '{"name":"get_volume_history",'
+                '"arguments":{'
+                '"catalog_id":4,'
+                '"limit":999'
+                "}}"
+            )
+        )
+
+
 def test_freshness_request_cannot_override_trusted_catalog():
     bound_request = (
         controlled_tools
@@ -579,6 +635,40 @@ def test_freshness_request_cannot_override_trusted_catalog():
         )
 
 
+def test_volume_request_cannot_override_trusted_catalog():
+    bound_request = (
+        controlled_tools
+        .bind_controlled_tool_request(
+            (
+                '{"name":"get_volume_history",'
+                '"arguments":{"catalog_id":4}}'
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert bound_request == {
+        "name": "get_volume_history",
+        "arguments": {
+            "catalog_id": 4,
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="trusted catalog",
+    ):
+        controlled_tools.bind_controlled_tool_request(
+            (
+                '{"name":"get_volume_history",'
+                '"arguments":{"catalog_id":999}}'
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+
+
 def test_controlled_tool_selection_uses_trusted_catalog_for_freshness():
     freshness_request = (
         controlled_tools
@@ -596,5 +686,202 @@ def test_controlled_tool_selection_uses_trusted_catalog_for_freshness():
         "name": "get_freshness_history",
         "arguments": {
             "catalog_id": 4,
+        },
+    }
+
+
+def test_controlled_tool_selection_uses_trusted_catalog_for_volume():
+    volume_request = (
+        controlled_tools
+        .select_controlled_tool_request(
+            (
+                "Show volume history "
+                "for catalog 999."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert volume_request == {
+        "name": "get_volume_history",
+        "arguments": {
+            "catalog_id": 4,
+        },
+    }
+
+
+def test_get_volume_history_tool_returns_json_safe_read_only_evidence(
+    monkeypatch,
+):
+    volume_frame = pd.DataFrame(
+        [
+            {
+                "volume_check_id": 22,
+                "volume_policy_id": 3,
+                "catalog_id": 4,
+                "ingestion_event_id": 15,
+                "version_id": 9,
+                "baseline_ingestion_event_id": 14,
+                "baseline_version_id": 8,
+                "baseline_row_count": 1000,
+                "current_row_count": 700,
+                "drop_threshold_pct": 20.0,
+                "spike_threshold_pct": 30.0,
+                "row_change_pct": -30.0,
+                "volume_status": "DROP",
+                "checked_at": datetime(
+                    2026,
+                    9,
+                    21,
+                    2,
+                    30,
+                    0,
+                ),
+            },
+            {
+                "volume_check_id": 21,
+                "volume_policy_id": 3,
+                "catalog_id": 4,
+                "ingestion_event_id": 14,
+                "version_id": 8,
+                "baseline_ingestion_event_id": None,
+                "baseline_version_id": None,
+                "baseline_row_count": None,
+                "current_row_count": 1000,
+                "drop_threshold_pct": 20.0,
+                "spike_threshold_pct": 30.0,
+                "row_change_pct": float("nan"),
+                "volume_status": "BASELINE",
+                "checked_at": datetime(
+                    2026,
+                    9,
+                    20,
+                    23,
+                    30,
+                    0,
+                ),
+            },
+        ]
+    )
+
+    captured: dict = {}
+
+    def fake_get_volume_history(
+        catalog_id,
+        limit=50,
+    ):
+        captured["catalog_id"] = catalog_id
+        captured["limit"] = limit
+
+        return volume_frame
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "get_volume_history",
+        fake_get_volume_history,
+        raising=False,
+    )
+
+    result = execute_controlled_tool(
+        "get_volume_history",
+        {
+            "catalog_id": 4,
+        },
+    )
+
+    assert captured == {
+        "catalog_id": 4,
+        "limit": 20,
+    }
+
+    assert result["name"] == (
+        "get_volume_history"
+    )
+
+    assert result["read_only"] is True
+    assert result["ok"] is True
+
+    assert result["result"] == [
+        {
+            "volume_check_id": 22,
+            "volume_policy_id": 3,
+            "catalog_id": 4,
+            "ingestion_event_id": 15,
+            "version_id": 9,
+            "baseline_ingestion_event_id": 14,
+            "baseline_version_id": 8,
+            "baseline_row_count": 1000,
+            "current_row_count": 700,
+            "drop_threshold_pct": 20.0,
+            "spike_threshold_pct": 30.0,
+            "row_change_pct": -30.0,
+            "volume_status": "DROP",
+            "checked_at": (
+                "2026-09-21T02:30:00"
+            ),
+        },
+        {
+            "volume_check_id": 21,
+            "volume_policy_id": 3,
+            "catalog_id": 4,
+            "ingestion_event_id": 14,
+            "version_id": 8,
+            "baseline_ingestion_event_id": None,
+            "baseline_version_id": None,
+            "baseline_row_count": None,
+            "current_row_count": 1000,
+            "drop_threshold_pct": 20.0,
+            "spike_threshold_pct": 30.0,
+            "row_change_pct": None,
+            "volume_status": "BASELINE",
+            "checked_at": (
+                "2026-09-20T23:30:00"
+            ),
+        },
+    ]
+
+    json.dumps(
+        result,
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+
+
+def test_volume_tool_definition_is_read_only_and_catalog_scoped():
+    definitions = (
+        controlled_tools
+        .get_controlled_tool_definitions()
+    )
+
+    volume_definition = next(
+        (
+            item
+            for item in definitions
+            if item["name"]
+            == "get_volume_history"
+        ),
+        None,
+    )
+
+    assert volume_definition == {
+        "name": "get_volume_history",
+        "description": (
+            "Read persisted volume history "
+            "for one dataset catalog."
+        ),
+        "read_only": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "catalog_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                },
+            },
+            "required": [
+                "catalog_id",
+            ],
+            "additionalProperties": False,
         },
     }

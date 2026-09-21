@@ -1101,3 +1101,121 @@ def test_copilot_endpoint_passes_trusted_catalog_to_freshness_selector(
             "result": [],
         },
     ]
+
+
+def test_copilot_endpoint_executes_volume_tool_with_trusted_catalog(
+    monkeypatch,
+):
+    diagnosis = _diagnosis()
+    explanation = _explanation()
+    copilot_result = _copilot_result()
+
+    captured: dict = {}
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: _context(),
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "reason_about_platform_context"
+        ),
+        lambda value: diagnosis,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "explain_platform_diagnosis"
+        ),
+        lambda value: explanation,
+    )
+
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        captured["executed_name"] = name
+        captured["executed_arguments"] = (
+            arguments
+        )
+
+        return {
+            "name": "get_volume_history",
+            "read_only": True,
+            "ok": True,
+            "result": [],
+        }
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "execute_controlled_tool"
+        ),
+        fake_execute_tool,
+    )
+
+    def fake_answer_copilot_question(
+        question,
+        diagnosis_value,
+        explanation_value,
+        *,
+        history=None,
+        controlled_tool_results=None,
+    ):
+        del question
+        del diagnosis_value
+        del explanation_value
+        del history
+
+        captured[
+            "controlled_tool_results"
+        ] = controlled_tool_results
+
+        return copilot_result
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "answer_copilot_question"
+        ),
+        fake_answer_copilot_question,
+    )
+
+    response = client.post(
+        "/api/assistant/catalog/4/copilot",
+        json={
+            "question": (
+                "Show volume history "
+                "for catalog 999."
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert captured[
+        "executed_name"
+    ] == "get_volume_history"
+
+    assert captured[
+        "executed_arguments"
+    ] == {
+        "catalog_id": 4,
+    }
+
+    assert captured[
+        "controlled_tool_results"
+    ] == [
+        {
+            "name": "get_volume_history",
+            "read_only": True,
+            "ok": True,
+            "result": [],
+        },
+    ]
