@@ -10,6 +10,9 @@ from database.repositories.freshness_repository import (
 from database.repositories.lineage_repository import (
     get_version_lineage,
 )
+from database.repositories.pipeline_run_repository import (
+    get_pipeline_run_history_by_catalog,
+)
 from database.repositories.volume_repository import (
     get_volume_history,
 )
@@ -36,6 +39,7 @@ def _require_positive_int(
 
 
 FRESHNESS_HISTORY_LIMIT = 20
+PIPELINE_RUN_HISTORY_LIMIT = 20
 VOLUME_HISTORY_LIMIT = 20
 
 LINEAGE_COLLECTION_LIMIT = 20
@@ -154,6 +158,27 @@ def get_controlled_tool_definitions() -> list[
                 "additionalProperties": False,
             },
         },
+        {
+            "name": "get_pipeline_run_history",
+            "description": (
+                "Read persisted pipeline run history "
+                "for one dataset catalog."
+            ),
+            "read_only": True,
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "catalog_id": {
+                        "type": "integer",
+                        "minimum": 1,
+                    },
+                },
+                "required": [
+                    "catalog_id",
+                ],
+                "additionalProperties": False,
+            },
+        },
     ]
 
 
@@ -215,6 +240,7 @@ def parse_controlled_tool_request(
         "get_version_lineage",
         "get_freshness_history",
         "get_volume_history",
+        "get_pipeline_run_history",
     }:
         raise ValueError(
             "Unsupported controlled tool: "
@@ -394,6 +420,32 @@ def select_controlled_tool_request(
             },
         }
 
+    pipeline_terms = (
+        "pipeline",
+        "airflow",
+    )
+
+    if any(
+        term in normalized_question
+        for term in pipeline_terms
+    ):
+        if trusted_catalog_id is None:
+            return None
+
+        trusted_catalog = (
+            _require_positive_int(
+                trusted_catalog_id,
+                field_name="trusted_catalog_id",
+            )
+        )
+
+        return {
+            "name": "get_pipeline_run_history",
+            "arguments": {
+                "catalog_id": trusted_catalog,
+            },
+        }
+
     return None
 
 
@@ -485,6 +537,7 @@ def execute_controlled_tool(
         "get_version_lineage",
         "get_freshness_history",
         "get_volume_history",
+        "get_pipeline_run_history",
     }:
         raise ValueError(
             "Unsupported controlled tool: "
@@ -605,6 +658,60 @@ def execute_controlled_tool(
             "read_only": True,
             "ok": True,
             "result": volume_result,
+        }
+
+    if normalized_name == "get_pipeline_run_history":
+        allowed_arguments = {
+            "catalog_id",
+        }
+
+        unexpected_arguments = (
+            set(arguments)
+            - allowed_arguments
+        )
+
+        if unexpected_arguments:
+            unsupported_argument = sorted(
+                str(argument)
+                for argument
+                in unexpected_arguments
+            )[0]
+
+            raise ValueError(
+                "Unsupported tool argument: "
+                f"{unsupported_argument}."
+            )
+
+        catalog_id = _require_positive_int(
+            arguments.get("catalog_id"),
+            field_name="catalog_id",
+        )
+
+        pipeline_history = (
+            get_pipeline_run_history_by_catalog(
+                catalog_id,
+                limit=PIPELINE_RUN_HISTORY_LIMIT,
+            )
+        )
+
+        pipeline_result = _json_safe(
+            pipeline_history
+        )
+
+        if not isinstance(
+            pipeline_result,
+            list,
+        ):
+            raise ValueError(
+                "Pipeline run history result must "
+                "be a list."
+            )
+
+        return {
+            "name": "get_pipeline_run_history",
+            "read_only": True,
+            "ok": True,
+            "result": pipeline_result,
         }
 
     allowed_arguments = {

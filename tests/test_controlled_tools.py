@@ -202,6 +202,27 @@ def test_controlled_tool_registry_exposes_read_only_schema():
                 "additionalProperties": False,
             },
         },
+        {
+            "name": "get_pipeline_run_history",
+            "description": (
+                "Read persisted pipeline run history "
+                "for one dataset catalog."
+            ),
+            "read_only": True,
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "catalog_id": {
+                        "type": "integer",
+                        "minimum": 1,
+                    },
+                },
+                "required": [
+                    "catalog_id",
+                ],
+                "additionalProperties": False,
+            },
+        },
     ]
 
 
@@ -885,3 +906,232 @@ def test_volume_tool_definition_is_read_only_and_catalog_scoped():
             "additionalProperties": False,
         },
     }
+
+
+def test_pipeline_run_history_tool_definition_is_read_only_and_catalog_scoped():
+    definitions = (
+        controlled_tools
+        .get_controlled_tool_definitions()
+    )
+
+    pipeline_definition = next(
+        (
+            item
+            for item in definitions
+            if item["name"]
+            == "get_pipeline_run_history"
+        ),
+        None,
+    )
+
+    assert pipeline_definition == {
+        "name": "get_pipeline_run_history",
+        "description": (
+            "Read persisted pipeline run history "
+            "for one dataset catalog."
+        ),
+        "read_only": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "catalog_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                },
+            },
+            "required": [
+                "catalog_id",
+            ],
+            "additionalProperties": False,
+        },
+    }
+
+
+def test_pipeline_run_history_tool_request_protocol_accepts_catalog_scope():
+    parsed = (
+        controlled_tools
+        .parse_controlled_tool_request(
+            (
+                '{"name":"get_pipeline_run_history",'
+                '"arguments":{"catalog_id":4}}'
+            )
+        )
+    )
+
+    assert parsed == {
+        "name": "get_pipeline_run_history",
+        "arguments": {
+            "catalog_id": 4,
+        },
+    }
+
+
+def test_pipeline_run_history_tool_request_protocol_rejects_user_limit():
+    with pytest.raises(
+        ValueError,
+        match="Unsupported tool argument: limit",
+    ):
+        controlled_tools.parse_controlled_tool_request(
+            (
+                '{"name":"get_pipeline_run_history",'
+                '"arguments":{'
+                '"catalog_id":4,'
+                '"limit":999'
+                "}}"
+            )
+        )
+
+
+def test_controlled_tool_selection_uses_trusted_catalog_for_pipeline_history():
+    pipeline_request = (
+        controlled_tools
+        .select_controlled_tool_request(
+            (
+                "Show pipeline run history "
+                "for catalog 999."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert pipeline_request == {
+        "name": "get_pipeline_run_history",
+        "arguments": {
+            "catalog_id": 4,
+        },
+    }
+
+
+def test_get_pipeline_run_history_tool_returns_json_safe_read_only_evidence(
+    monkeypatch,
+):
+    pipeline_frame = pd.DataFrame(
+        [
+            {
+                "pipeline_run_id": 31,
+                "catalog_id": 4,
+                "version_id": 9,
+                "run_status": "FAILED",
+                "attempt_count": 2,
+                "trust_score": float("nan"),
+                "started_at": datetime(
+                    2026,
+                    9,
+                    21,
+                    3,
+                    0,
+                    0,
+                ),
+                "finished_at": datetime(
+                    2026,
+                    9,
+                    21,
+                    3,
+                    1,
+                    30,
+                ),
+                "error_type": "RuntimeError",
+                "error_message": "Validation failed.",
+            },
+            {
+                "pipeline_run_id": 30,
+                "catalog_id": 4,
+                "version_id": 8,
+                "run_status": "SUCCESS",
+                "attempt_count": 1,
+                "trust_score": 97.0,
+                "started_at": datetime(
+                    2026,
+                    9,
+                    20,
+                    3,
+                    0,
+                    0,
+                ),
+                "finished_at": datetime(
+                    2026,
+                    9,
+                    20,
+                    3,
+                    1,
+                    0,
+                ),
+                "error_type": None,
+                "error_message": None,
+            },
+        ]
+    )
+
+    captured = {}
+
+    def fake_get_pipeline_run_history_by_catalog(
+        catalog_id,
+        *,
+        limit,
+    ):
+        captured["catalog_id"] = catalog_id
+        captured["limit"] = limit
+
+        return pipeline_frame
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "get_pipeline_run_history_by_catalog",
+        fake_get_pipeline_run_history_by_catalog,
+        raising=False,
+    )
+
+    result = execute_controlled_tool(
+        "get_pipeline_run_history",
+        {
+            "catalog_id": 4,
+        },
+    )
+
+    assert captured == {
+        "catalog_id": 4,
+        "limit": 20,
+    }
+
+    assert result["name"] == (
+        "get_pipeline_run_history"
+    )
+
+    assert result["read_only"] is True
+    assert result["ok"] is True
+
+    assert result["result"] == [
+        {
+            "pipeline_run_id": 31,
+            "catalog_id": 4,
+            "version_id": 9,
+            "run_status": "FAILED",
+            "attempt_count": 2,
+            "trust_score": None,
+            "started_at": (
+                "2026-09-21T03:00:00"
+            ),
+            "finished_at": (
+                "2026-09-21T03:01:30"
+            ),
+            "error_type": "RuntimeError",
+            "error_message": "Validation failed.",
+        },
+        {
+            "pipeline_run_id": 30,
+            "catalog_id": 4,
+            "version_id": 8,
+            "run_status": "SUCCESS",
+            "attempt_count": 1,
+            "trust_score": 97.0,
+            "started_at": (
+                "2026-09-20T03:00:00"
+            ),
+            "finished_at": (
+                "2026-09-20T03:01:00"
+            ),
+            "error_type": None,
+            "error_message": None,
+        },
+    ]

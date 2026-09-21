@@ -359,3 +359,66 @@ def get_pipeline_run_history(
             query,
             connection,
         )
+
+
+def get_pipeline_run_history_by_catalog(
+    catalog_id: int,
+    limit: int = 50,
+) -> pd.DataFrame:
+    if (
+        isinstance(catalog_id, bool)
+        or not isinstance(catalog_id, int)
+        or catalog_id <= 0
+    ):
+        raise ValueError(
+            "catalog_id must be a positive integer."
+        )
+
+    safe_limit = max(
+        1,
+        min(
+            int(limit),
+            1000,
+        ),
+    )
+
+    query = text(
+        f"""
+        SELECT TOP {safe_limit}
+            pipeline_run_id,
+            dag_id,
+            airflow_run_id,
+            source_path,
+            run_status,
+            attempt_count,
+            catalog_id,
+            version_id,
+            validation_status,
+            governance_decision,
+            trust_score,
+            lifecycle_state,
+            started_at,
+            finished_at,
+            duration_ms,
+            error_type,
+            error_message,
+            created_at,
+            updated_at
+        FROM dbo.pipeline_runs
+        WHERE catalog_id = :catalog_id
+        ORDER BY
+            started_at DESC,
+            pipeline_run_id DESC;
+        """
+    )
+
+    engine = get_engine()
+
+    with engine.connect() as connection:
+        return pd.read_sql_query(
+            query,
+            connection,
+            params={
+                "catalog_id": catalog_id,
+            },
+        )
