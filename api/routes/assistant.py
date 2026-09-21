@@ -339,6 +339,9 @@ def ask_catalog_copilot(
                     trusted_version_id=(
                         latest_version_id
                     ),
+                    trusted_catalog_id=(
+                        catalog_id
+                    ),
                 )
             )
 
