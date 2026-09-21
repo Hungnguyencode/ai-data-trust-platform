@@ -496,3 +496,125 @@ def test_operational_event_history_clamps_limit(
         captured["connection"]
         is connection
     )
+
+
+def test_operational_event_history_by_catalog_scopes_query(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    connection = FakeConnection(
+        []
+    )
+
+    monkeypatch.setattr(
+        repository,
+        "get_engine",
+        lambda: FakeEngine(
+            connection
+        ),
+    )
+
+    expected = pd.DataFrame(
+        [
+            {
+                "operational_event_id": 7,
+                "catalog_id": 4,
+            }
+        ]
+    )
+
+    captured: dict[
+        str,
+        Any,
+    ] = {}
+
+    def fake_read_sql_query(
+        query,
+        connection_arg,
+        params=None,
+    ):
+        captured["sql"] = str(
+            query
+        )
+        captured[
+            "connection"
+        ] = connection_arg
+        captured["params"] = params
+
+        return expected
+
+    monkeypatch.setattr(
+        repository.pd,
+        "read_sql_query",
+        fake_read_sql_query,
+    )
+
+    result = (
+        repository
+        .get_operational_event_history_by_catalog(
+            catalog_id=4,
+            limit=20,
+        )
+    )
+
+    assert result.equals(
+        expected
+    )
+
+    assert (
+        "SELECT TOP 20"
+        in captured["sql"]
+    )
+
+    assert (
+        "WHERE catalog_id = :catalog_id"
+        in captured["sql"]
+    )
+
+    assert (
+        "occurred_at DESC"
+        in captured["sql"]
+    )
+
+    assert (
+        "operational_event_id DESC"
+        in captured["sql"]
+    )
+
+    assert captured[
+        "params"
+    ] == {
+        "catalog_id": 4,
+    }
+
+    assert (
+        captured["connection"]
+        is connection
+    )
+
+
+@pytest.mark.parametrize(
+    "catalog_id",
+    [
+        0,
+        -1,
+        True,
+        False,
+        1.5,
+        "4",
+        None,
+    ],
+)
+def test_operational_event_history_by_catalog_rejects_invalid_catalog_id(
+    catalog_id,
+):
+    with pytest.raises(
+        ValueError,
+        match="catalog_id must be a positive integer",
+    ):
+        (
+            repository
+            .get_operational_event_history_by_catalog(
+                catalog_id=catalog_id,
+                limit=20,
+            )
+        )

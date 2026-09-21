@@ -223,6 +223,27 @@ def test_controlled_tool_registry_exposes_read_only_schema():
                 "additionalProperties": False,
             },
         },
+        {
+            "name": "get_operational_event_history",
+            "description": (
+                "Read persisted operational event history "
+                "for one dataset catalog."
+            ),
+            "read_only": True,
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "catalog_id": {
+                        "type": "integer",
+                        "minimum": 1,
+                    },
+                },
+                "required": [
+                    "catalog_id",
+                ],
+                "additionalProperties": False,
+            },
+        },
     ]
 
 
@@ -1134,4 +1155,203 @@ def test_get_pipeline_run_history_tool_returns_json_safe_read_only_evidence(
             "error_type": None,
             "error_message": None,
         },
+    ]
+
+
+def test_operational_event_history_tool_definition_is_read_only_and_catalog_scoped():
+    definitions = (
+        controlled_tools
+        .get_controlled_tool_definitions()
+    )
+
+    event_definition = next(
+        (
+            item
+            for item in definitions
+            if item["name"]
+            == "get_operational_event_history"
+        ),
+        None,
+    )
+
+    assert event_definition == {
+        "name": "get_operational_event_history",
+        "description": (
+            "Read persisted operational event history "
+            "for one dataset catalog."
+        ),
+        "read_only": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "catalog_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                },
+            },
+            "required": [
+                "catalog_id",
+            ],
+            "additionalProperties": False,
+        },
+    }
+
+
+def test_operational_event_history_tool_request_protocol_accepts_catalog_scope():
+    parsed = (
+        controlled_tools
+        .parse_controlled_tool_request(
+            (
+                '{"name":"get_operational_event_history",'
+                '"arguments":{"catalog_id":4}}'
+            )
+        )
+    )
+
+    assert parsed == {
+        "name": "get_operational_event_history",
+        "arguments": {
+            "catalog_id": 4,
+        },
+    }
+
+
+def test_operational_event_history_tool_request_protocol_rejects_user_limit():
+    with pytest.raises(
+        ValueError,
+        match="Unsupported tool argument: limit",
+    ):
+        controlled_tools.parse_controlled_tool_request(
+            (
+                '{"name":"get_operational_event_history",'
+                '"arguments":{'
+                '"catalog_id":4,'
+                '"limit":999'
+                "}}"
+            )
+        )
+
+
+def test_controlled_tool_selection_uses_trusted_catalog_for_operational_events():
+    event_request = (
+        controlled_tools
+        .select_controlled_tool_request(
+            (
+                "Show operational event history "
+                "for catalog 999."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert event_request == {
+        "name": "get_operational_event_history",
+        "arguments": {
+            "catalog_id": 4,
+        },
+    }
+
+
+def test_get_operational_event_history_tool_returns_json_safe_read_only_evidence(
+    monkeypatch,
+):
+    event_frame = pd.DataFrame(
+        [
+            {
+                "operational_event_id": 51,
+                "event_key": "freshness:4:stale",
+                "event_type": "DATASET_STALE",
+                "severity": "WARNING",
+                "event_source": "FRESHNESS_MONITOR",
+                "event_stage": "OBSERVABILITY",
+                "catalog_id": 4,
+                "version_id": 9,
+                "pipeline_run_id": float("nan"),
+                "reference_id": 12,
+                "message": "Dataset is stale.",
+                "detail_json": (
+                    '{"age_minutes": 180}'
+                ),
+                "occurred_at": datetime(
+                    2026,
+                    9,
+                    21,
+                    4,
+                    0,
+                    0,
+                ),
+                "created_at": datetime(
+                    2026,
+                    9,
+                    21,
+                    4,
+                    0,
+                    5,
+                ),
+            }
+        ]
+    )
+
+    captured = {}
+
+    def fake_get_operational_event_history_by_catalog(
+        catalog_id,
+        *,
+        limit,
+    ):
+        captured["catalog_id"] = catalog_id
+        captured["limit"] = limit
+
+        return event_frame
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "get_operational_event_history_by_catalog",
+        fake_get_operational_event_history_by_catalog,
+        raising=False,
+    )
+
+    result = execute_controlled_tool(
+        "get_operational_event_history",
+        {
+            "catalog_id": 4,
+        },
+    )
+
+    assert captured == {
+        "catalog_id": 4,
+        "limit": 20,
+    }
+
+    assert result["name"] == (
+        "get_operational_event_history"
+    )
+
+    assert result["read_only"] is True
+    assert result["ok"] is True
+
+    assert result["result"] == [
+        {
+            "operational_event_id": 51,
+            "event_key": "freshness:4:stale",
+            "event_type": "DATASET_STALE",
+            "severity": "WARNING",
+            "event_source": "FRESHNESS_MONITOR",
+            "event_stage": "OBSERVABILITY",
+            "catalog_id": 4,
+            "version_id": 9,
+            "pipeline_run_id": None,
+            "reference_id": 12,
+            "message": "Dataset is stale.",
+            "detail_json": (
+                '{"age_minutes": 180}'
+            ),
+            "occurred_at": (
+                "2026-09-21T04:00:00"
+            ),
+            "created_at": (
+                "2026-09-21T04:00:05"
+            ),
+        }
     ]
