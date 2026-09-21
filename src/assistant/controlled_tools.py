@@ -10,6 +10,9 @@ from database.repositories.freshness_repository import (
 from database.repositories.lineage_repository import (
     get_version_lineage,
 )
+from database.repositories.volume_repository import (
+    get_volume_history,
+)
 from src.assistant.platform_context import (
     _json_safe,
 )
@@ -33,6 +36,7 @@ def _require_positive_int(
 
 
 FRESHNESS_HISTORY_LIMIT = 20
+VOLUME_HISTORY_LIMIT = 20
 
 LINEAGE_COLLECTION_LIMIT = 20
 
@@ -129,6 +133,27 @@ def get_controlled_tool_definitions() -> list[
                 "additionalProperties": False,
             },
         },
+        {
+            "name": "get_volume_history",
+            "description": (
+                "Read persisted volume history "
+                "for one dataset catalog."
+            ),
+            "read_only": True,
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "catalog_id": {
+                        "type": "integer",
+                        "minimum": 1,
+                    },
+                },
+                "required": [
+                    "catalog_id",
+                ],
+                "additionalProperties": False,
+            },
+        },
     ]
 
 
@@ -189,6 +214,7 @@ def parse_controlled_tool_request(
     if normalized_name not in {
         "get_version_lineage",
         "get_freshness_history",
+        "get_volume_history",
     }:
         raise ValueError(
             "Unsupported controlled tool: "
@@ -338,6 +364,36 @@ def select_controlled_tool_request(
             },
         }
 
+    volume_terms = (
+        "volume",
+        "row count",
+        "rowcount",
+        "spike",
+        "drop",
+        "số dòng",
+    )
+
+    if any(
+        term in normalized_question
+        for term in volume_terms
+    ):
+        if trusted_catalog_id is None:
+            return None
+
+        trusted_catalog = (
+            _require_positive_int(
+                trusted_catalog_id,
+                field_name="trusted_catalog_id",
+            )
+        )
+
+        return {
+            "name": "get_volume_history",
+            "arguments": {
+                "catalog_id": trusted_catalog,
+            },
+        }
+
     return None
 
 
@@ -428,6 +484,7 @@ def execute_controlled_tool(
     if normalized_name not in {
         "get_version_lineage",
         "get_freshness_history",
+        "get_volume_history",
     }:
         raise ValueError(
             "Unsupported controlled tool: "
@@ -494,6 +551,60 @@ def execute_controlled_tool(
             "read_only": True,
             "ok": True,
             "result": freshness_result,
+        }
+
+    if normalized_name == "get_volume_history":
+        allowed_arguments = {
+            "catalog_id",
+        }
+
+        unexpected_arguments = (
+            set(arguments)
+            - allowed_arguments
+        )
+
+        if unexpected_arguments:
+            unsupported_argument = sorted(
+                str(argument)
+                for argument
+                in unexpected_arguments
+            )[0]
+
+            raise ValueError(
+                "Unsupported tool argument: "
+                f"{unsupported_argument}."
+            )
+
+        catalog_id = _require_positive_int(
+            arguments.get("catalog_id"),
+            field_name="catalog_id",
+        )
+
+        volume_history = (
+            get_volume_history(
+                catalog_id,
+                limit=VOLUME_HISTORY_LIMIT,
+            )
+        )
+
+        volume_result = _json_safe(
+            volume_history
+        )
+
+        if not isinstance(
+            volume_result,
+            list,
+        ):
+            raise ValueError(
+                "Volume history result must "
+                "be a list."
+            )
+
+        return {
+            "name": "get_volume_history",
+            "read_only": True,
+            "ok": True,
+            "result": volume_result,
         }
 
     allowed_arguments = {
