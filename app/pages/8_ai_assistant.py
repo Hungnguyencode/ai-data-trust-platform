@@ -744,6 +744,108 @@ def render_chat_message(
                 ),
             )
 
+        tool_execution_trace = (
+            copilot_meta.get(
+                "tool_execution_trace",
+                [],
+            )
+            or []
+        )
+
+        if tool_execution_trace:
+            with st.expander(
+                "Tool execution trace",
+                expanded=False,
+            ):
+                for item in tool_execution_trace:
+                    if not isinstance(
+                        item,
+                        dict,
+                    ):
+                        continue
+
+                    step = item.get(
+                        "step",
+                        "?",
+                    )
+
+                    tool_name = str(
+                        item.get(
+                            "tool_name",
+                            "UNKNOWN",
+                        )
+                    )
+
+                    status = str(
+                        item.get(
+                            "status",
+                            "UNKNOWN",
+                        )
+                    )
+
+                    duration_ms = item.get(
+                        "duration_ms"
+                    )
+
+                    st.markdown(
+                        f"**Step {step} — "
+                        f"`{tool_name}`**"
+                    )
+
+                    st.write(
+                        "**Status:**",
+                        status,
+                    )
+
+                    st.write(
+                        "**Duration:**",
+                        (
+                            f"{duration_ms} ms"
+                            if duration_ms
+                            is not None
+                            else "N/A"
+                        ),
+                    )
+
+                    st.write(
+                        "**Evidence accepted:**",
+                        bool(
+                            item.get(
+                                "evidence_accepted",
+                                False,
+                            )
+                        ),
+                    )
+
+                    error_type = item.get(
+                        "error_type"
+                    )
+
+                    if error_type:
+                        st.write(
+                            "**Error type:**",
+                            error_type,
+                        )
+
+                    arguments = item.get(
+                        "arguments",
+                        {},
+                    )
+
+                    if isinstance(
+                        arguments,
+                        dict,
+                    ):
+                        st.write(
+                            "**Arguments:**"
+                        )
+
+                        st.json(
+                            arguments
+                        )
+
+                    st.divider()
+
 
 def build_copilot_chat_message(
     answer: str,
@@ -800,6 +902,13 @@ def build_copilot_chat_message(
                     "source_action_codes",
                     [],
                 )
+            ),
+            "tool_execution_trace": (
+                backend_result.get(
+                    "tool_execution_trace",
+                    [],
+                )
+                or []
             ),
         },
     }
@@ -1054,6 +1163,13 @@ def ask_assistant_backend(
         "source_action_codes": list(
             data.get(
                 "source_action_codes",
+                [],
+            )
+            or []
+        ),
+        "tool_execution_trace": list(
+            data.get(
+                "tool_execution_trace",
                 [],
             )
             or []

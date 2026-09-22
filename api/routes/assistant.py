@@ -1,3 +1,5 @@
+import time
+
 from fastapi import (
     APIRouter,
     HTTPException,
@@ -319,6 +321,7 @@ def ask_catalog_copilot(
         ]
 
         controlled_tool_results = []
+        tool_execution_trace = []
 
         latest_version_id = diagnosis.get(
             "latest_version_id"
@@ -369,12 +372,23 @@ def ask_catalog_copilot(
             if len(tool_requests) > 1:
                 controlled_tool_results.extend(
                     execute_controlled_tool_plan(
-                        tool_requests
+                        tool_requests,
+                        execution_trace=(
+                            tool_execution_trace
+                        ),
                     )
                 )
 
             else:
-                for tool_request in tool_requests:
+                for step, tool_request in enumerate(
+                    tool_requests,
+                    start=1,
+                ):
+                    started_at = time.perf_counter()
+
+                    tool_result = None
+                    error_type = None
+
                     try:
                         tool_result = (
                             execute_controlled_tool(
@@ -385,8 +399,55 @@ def ask_catalog_copilot(
                             )
                         )
 
-                    except Exception:
+                    except Exception as exc:
+                        error_type = type(
+                            exc
+                        ).__name__
+
                         tool_result = None
+
+                    duration_ms = round(
+                        (
+                            time.perf_counter()
+                            - started_at
+                        )
+                        * 1000,
+                        3,
+                    )
+
+                    evidence_accepted = (
+                        tool_result is not None
+                    )
+
+                    tool_execution_trace.append(
+                        {
+                            "step": step,
+                            "tool_name": (
+                                tool_request[
+                                    "name"
+                                ]
+                            ),
+                            "arguments": (
+                                tool_request[
+                                    "arguments"
+                                ]
+                            ),
+                            "status": (
+                                "SUCCEEDED"
+                                if evidence_accepted
+                                else "FAILED"
+                            ),
+                            "duration_ms": (
+                                duration_ms
+                            ),
+                            "evidence_accepted": (
+                                evidence_accepted
+                            ),
+                            "error_type": (
+                                error_type
+                            ),
+                        }
+                    )
 
                     if tool_result is not None:
                         controlled_tool_results.append(
@@ -440,6 +501,9 @@ def ask_catalog_copilot(
         **copilot,
         grounded=True,
         version="2.6",
+        tool_execution_trace=(
+            tool_execution_trace
+        ),
     )
 
 

@@ -1587,3 +1587,245 @@ def test_controlled_tool_plan_executor_isolates_tool_failure(
         "get_freshness_history",
         "get_pipeline_run_history",
     ]
+
+
+def test_controlled_tool_plan_executor_records_success_trace(
+    monkeypatch,
+):
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "catalog_id": (
+                        arguments["catalog_id"]
+                    ),
+                },
+            ],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    execution_trace: list[dict] = []
+
+    results = (
+        controlled_tools
+        .execute_controlled_tool_plan(
+            [
+                {
+                    "name": "get_freshness_history",
+                    "arguments": {
+                        "catalog_id": 4,
+                    },
+                },
+            ],
+            execution_trace=execution_trace,
+        )
+    )
+
+    assert len(results) == 1
+
+    assert len(execution_trace) == 1
+
+    trace_step = execution_trace[0]
+
+    assert trace_step["step"] == 1
+
+    assert (
+        trace_step["tool_name"]
+        == "get_freshness_history"
+    )
+
+    assert trace_step["arguments"] == {
+        "catalog_id": 4,
+    }
+
+    assert trace_step["status"] == "SUCCEEDED"
+
+    assert (
+        trace_step["evidence_accepted"]
+        is True
+    )
+
+    assert trace_step["error_type"] is None
+
+    assert trace_step["duration_ms"] >= 0
+
+
+def test_controlled_tool_plan_executor_records_failure_trace_and_continues(
+    monkeypatch,
+):
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        if name == "get_volume_history":
+            raise RuntimeError(
+                "simulated volume read failure"
+            )
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    execution_trace: list[dict] = []
+
+    results = (
+        controlled_tools
+        .execute_controlled_tool_plan(
+            [
+                {
+                    "name": "get_freshness_history",
+                    "arguments": {
+                        "catalog_id": 4,
+                    },
+                },
+                {
+                    "name": "get_volume_history",
+                    "arguments": {
+                        "catalog_id": 4,
+                    },
+                },
+                {
+                    "name": "get_pipeline_run_history",
+                    "arguments": {
+                        "catalog_id": 4,
+                    },
+                },
+            ],
+            execution_trace=execution_trace,
+        )
+    )
+
+    assert [
+        result["name"]
+        for result in results
+    ] == [
+        "get_freshness_history",
+        "get_pipeline_run_history",
+    ]
+
+    assert [
+        item["status"]
+        for item in execution_trace
+    ] == [
+        "SUCCEEDED",
+        "FAILED",
+        "SUCCEEDED",
+    ]
+
+    assert (
+        execution_trace[1][
+            "tool_name"
+        ]
+        == "get_volume_history"
+    )
+
+    assert (
+        execution_trace[1][
+            "evidence_accepted"
+        ]
+        is False
+    )
+
+    assert (
+        execution_trace[1][
+            "error_type"
+        ]
+        == "RuntimeError"
+    )
+
+
+def test_controlled_tool_plan_executor_trace_respects_hard_cap(
+    monkeypatch,
+):
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    execution_trace: list[dict] = []
+
+    controlled_tools.execute_controlled_tool_plan(
+        [
+            {
+                "name": "get_version_lineage",
+                "arguments": {
+                    "version_id": 6,
+                },
+            },
+            {
+                "name": "get_freshness_history",
+                "arguments": {
+                    "catalog_id": 4,
+                },
+            },
+            {
+                "name": "get_volume_history",
+                "arguments": {
+                    "catalog_id": 4,
+                },
+            },
+            {
+                "name": "get_pipeline_run_history",
+                "arguments": {
+                    "catalog_id": 4,
+                },
+            },
+        ],
+        execution_trace=execution_trace,
+    )
+
+    assert len(execution_trace) == 3
+
+    assert [
+        item["step"]
+        for item in execution_trace
+    ] == [
+        1,
+        2,
+        3,
+    ]
+
+    assert [
+        item["tool_name"]
+        for item in execution_trace
+    ] == [
+        "get_version_lineage",
+        "get_freshness_history",
+        "get_volume_history",
+    ]

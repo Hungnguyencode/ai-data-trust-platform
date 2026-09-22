@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import json
+import time
 from collections.abc import Mapping
 from typing import Any
 
@@ -1071,30 +1072,120 @@ def execute_controlled_tool_plan(
     tool_requests: list[
         Mapping[str, Any]
     ],
+    *,
+    execution_trace: (
+        list[dict[str, Any]] | None
+    ) = None,
 ) -> list[dict[str, Any]]:
     results: list[
         dict[str, Any]
     ] = []
 
-    for tool_request in tool_requests[
-        :CONTROLLED_TOOL_PLAN_LIMIT
-    ]:
+    for step, tool_request in enumerate(
+        tool_requests[
+            :CONTROLLED_TOOL_PLAN_LIMIT
+        ],
+        start=1,
+    ):
+        started_at = time.perf_counter()
+
+        tool_result = None
+        error_type = None
+
         try:
+            tool_name = tool_request[
+                "name"
+            ]
+
+            tool_arguments = tool_request[
+                "arguments"
+            ]
+
             tool_result = (
                 execute_controlled_tool(
-                    tool_request["name"],
-                    tool_request[
-                        "arguments"
-                    ],
+                    tool_name,
+                    tool_arguments,
                 )
             )
 
-        except Exception:
+        except Exception as exc:
+            error_type = type(
+                exc
+            ).__name__
+
             tool_result = None
+
+        duration_ms = round(
+            (
+                time.perf_counter()
+                - started_at
+            )
+            * 1000,
+            3,
+        )
+
+        evidence_accepted = (
+            tool_result is not None
+        )
 
         if tool_result is not None:
             results.append(
                 tool_result
+            )
+
+        if execution_trace is not None:
+            execution_trace.append(
+                {
+                    "step": step,
+                    "tool_name": (
+                        str(
+                            tool_request.get(
+                                "name",
+                                "UNKNOWN",
+                            )
+                        )
+                        if isinstance(
+                            tool_request,
+                            Mapping,
+                        )
+                        else "UNKNOWN"
+                    ),
+                    "arguments": (
+                        dict(
+                            tool_request.get(
+                                "arguments",
+                                {},
+                            )
+                        )
+                        if (
+                            isinstance(
+                                tool_request,
+                                Mapping,
+                            )
+                            and isinstance(
+                                tool_request.get(
+                                    "arguments"
+                                ),
+                                Mapping,
+                            )
+                        )
+                        else {}
+                    ),
+                    "status": (
+                        "SUCCEEDED"
+                        if evidence_accepted
+                        else "FAILED"
+                    ),
+                    "duration_ms": (
+                        duration_ms
+                    ),
+                    "evidence_accepted": (
+                        evidence_accepted
+                    ),
+                    "error_type": (
+                        error_type
+                    ),
+                }
             )
 
     return results
