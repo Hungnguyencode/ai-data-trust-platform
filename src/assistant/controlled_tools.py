@@ -45,6 +45,7 @@ FRESHNESS_HISTORY_LIMIT = 20
 OPERATIONAL_EVENT_HISTORY_LIMIT = 20
 PIPELINE_RUN_HISTORY_LIMIT = 20
 VOLUME_HISTORY_LIMIT = 20
+CONTROLLED_TOOL_PLAN_LIMIT = 3
 
 LINEAGE_COLLECTION_LIMIT = 20
 
@@ -510,6 +511,198 @@ def select_controlled_tool_request(
     return None
 
 
+def plan_controlled_tool_requests(
+    question: str,
+    *,
+    trusted_version_id: int,
+    trusted_catalog_id: int | None = None,
+) -> list[dict[str, Any]]:
+    trusted_version = _require_positive_int(
+        trusted_version_id,
+        field_name="trusted_version_id",
+    )
+
+    if not isinstance(
+        question,
+        str,
+    ):
+        raise ValueError(
+            "question must be a string."
+        )
+
+    normalized_question = (
+        question
+        .strip()
+        .lower()
+    )
+
+    if not normalized_question:
+        return []
+
+    mutating_terms = (
+        "promote",
+        "activate",
+        "update",
+        "delete",
+        "remove",
+        "cập nhật",
+        "xóa",
+        "kích hoạt",
+        "thay đổi",
+    )
+
+    if any(
+        term in normalized_question
+        for term in mutating_terms
+    ):
+        return []
+
+    plan: list[
+        dict[str, Any]
+    ] = []
+
+    lineage_terms = (
+        "lineage",
+        "provenance",
+        "truy vết",
+    )
+
+    if any(
+        term in normalized_question
+        for term in lineage_terms
+    ):
+        plan.append(
+            {
+                "name": "get_version_lineage",
+                "arguments": {
+                    "version_id": trusted_version,
+                },
+            }
+        )
+
+    freshness_terms = (
+        "freshness",
+        "stale",
+        "độ tươi",
+    )
+
+    if any(
+        term in normalized_question
+        for term in freshness_terms
+    ):
+        if trusted_catalog_id is not None:
+            trusted_catalog = (
+                _require_positive_int(
+                    trusted_catalog_id,
+                    field_name="trusted_catalog_id",
+                )
+            )
+
+            plan.append(
+                {
+                    "name": "get_freshness_history",
+                    "arguments": {
+                        "catalog_id": trusted_catalog,
+                    },
+                }
+            )
+
+    volume_terms = (
+        "volume",
+        "row count",
+        "rowcount",
+        "spike",
+        "drop",
+        "số dòng",
+    )
+
+    if any(
+        term in normalized_question
+        for term in volume_terms
+    ):
+        if trusted_catalog_id is not None:
+            trusted_catalog = (
+                _require_positive_int(
+                    trusted_catalog_id,
+                    field_name="trusted_catalog_id",
+                )
+            )
+
+            plan.append(
+                {
+                    "name": "get_volume_history",
+                    "arguments": {
+                        "catalog_id": trusted_catalog,
+                    },
+                }
+            )
+
+    pipeline_terms = (
+        "pipeline",
+        "airflow",
+    )
+
+    if any(
+        term in normalized_question
+        for term in pipeline_terms
+    ):
+        if trusted_catalog_id is not None:
+            trusted_catalog = (
+                _require_positive_int(
+                    trusted_catalog_id,
+                    field_name="trusted_catalog_id",
+                )
+            )
+
+            plan.append(
+                {
+                    "name": "get_pipeline_run_history",
+                    "arguments": {
+                        "catalog_id": trusted_catalog,
+                    },
+                }
+            )
+
+    operational_event_terms = (
+        "operational event",
+        "operational events",
+        "operational alert",
+        "operational alerts",
+        "alert",
+        "incident",
+        "sự kiện vận hành",
+        "cảnh báo vận hành",
+        "cảnh báo",
+        "sự cố vận hành",
+        "sự cố",
+    )
+
+    if any(
+        term in normalized_question
+        for term in operational_event_terms
+    ):
+        if trusted_catalog_id is not None:
+            trusted_catalog = (
+                _require_positive_int(
+                    trusted_catalog_id,
+                    field_name="trusted_catalog_id",
+                )
+            )
+
+            plan.append(
+                {
+                    "name": "get_operational_event_history",
+                    "arguments": {
+                        "catalog_id": trusted_catalog,
+                    },
+                }
+            )
+
+    return plan[
+        :CONTROLLED_TOOL_PLAN_LIMIT
+    ]
+
+
 def bind_controlled_tool_request(
     raw_request: str,
     *,
@@ -872,3 +1065,36 @@ def execute_controlled_tool(
         "ok": True,
         "result": lineage_result,
     }
+
+
+def execute_controlled_tool_plan(
+    tool_requests: list[
+        Mapping[str, Any]
+    ],
+) -> list[dict[str, Any]]:
+    results: list[
+        dict[str, Any]
+    ] = []
+
+    for tool_request in tool_requests[
+        :CONTROLLED_TOOL_PLAN_LIMIT
+    ]:
+        try:
+            tool_result = (
+                execute_controlled_tool(
+                    tool_request["name"],
+                    tool_request[
+                        "arguments"
+                    ],
+                )
+            )
+
+        except Exception:
+            tool_result = None
+
+        if tool_result is not None:
+            results.append(
+                tool_result
+            )
+
+    return results

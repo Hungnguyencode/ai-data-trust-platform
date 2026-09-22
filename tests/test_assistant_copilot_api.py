@@ -1455,3 +1455,421 @@ def test_copilot_endpoint_executes_operational_event_tool_with_trusted_catalog(
             "result": [],
         },
     ]
+
+
+def test_copilot_endpoint_executes_multi_tool_evidence_plan(
+    monkeypatch,
+):
+    diagnosis = _diagnosis()
+    explanation = _explanation()
+    copilot_result = _copilot_result()
+
+    captured: dict = {
+        "executed": [],
+    }
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: _context(),
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "reason_about_platform_context"
+        ),
+        lambda value: diagnosis,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "explain_platform_diagnosis"
+        ),
+        lambda value: explanation,
+    )
+
+    def fake_plan_tool_requests(
+        question,
+        *,
+        trusted_version_id,
+        trusted_catalog_id,
+    ):
+        captured["planned_question"] = (
+            question
+        )
+
+        captured["trusted_version_id"] = (
+            trusted_version_id
+        )
+
+        captured["trusted_catalog_id"] = (
+            trusted_catalog_id
+        )
+
+        return [
+            {
+                "name": "get_freshness_history",
+                "arguments": {
+                    "catalog_id": (
+                        trusted_catalog_id
+                    ),
+                },
+            },
+            {
+                "name": "get_volume_history",
+                "arguments": {
+                    "catalog_id": (
+                        trusted_catalog_id
+                    ),
+                },
+            },
+            {
+                "name": "get_pipeline_run_history",
+                "arguments": {
+                    "catalog_id": (
+                        trusted_catalog_id
+                    ),
+                },
+            },
+        ]
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "plan_controlled_tool_requests"
+        ),
+        fake_plan_tool_requests,
+    )
+
+    def fail_single_selector(
+        question,
+        *,
+        trusted_version_id,
+        trusted_catalog_id,
+    ):
+        del question
+        del trusted_version_id
+        del trusted_catalog_id
+
+        raise AssertionError(
+            "multi-tool plan must not fall "
+            "back to single-tool selection"
+        )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "select_controlled_tool_request"
+        ),
+        fail_single_selector,
+    )
+
+    def fake_execute_plan(
+        requests,
+    ):
+        captured["executed"].extend(
+            requests
+        )
+
+        return [
+            {
+                "name": request["name"],
+                "read_only": True,
+                "ok": True,
+                "result": [],
+            }
+            for request in requests
+        ]
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "execute_controlled_tool_plan"
+        ),
+        fake_execute_plan,
+    )
+
+    def fake_answer_copilot_question(
+        question,
+        diagnosis_value,
+        explanation_value,
+        *,
+        history=None,
+        controlled_tool_results=None,
+    ):
+        del question
+        del diagnosis_value
+        del explanation_value
+        del history
+
+        captured[
+            "controlled_tool_results"
+        ] = controlled_tool_results
+
+        return copilot_result
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "answer_copilot_question"
+        ),
+        fake_answer_copilot_question,
+    )
+
+    response = client.post(
+        "/api/assistant/catalog/4/copilot",
+        json={
+            "question": (
+                "Compare freshness, volume, "
+                "and pipeline history "
+                "for catalog 999."
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert captured[
+        "trusted_version_id"
+    ] == diagnosis[
+        "latest_version_id"
+    ]
+
+    assert captured[
+        "trusted_catalog_id"
+    ] == 4
+
+    assert captured["executed"] == [
+        {
+            "name": "get_freshness_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+        {
+            "name": "get_volume_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+        {
+            "name": "get_pipeline_run_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+    ]
+
+    assert captured[
+        "controlled_tool_results"
+    ] == [
+        {
+            "name": "get_freshness_history",
+            "read_only": True,
+            "ok": True,
+            "result": [],
+        },
+        {
+            "name": "get_volume_history",
+            "read_only": True,
+            "ok": True,
+            "result": [],
+        },
+        {
+            "name": "get_pipeline_run_history",
+            "read_only": True,
+            "ok": True,
+            "result": [],
+        },
+    ]
+
+
+def test_copilot_endpoint_delegates_multi_tool_execution_to_plan_executor(
+    monkeypatch,
+):
+    diagnosis = _diagnosis()
+    explanation = _explanation()
+    copilot_result = _copilot_result()
+
+    captured: dict = {}
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: _context(),
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "reason_about_platform_context"
+        ),
+        lambda value: diagnosis,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "explain_platform_diagnosis"
+        ),
+        lambda value: explanation,
+    )
+
+    tool_requests = [
+        {
+            "name": "get_freshness_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+        {
+            "name": "get_volume_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+        {
+            "name": "get_pipeline_run_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+    ]
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "plan_controlled_tool_requests"
+        ),
+        lambda question, *,
+        trusted_version_id,
+        trusted_catalog_id: tool_requests,
+    )
+
+    def fail_single_selector(
+        question,
+        *,
+        trusted_version_id,
+        trusted_catalog_id,
+    ):
+        del question
+        del trusted_version_id
+        del trusted_catalog_id
+
+        raise AssertionError(
+            "multi-tool execution must not "
+            "use the single-tool selector"
+        )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "select_controlled_tool_request"
+        ),
+        fail_single_selector,
+    )
+
+    def fake_execute_plan(
+        requests,
+    ):
+        captured[
+            "tool_requests"
+        ] = requests
+
+        return [
+            {
+                "name": request["name"],
+                "read_only": True,
+                "ok": True,
+                "result": [],
+            }
+            for request in requests
+        ]
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "execute_controlled_tool_plan"
+        ),
+        fake_execute_plan,
+    )
+
+    def fail_direct_execute(
+        name,
+        arguments,
+    ):
+        del name
+        del arguments
+
+        raise AssertionError(
+            "route must delegate execution "
+            "to the bounded plan executor"
+        )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "execute_controlled_tool"
+        ),
+        fail_direct_execute,
+    )
+
+    def fake_answer_copilot_question(
+        question,
+        diagnosis_value,
+        explanation_value,
+        *,
+        history=None,
+        controlled_tool_results=None,
+    ):
+        del question
+        del diagnosis_value
+        del explanation_value
+        del history
+
+        captured[
+            "controlled_tool_results"
+        ] = controlled_tool_results
+
+        return copilot_result
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "answer_copilot_question"
+        ),
+        fake_answer_copilot_question,
+    )
+
+    response = client.post(
+        "/api/assistant/catalog/4/copilot",
+        json={
+            "question": (
+                "Compare freshness, volume, "
+                "and pipeline history."
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert captured[
+        "tool_requests"
+    ] == tool_requests
+
+    assert [
+        result["name"]
+        for result in captured[
+            "controlled_tool_results"
+        ]
+    ] == [
+        "get_freshness_history",
+        "get_volume_history",
+        "get_pipeline_run_history",
+    ]
