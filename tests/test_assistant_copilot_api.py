@@ -1621,13 +1621,23 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
         fail_single_selector,
     )
 
-    def fake_execute_plan(
-        requests,
+    def fake_execute_bounded_rounds(
+        question,
         *,
-        execution_trace,
+        trusted_version_id,
+        trusted_catalog_id=None,
+        execution_trace=None,
+        initial_tool_requests=None,
     ):
+        del question
+        del trusted_version_id
+        del trusted_catalog_id
+
+        assert execution_trace is not None
+        assert initial_tool_requests is not None
+
         captured["executed"].extend(
-            requests
+            initial_tool_requests
         )
 
         captured[
@@ -1641,15 +1651,15 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
                 "ok": True,
                 "result": [],
             }
-            for request in requests
+            for request in initial_tool_requests
         ]
 
     monkeypatch.setattr(
         (
             "api.routes.assistant."
-            "execute_controlled_tool_plan"
+            "execute_bounded_controlled_tool_rounds"
         ),
-        fake_execute_plan,
+        fake_execute_bounded_rounds,
     )
 
     def fake_answer_copilot_question(
@@ -1747,7 +1757,7 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
     ]
 
 
-def test_copilot_endpoint_delegates_multi_tool_execution_to_plan_executor(
+def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
     monkeypatch,
 ):
     diagnosis = _diagnosis()
@@ -1834,21 +1844,44 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_plan_executor(
         fail_single_selector,
     )
 
-    def fake_execute_plan(
-        requests,
+    def fake_execute_bounded_rounds(
+        question,
         *,
-        execution_trace,
+        trusted_version_id,
+        trusted_catalog_id=None,
+        execution_trace=None,
+        initial_tool_requests=None,
     ):
         captured[
-            "tool_requests"
-        ] = requests
+            "bounded_question"
+        ] = question
 
         captured[
-            "execution_trace"
-        ] = execution_trace
+            "bounded_trusted_version_id"
+        ] = trusted_version_id
+
+        captured[
+            "bounded_trusted_catalog_id"
+        ] = trusted_catalog_id
+
+        captured[
+            "initial_tool_requests"
+        ] = initial_tool_requests
+
+        assert execution_trace is not None
+
+        bounded_requests = [
+            *initial_tool_requests,
+            {
+                "name": "get_operational_event_history",
+                "arguments": {
+                    "catalog_id": 4,
+                },
+            },
+        ]
 
         for step, request in enumerate(
-            requests,
+            bounded_requests,
             start=1,
         ):
             execution_trace.append(
@@ -1867,6 +1900,10 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_plan_executor(
                 }
             )
 
+        captured[
+            "execution_trace"
+        ] = execution_trace
+
         return [
             {
                 "name": request["name"],
@@ -1874,15 +1911,38 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_plan_executor(
                 "ok": True,
                 "result": [],
             }
-            for request in requests
+            for request in bounded_requests
         ]
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "execute_bounded_controlled_tool_rounds"
+        ),
+        fake_execute_bounded_rounds,
+        raising=False,
+    )
+
+    def fail_plan_executor(
+        requests,
+        *,
+        execution_trace=None,
+    ):
+        del requests
+        del execution_trace
+
+        raise AssertionError(
+            "multi-tool route must delegate "
+            "to bounded controlled rounds"
+        )
 
     monkeypatch.setattr(
         (
             "api.routes.assistant."
             "execute_controlled_tool_plan"
         ),
-        fake_execute_plan,
+        fail_plan_executor,
+        raising=False,
     )
 
     def fail_direct_execute(
@@ -1894,7 +1954,7 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_plan_executor(
 
         raise AssertionError(
             "route must delegate execution "
-            "to the bounded plan executor"
+            "to bounded controlled rounds"
         )
 
     monkeypatch.setattr(
@@ -1937,7 +1997,7 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_plan_executor(
         json={
             "question": (
                 "Compare freshness, volume, "
-                "and pipeline history."
+                "pipeline history, and operational events."
             ),
         },
     )
@@ -1963,11 +2023,25 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_plan_executor(
         "get_freshness_history",
         "get_volume_history",
         "get_pipeline_run_history",
+        "get_operational_event_history",
     ]
 
     assert captured[
-        "tool_requests"
+        "initial_tool_requests"
     ] == tool_requests
+
+    assert (
+        captured[
+            "bounded_trusted_version_id"
+        ]
+        == diagnosis[
+            "latest_version_id"
+        ]
+    )
+
+    assert captured[
+        "bounded_trusted_catalog_id"
+    ] == 4
 
     assert [
         result["name"]
@@ -1978,4 +2052,5 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_plan_executor(
         "get_freshness_history",
         "get_volume_history",
         "get_pipeline_run_history",
+        "get_operational_event_history",
     ]

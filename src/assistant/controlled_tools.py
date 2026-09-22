@@ -47,6 +47,7 @@ OPERATIONAL_EVENT_HISTORY_LIMIT = 20
 PIPELINE_RUN_HISTORY_LIMIT = 20
 VOLUME_HISTORY_LIMIT = 20
 CONTROLLED_TOOL_PLAN_LIMIT = 3
+CONTROLLED_TOOL_MAX_ROUNDS = 2
 
 LINEAGE_COLLECTION_LIMIT = 20
 
@@ -512,7 +513,7 @@ def select_controlled_tool_request(
     return None
 
 
-def plan_controlled_tool_requests(
+def _build_controlled_tool_candidates(
     question: str,
     *,
     trusted_version_id: int,
@@ -699,7 +700,59 @@ def plan_controlled_tool_requests(
                 }
             )
 
-    return plan[
+    return plan
+
+
+def plan_controlled_tool_requests(
+    question: str,
+    *,
+    trusted_version_id: int,
+    trusted_catalog_id: int | None = None,
+) -> list[dict[str, Any]]:
+    candidates = (
+        _build_controlled_tool_candidates(
+            question,
+            trusted_version_id=(
+                trusted_version_id
+            ),
+            trusted_catalog_id=(
+                trusted_catalog_id
+            ),
+        )
+    )
+
+    return candidates[
+        :CONTROLLED_TOOL_PLAN_LIMIT
+    ]
+
+
+def plan_follow_up_controlled_tool_requests(
+    question: str,
+    *,
+    trusted_version_id: int,
+    trusted_catalog_id: int | None = None,
+    attempted_tool_names: set[str],
+) -> list[dict[str, Any]]:
+    candidates = (
+        _build_controlled_tool_candidates(
+            question,
+            trusted_version_id=(
+                trusted_version_id
+            ),
+            trusted_catalog_id=(
+                trusted_catalog_id
+            ),
+        )
+    )
+
+    remaining = [
+        request
+        for request in candidates
+        if request["name"]
+        not in attempted_tool_names
+    ]
+
+    return remaining[
         :CONTROLLED_TOOL_PLAN_LIMIT
     ]
 
@@ -1081,11 +1134,17 @@ def execute_controlled_tool_plan(
         dict[str, Any]
     ] = []
 
+    trace_step_start = (
+        len(execution_trace) + 1
+        if execution_trace is not None
+        else 1
+    )
+
     for step, tool_request in enumerate(
         tool_requests[
             :CONTROLLED_TOOL_PLAN_LIMIT
         ],
-        start=1,
+        start=trace_step_start,
     ):
         started_at = time.perf_counter()
 
@@ -1187,5 +1246,96 @@ def execute_controlled_tool_plan(
                     ),
                 }
             )
+
+    return results
+
+
+def execute_bounded_controlled_tool_rounds(
+    question: str,
+    *,
+    trusted_version_id: int,
+    trusted_catalog_id: int | None = None,
+    execution_trace: (
+        list[dict[str, Any]] | None
+    ) = None,
+    initial_tool_requests: (
+        list[dict[str, Any]] | None
+    ) = None,
+) -> list[dict[str, Any]]:
+    results: list[
+        dict[str, Any]
+    ] = []
+
+    attempted_tool_names: set[
+        str
+    ] = set()
+
+    for round_number in range(
+        1,
+        CONTROLLED_TOOL_MAX_ROUNDS + 1,
+    ):
+        if round_number == 1:
+            if initial_tool_requests is not None:
+                tool_requests = (
+                    initial_tool_requests[
+                        :CONTROLLED_TOOL_PLAN_LIMIT
+                    ]
+                )
+
+            else:
+                tool_requests = (
+                    plan_controlled_tool_requests(
+                        question,
+                        trusted_version_id=(
+                            trusted_version_id
+                        ),
+                        trusted_catalog_id=(
+                            trusted_catalog_id
+                        ),
+                    )
+                )
+
+        else:
+            tool_requests = (
+                plan_follow_up_controlled_tool_requests(
+                    question,
+                    trusted_version_id=(
+                        trusted_version_id
+                    ),
+                    trusted_catalog_id=(
+                        trusted_catalog_id
+                    ),
+                    attempted_tool_names=(
+                        attempted_tool_names
+                    ),
+                )
+            )
+
+        if not tool_requests:
+            break
+
+        tool_requests = tool_requests[
+            :CONTROLLED_TOOL_PLAN_LIMIT
+        ]
+
+        attempted_tool_names.update(
+            str(
+                request["name"]
+            )
+            for request in tool_requests
+        )
+
+        round_results = (
+            execute_controlled_tool_plan(
+                tool_requests,
+                execution_trace=(
+                    execution_trace
+                ),
+            )
+        )
+
+        results.extend(
+            round_results
+        )
 
     return results
