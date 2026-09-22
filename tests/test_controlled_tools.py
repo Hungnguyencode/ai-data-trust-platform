@@ -1430,6 +1430,93 @@ def test_controlled_tool_planner_caps_plan_at_three_tools():
     ]
 
 
+def test_controlled_tool_follow_up_planner_returns_unattempted_requested_tools():
+    question = (
+        "Show lineage, freshness, volume, "
+        "pipeline history, and operational events."
+    )
+
+    first_round = (
+        controlled_tools
+        .plan_controlled_tool_requests(
+            question,
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    attempted_tool_names = {
+        request["name"]
+        for request in first_round
+    }
+
+    follow_up = (
+        controlled_tools
+        .plan_follow_up_controlled_tool_requests(
+            question,
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            attempted_tool_names=(
+                attempted_tool_names
+            ),
+        )
+    )
+
+    assert follow_up == [
+        {
+            "name": "get_pipeline_run_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+        {
+            "name": "get_operational_event_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+    ]
+
+
+def test_controlled_tool_follow_up_planner_does_not_retry_attempted_failed_tool():
+    question = (
+        "Show freshness, volume, "
+        "pipeline history, and operational events."
+    )
+
+    attempted_tool_names = {
+        "get_freshness_history",
+        "get_volume_history",
+    }
+
+    follow_up = (
+        controlled_tools
+        .plan_follow_up_controlled_tool_requests(
+            question,
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            attempted_tool_names=(
+                attempted_tool_names
+            ),
+        )
+    )
+
+    assert follow_up == [
+        {
+            "name": "get_pipeline_run_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+        {
+            "name": "get_operational_event_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+    ]
+
+
 def test_controlled_tool_planner_rejects_mutating_request():
     plan = (
         controlled_tools
@@ -1826,6 +1913,465 @@ def test_controlled_tool_plan_executor_trace_respects_hard_cap(
         for item in execution_trace
     ] == [
         "get_version_lineage",
+        "get_freshness_history",
+        "get_volume_history",
+    ]
+
+
+def test_bounded_controlled_tool_rounds_stop_after_two_rounds(
+    monkeypatch,
+):
+    planned_rounds: list[str] = []
+    executed_tools: list[str] = []
+
+    def fake_first_round_planner(
+        question,
+        *,
+        trusted_version_id,
+        trusted_catalog_id=None,
+    ):
+        del (
+            question,
+            trusted_version_id,
+            trusted_catalog_id,
+        )
+
+        planned_rounds.append(
+            "first"
+        )
+
+        return [
+            {
+                "name": "get_freshness_history",
+                "arguments": {
+                    "catalog_id": 4,
+                },
+            },
+        ]
+
+    def fake_follow_up_planner(
+        question,
+        *,
+        trusted_version_id,
+        trusted_catalog_id=None,
+        attempted_tool_names,
+    ):
+        del (
+            question,
+            trusted_version_id,
+            trusted_catalog_id,
+            attempted_tool_names,
+        )
+
+        planned_rounds.append(
+            "follow_up"
+        )
+
+        return [
+            {
+                "name": "get_volume_history",
+                "arguments": {
+                    "catalog_id": 4,
+                },
+            },
+        ]
+
+    def fake_execute_plan(
+        tool_requests,
+        *,
+        execution_trace=None,
+    ):
+        del execution_trace
+
+        results = []
+
+        for request in tool_requests:
+            executed_tools.append(
+                request["name"]
+            )
+
+            results.append(
+                {
+                    "name": request["name"],
+                    "read_only": True,
+                    "ok": True,
+                    "result": [],
+                }
+            )
+
+        return results
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "plan_controlled_tool_requests",
+        fake_first_round_planner,
+    )
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "plan_follow_up_controlled_tool_requests",
+        fake_follow_up_planner,
+    )
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool_plan",
+        fake_execute_plan,
+    )
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            "Show evidence.",
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert planned_rounds == [
+        "first",
+        "follow_up",
+    ]
+
+    assert executed_tools == [
+        "get_freshness_history",
+        "get_volume_history",
+    ]
+
+    assert [
+        result["name"]
+        for result in results
+    ] == [
+        "get_freshness_history",
+        "get_volume_history",
+    ]
+
+
+def test_bounded_controlled_tool_rounds_keep_trace_steps_continuous(
+    monkeypatch,
+):
+    def fake_first_round_planner(
+        question,
+        *,
+        trusted_version_id,
+        trusted_catalog_id=None,
+    ):
+        del (
+            question,
+            trusted_version_id,
+            trusted_catalog_id,
+        )
+
+        return [
+            {
+                "name": "get_freshness_history",
+                "arguments": {
+                    "catalog_id": 4,
+                },
+            },
+        ]
+
+    def fake_follow_up_planner(
+        question,
+        *,
+        trusted_version_id,
+        trusted_catalog_id=None,
+        attempted_tool_names,
+    ):
+        del (
+            question,
+            trusted_version_id,
+            trusted_catalog_id,
+            attempted_tool_names,
+        )
+
+        return [
+            {
+                "name": "get_volume_history",
+                "arguments": {
+                    "catalog_id": 4,
+                },
+            },
+        ]
+
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "plan_controlled_tool_requests",
+        fake_first_round_planner,
+    )
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "plan_follow_up_controlled_tool_requests",
+        fake_follow_up_planner,
+    )
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    execution_trace: list[dict] = []
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            "Show evidence.",
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            execution_trace=execution_trace,
+        )
+    )
+
+    assert [
+        result["name"]
+        for result in results
+    ] == [
+        "get_freshness_history",
+        "get_volume_history",
+    ]
+
+    assert [
+        item["step"]
+        for item in execution_trace
+    ] == [
+        1,
+        2,
+    ]
+
+    assert [
+        item["tool_name"]
+        for item in execution_trace
+    ] == [
+        "get_freshness_history",
+        "get_volume_history",
+    ]
+
+
+def test_bounded_controlled_tool_rounds_do_not_retry_failed_attempt(
+    monkeypatch,
+):
+    executed_tools: list[str] = []
+
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        executed_tools.append(
+            name
+        )
+
+        if name == "get_freshness_history":
+            raise RuntimeError(
+                "simulated freshness read failure"
+            )
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    execution_trace: list[dict] = []
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            (
+                "Show freshness, volume, "
+                "pipeline history, "
+                "and operational events."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            execution_trace=execution_trace,
+        )
+    )
+
+    assert executed_tools == [
+        "get_freshness_history",
+        "get_volume_history",
+        "get_pipeline_run_history",
+        "get_operational_event_history",
+    ]
+
+    assert (
+        executed_tools.count(
+            "get_freshness_history"
+        )
+        == 1
+    )
+
+    assert [
+        result["name"]
+        for result in results
+    ] == [
+        "get_volume_history",
+        "get_pipeline_run_history",
+        "get_operational_event_history",
+    ]
+
+    assert [
+        item["step"]
+        for item in execution_trace
+    ] == [
+        1,
+        2,
+        3,
+        4,
+    ]
+
+    assert [
+        item["status"]
+        for item in execution_trace
+    ] == [
+        "FAILED",
+        "SUCCEEDED",
+        "SUCCEEDED",
+        "SUCCEEDED",
+    ]
+
+
+def test_bounded_controlled_tool_rounds_can_use_initial_plan_without_replanning(
+    monkeypatch,
+):
+    executed_tools: list[str] = []
+
+    initial_tool_requests = [
+        {
+            "name": "get_freshness_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+        {
+            "name": "get_volume_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+    ]
+
+    def fail_first_round_planner(
+        question,
+        *,
+        trusted_version_id,
+        trusted_catalog_id=None,
+    ):
+        del (
+            question,
+            trusted_version_id,
+            trusted_catalog_id,
+        )
+
+        raise AssertionError(
+            "initial plan must avoid replanning round 1"
+        )
+
+    def fake_follow_up_planner(
+        question,
+        *,
+        trusted_version_id,
+        trusted_catalog_id=None,
+        attempted_tool_names,
+    ):
+        del (
+            question,
+            trusted_version_id,
+            trusted_catalog_id,
+        )
+
+        assert attempted_tool_names == {
+            "get_freshness_history",
+            "get_volume_history",
+        }
+
+        return []
+
+    def fake_execute_plan(
+        tool_requests,
+        *,
+        execution_trace=None,
+    ):
+        del execution_trace
+
+        executed_tools.extend(
+            request["name"]
+            for request in tool_requests
+        )
+
+        return [
+            {
+                "name": request["name"],
+                "read_only": True,
+                "ok": True,
+                "result": [],
+            }
+            for request in tool_requests
+        ]
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "plan_controlled_tool_requests",
+        fail_first_round_planner,
+    )
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "plan_follow_up_controlled_tool_requests",
+        fake_follow_up_planner,
+    )
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool_plan",
+        fake_execute_plan,
+    )
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            "Show evidence.",
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            initial_tool_requests=(
+                initial_tool_requests
+            ),
+        )
+    )
+
+    assert executed_tools == [
+        "get_freshness_history",
+        "get_volume_history",
+    ]
+
+    assert [
+        result["name"]
+        for result in results
+    ] == [
         "get_freshness_history",
         "get_volume_history",
     ]

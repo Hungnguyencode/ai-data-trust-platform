@@ -17,8 +17,8 @@ from api.schemas.assistant_schema import (
     AssistantPlatformExplanationResponse,
 )
 from src.assistant.controlled_tools import (
+    execute_bounded_controlled_tool_rounds,
     execute_controlled_tool,
-    execute_controlled_tool_plan,
     plan_controlled_tool_requests,
     select_controlled_tool_request,
 )
@@ -371,10 +371,19 @@ def ask_catalog_copilot(
 
             if len(tool_requests) > 1:
                 controlled_tool_results.extend(
-                    execute_controlled_tool_plan(
-                        tool_requests,
+                    execute_bounded_controlled_tool_rounds(
+                        payload.question,
+                        trusted_version_id=(
+                            latest_version_id
+                        ),
+                        trusted_catalog_id=(
+                            catalog_id
+                        ),
                         execution_trace=(
                             tool_execution_trace
+                        ),
+                        initial_tool_requests=(
+                            tool_requests
                         ),
                     )
                 )
