@@ -16,6 +16,8 @@ from api.schemas.assistant_schema import (
 )
 from src.assistant.controlled_tools import (
     execute_controlled_tool,
+    execute_controlled_tool_plan,
+    plan_controlled_tool_requests,
     select_controlled_tool_request,
 )
 from src.assistant.llm_provider import (
@@ -333,8 +335,8 @@ def ask_catalog_copilot(
             )
             and latest_version_id > 0
         ):
-            tool_request = (
-                select_controlled_tool_request(
+            tool_requests = (
+                plan_controlled_tool_requests(
                     payload.question,
                     trusted_version_id=(
                         latest_version_id
@@ -345,24 +347,51 @@ def ask_catalog_copilot(
                 )
             )
 
-            if tool_request is not None:
-                try:
-                    tool_result = (
-                        execute_controlled_tool(
-                            tool_request["name"],
-                            tool_request[
-                                "arguments"
-                            ],
+            if len(tool_requests) <= 1:
+                tool_request = (
+                    select_controlled_tool_request(
+                        payload.question,
+                        trusted_version_id=(
+                            latest_version_id
+                        ),
+                        trusted_catalog_id=(
+                            catalog_id
+                        ),
+                    )
+                )
+
+                tool_requests = (
+                    [tool_request]
+                    if tool_request is not None
+                    else []
+                )
+
+            if len(tool_requests) > 1:
+                controlled_tool_results.extend(
+                    execute_controlled_tool_plan(
+                        tool_requests
+                    )
+                )
+
+            else:
+                for tool_request in tool_requests:
+                    try:
+                        tool_result = (
+                            execute_controlled_tool(
+                                tool_request["name"],
+                                tool_request[
+                                    "arguments"
+                                ],
+                            )
                         )
-                    )
 
-                except Exception:
-                    tool_result = None
+                    except Exception:
+                        tool_result = None
 
-                if tool_result is not None:
-                    controlled_tool_results.append(
-                        tool_result
-                    )
+                    if tool_result is not None:
+                        controlled_tool_results.append(
+                            tool_result
+                        )
 
         if controlled_tool_results:
             copilot = answer_copilot_question(

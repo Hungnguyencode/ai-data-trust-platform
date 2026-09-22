@@ -1355,3 +1355,235 @@ def test_get_operational_event_history_tool_returns_json_safe_read_only_evidence
             ),
         }
     ]
+
+
+def test_controlled_tool_planner_builds_multi_tool_read_only_evidence_plan():
+    plan = (
+        controlled_tools
+        .plan_controlled_tool_requests(
+            (
+                "Compare freshness, volume, "
+                "and pipeline history "
+                "for catalog 999."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert plan == [
+        {
+            "name": "get_freshness_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+        {
+            "name": "get_volume_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+        {
+            "name": "get_pipeline_run_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+    ]
+
+
+def test_controlled_tool_planner_caps_plan_at_three_tools():
+    plan = (
+        controlled_tools
+        .plan_controlled_tool_requests(
+            (
+                "Show lineage, freshness, volume, "
+                "pipeline history, and operational events."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert len(plan) == 3
+
+    assert plan == [
+        {
+            "name": "get_version_lineage",
+            "arguments": {
+                "version_id": 6,
+            },
+        },
+        {
+            "name": "get_freshness_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+        {
+            "name": "get_volume_history",
+            "arguments": {
+                "catalog_id": 4,
+            },
+        },
+    ]
+
+
+def test_controlled_tool_planner_rejects_mutating_request():
+    plan = (
+        controlled_tools
+        .plan_controlled_tool_requests(
+            (
+                "Promote this dataset and show "
+                "freshness, pipeline, and alerts."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert plan == []
+
+
+def test_controlled_tool_plan_executor_hard_caps_execution(
+    monkeypatch,
+):
+    executed: list[str] = []
+
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        executed.append(
+            name
+        )
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    results = (
+        controlled_tools
+        .execute_controlled_tool_plan(
+            [
+                {
+                    "name": "get_version_lineage",
+                    "arguments": {
+                        "version_id": 6,
+                    },
+                },
+                {
+                    "name": "get_freshness_history",
+                    "arguments": {
+                        "catalog_id": 4,
+                    },
+                },
+                {
+                    "name": "get_volume_history",
+                    "arguments": {
+                        "catalog_id": 4,
+                    },
+                },
+                {
+                    "name": "get_pipeline_run_history",
+                    "arguments": {
+                        "catalog_id": 4,
+                    },
+                },
+            ]
+        )
+    )
+
+    assert executed == [
+        "get_version_lineage",
+        "get_freshness_history",
+        "get_volume_history",
+    ]
+
+    assert len(results) == 3
+
+
+def test_controlled_tool_plan_executor_isolates_tool_failure(
+    monkeypatch,
+):
+    executed: list[str] = []
+
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        executed.append(
+            name
+        )
+
+        if name == "get_volume_history":
+            raise RuntimeError(
+                "simulated volume read failure"
+            )
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    results = (
+        controlled_tools
+        .execute_controlled_tool_plan(
+            [
+                {
+                    "name": "get_freshness_history",
+                    "arguments": {
+                        "catalog_id": 4,
+                    },
+                },
+                {
+                    "name": "get_volume_history",
+                    "arguments": {
+                        "catalog_id": 4,
+                    },
+                },
+                {
+                    "name": "get_pipeline_run_history",
+                    "arguments": {
+                        "catalog_id": 4,
+                    },
+                },
+            ]
+        )
+    )
+
+    assert executed == [
+        "get_freshness_history",
+        "get_volume_history",
+        "get_pipeline_run_history",
+    ]
+
+    assert [
+        result["name"]
+        for result in results
+    ] == [
+        "get_freshness_history",
+        "get_pipeline_run_history",
+    ]
