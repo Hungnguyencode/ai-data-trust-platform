@@ -195,3 +195,9 @@ class AssistantCopilotResponse(BaseModel):
 
     fallback_reason: str | None = None
     error_type: str | None = None
+
+    tool_execution_trace: list[
+        Dict[str, Any]
+    ] = Field(
+        default_factory=list
+    )

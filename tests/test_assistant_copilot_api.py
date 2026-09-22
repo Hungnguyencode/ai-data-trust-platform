@@ -675,6 +675,34 @@ def test_copilot_endpoint_executes_selected_read_only_tool(
         },
     ]
 
+    trace = response.json()[
+        "tool_execution_trace"
+    ]
+
+    assert len(trace) == 1
+
+    assert trace[0]["step"] == 1
+
+    assert (
+        trace[0]["tool_name"]
+        == "get_version_lineage"
+    )
+
+    assert trace[0]["arguments"] == {
+        "version_id": 3,
+    }
+
+    assert trace[0]["status"] == "SUCCEEDED"
+
+    assert (
+        trace[0]["evidence_accepted"]
+        is True
+    )
+
+    assert trace[0]["error_type"] is None
+
+    assert trace[0]["duration_ms"] >= 0
+
 
 def test_copilot_endpoint_falls_back_when_read_only_tool_fails(
     monkeypatch,
@@ -798,6 +826,31 @@ def test_copilot_endpoint_falls_back_when_read_only_tool_fails(
             "overall_state"
         ]
     )
+
+    trace = response.json()[
+        "tool_execution_trace"
+    ]
+
+    assert len(trace) == 1
+
+    assert (
+        trace[0]["tool_name"]
+        == "get_version_lineage"
+    )
+
+    assert trace[0]["status"] == "FAILED"
+
+    assert (
+        trace[0]["evidence_accepted"]
+        is False
+    )
+
+    assert (
+        trace[0]["error_type"]
+        == "RuntimeError"
+    )
+
+    assert trace[0]["duration_ms"] >= 0
 
 
 def test_copilot_history_cannot_trigger_controlled_tool(
@@ -1570,10 +1623,16 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
 
     def fake_execute_plan(
         requests,
+        *,
+        execution_trace,
     ):
         captured["executed"].extend(
             requests
         )
+
+        captured[
+            "execution_trace"
+        ] = execution_trace
 
         return [
             {
@@ -1777,10 +1836,36 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_plan_executor(
 
     def fake_execute_plan(
         requests,
+        *,
+        execution_trace,
     ):
         captured[
             "tool_requests"
         ] = requests
+
+        captured[
+            "execution_trace"
+        ] = execution_trace
+
+        for step, request in enumerate(
+            requests,
+            start=1,
+        ):
+            execution_trace.append(
+                {
+                    "step": step,
+                    "tool_name": (
+                        request["name"]
+                    ),
+                    "arguments": (
+                        request["arguments"]
+                    ),
+                    "status": "SUCCEEDED",
+                    "duration_ms": 1.0,
+                    "evidence_accepted": True,
+                    "error_type": None,
+                }
+            )
 
         return [
             {
@@ -1858,6 +1943,27 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_plan_executor(
     )
 
     assert response.status_code == 200
+    response_body = response.json()
+
+    assert (
+        response_body[
+            "tool_execution_trace"
+        ]
+        == captured[
+            "execution_trace"
+        ]
+    )
+
+    assert [
+        item["tool_name"]
+        for item in response_body[
+            "tool_execution_trace"
+        ]
+    ] == [
+        "get_freshness_history",
+        "get_volume_history",
+        "get_pipeline_run_history",
+    ]
 
     assert captured[
         "tool_requests"
