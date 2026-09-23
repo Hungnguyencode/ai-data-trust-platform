@@ -17,8 +17,10 @@ from api.schemas.assistant_schema import (
     AssistantPlatformExplanationResponse,
 )
 from src.assistant.controlled_tools import (
+    build_controlled_evidence_coverage,
     execute_bounded_controlled_tool_rounds,
     execute_controlled_tool,
+    plan_controlled_evidence_requirements,
     plan_controlled_tool_requests,
     select_controlled_tool_request,
 )
@@ -323,6 +325,7 @@ def ask_catalog_copilot(
         controlled_tool_results = []
         tool_execution_trace = []
         agent_run_summary = None
+        agent_evidence_coverage = None
 
         latest_version_id = diagnosis.get(
             "latest_version_id"
@@ -372,6 +375,7 @@ def ask_catalog_copilot(
 
             if len(tool_requests) > 1:
                 agent_run_summary = {}
+                agent_evidence_coverage = {}
 
                 controlled_tool_results.extend(
                     execute_bounded_controlled_tool_rounds(
@@ -390,6 +394,9 @@ def ask_catalog_copilot(
                         ),
                         agent_run_summary=(
                             agent_run_summary
+                        ),
+                        agent_evidence_coverage=(
+                            agent_evidence_coverage
                         ),
                     )
                 )
@@ -500,6 +507,40 @@ def ask_catalog_copilot(
                     ),
                 }
 
+                requested_evidence = (
+                    plan_controlled_evidence_requirements(
+                        payload.question,
+                        trusted_version_id=(
+                            latest_version_id
+                        ),
+                        trusted_catalog_id=(
+                            catalog_id
+                        ),
+                    )
+                )
+
+                agent_evidence_coverage = (
+                    build_controlled_evidence_coverage(
+                        requested_evidence=(
+                            requested_evidence
+                        ),
+                        attempted_tool_names=[
+                            str(
+                                request["name"]
+                            )
+                            for request
+                            in tool_requests
+                        ],
+                        accepted_tool_names=[
+                            str(
+                                result["name"]
+                            )
+                            for result
+                            in controlled_tool_results
+                        ],
+                    )
+                )
+
         if controlled_tool_results:
             copilot = answer_copilot_question(
                 payload.question,
@@ -552,6 +593,9 @@ def ask_catalog_copilot(
         ),
         agent_run_summary=(
             agent_run_summary
+        ),
+        agent_evidence_coverage=(
+            agent_evidence_coverage
         ),
     )
 

@@ -23,6 +23,7 @@ from app.services.assistant_api import (
     ask_catalog_copilot,
 )
 from app.services.assistant_chat import (
+    build_agent_evidence_coverage_items,
     build_agent_run_summary_items,
     build_copilot_backend_result,
     build_copilot_chat_message,
@@ -779,6 +780,55 @@ def render_chat_message(
                         (
                             value
                             if value is not None
+                            else "N/A"
+                        ),
+                    )
+
+        agent_evidence_coverage = (
+            copilot_meta.get(
+                "agent_evidence_coverage"
+            )
+        )
+
+        agent_evidence_coverage_items = (
+            build_agent_evidence_coverage_items(
+                agent_evidence_coverage
+            )
+        )
+
+        if agent_evidence_coverage_items:
+            with st.expander(
+                "Evidence coverage",
+                expanded=False,
+            ):
+                st.caption(
+                    "Deterministic coverage metadata. "
+                    "This is not Copilot evidence."
+                )
+
+                for label, value in (
+                    agent_evidence_coverage_items
+                ):
+                    display_value = value
+
+                    if isinstance(
+                        value,
+                        list,
+                    ):
+                        display_value = (
+                            ", ".join(
+                                str(item)
+                                for item in value
+                            )
+                            if value
+                            else "None"
+                        )
+
+                    st.write(
+                        f"**{label}:**",
+                        (
+                            display_value
+                            if display_value is not None
                             else "N/A"
                         ),
                     )

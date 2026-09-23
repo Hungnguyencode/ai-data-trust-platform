@@ -46,6 +46,53 @@ def build_agent_run_summary_items(
     ]
 
 
+def build_agent_evidence_coverage_items(
+    agent_evidence_coverage: Any,
+) -> list[tuple[str, Any]]:
+    if not isinstance(
+        agent_evidence_coverage,
+        dict,
+    ):
+        return []
+
+    return [
+        (
+            "Coverage status",
+            agent_evidence_coverage.get(
+                "coverage_status"
+            ),
+        ),
+        (
+            "Requested evidence",
+            agent_evidence_coverage.get(
+                "requested_evidence",
+                [],
+            ),
+        ),
+        (
+            "Attempted evidence",
+            agent_evidence_coverage.get(
+                "attempted_evidence",
+                [],
+            ),
+        ),
+        (
+            "Accepted evidence",
+            agent_evidence_coverage.get(
+                "accepted_evidence",
+                [],
+            ),
+        ),
+        (
+            "Missing evidence",
+            agent_evidence_coverage.get(
+                "missing_evidence",
+                [],
+            ),
+        ),
+    ]
+
+
 def build_copilot_backend_result(
     data: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -116,6 +163,9 @@ def build_copilot_backend_result(
         "agent_run_summary": data.get(
             "agent_run_summary"
         ),
+        "agent_evidence_coverage": data.get(
+            "agent_evidence_coverage"
+        ),
     }
 
 
@@ -185,6 +235,11 @@ def build_copilot_chat_message(
             "agent_run_summary": (
                 backend_result.get(
                     "agent_run_summary"
+                )
+            ),
+            "agent_evidence_coverage": (
+                backend_result.get(
+                    "agent_evidence_coverage"
                 )
             ),
         },

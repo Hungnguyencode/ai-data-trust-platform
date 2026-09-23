@@ -201,6 +201,50 @@ class AssistantAgentRunSummaryResponse(
     )
 
 
+AssistantControlledEvidenceType = Literal[
+    "version_lineage",
+    "freshness_history",
+    "volume_history",
+    "pipeline_run_history",
+    "operational_event_history",
+]
+
+
+class AssistantAgentEvidenceCoverageResponse(
+    BaseModel
+):
+    requested_evidence: list[
+        AssistantControlledEvidenceType
+    ] = Field(
+        default_factory=list
+    )
+
+    attempted_evidence: list[
+        AssistantControlledEvidenceType
+    ] = Field(
+        default_factory=list
+    )
+
+    accepted_evidence: list[
+        AssistantControlledEvidenceType
+    ] = Field(
+        default_factory=list
+    )
+
+    missing_evidence: list[
+        AssistantControlledEvidenceType
+    ] = Field(
+        default_factory=list
+    )
+
+    coverage_status: Literal[
+        "COMPLETE",
+        "PARTIAL",
+        "NONE",
+        "NOT_APPLICABLE",
+    ]
+
+
 class AssistantCopilotResponse(BaseModel):
     catalog_id: int
     grounded: bool = True
@@ -234,5 +278,10 @@ class AssistantCopilotResponse(BaseModel):
 
     agent_run_summary: (
         AssistantAgentRunSummaryResponse
+        | None
+    ) = None
+
+    agent_evidence_coverage: (
+        AssistantAgentEvidenceCoverageResponse
         | None
     ) = None
