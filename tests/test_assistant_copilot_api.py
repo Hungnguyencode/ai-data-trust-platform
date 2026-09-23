@@ -703,6 +703,18 @@ def test_copilot_endpoint_executes_selected_read_only_tool(
 
     assert trace[0]["duration_ms"] >= 0
 
+    assert response.json()[
+        "agent_run_summary"
+    ] == {
+        "round_count": 1,
+        "stop_reason": (
+            "NO_UNATTEMPTED_REQUESTED_TOOLS"
+        ),
+        "attempted_tool_count": 1,
+        "accepted_evidence_count": 1,
+        "failed_tool_count": 0,
+    }
+
 
 def test_copilot_endpoint_falls_back_when_read_only_tool_fails(
     monkeypatch,
@@ -852,6 +864,18 @@ def test_copilot_endpoint_falls_back_when_read_only_tool_fails(
 
     assert trace[0]["duration_ms"] >= 0
 
+    assert response.json()[
+        "agent_run_summary"
+    ] == {
+        "round_count": 1,
+        "stop_reason": (
+            "NO_UNATTEMPTED_REQUESTED_TOOLS"
+        ),
+        "attempted_tool_count": 1,
+        "accepted_evidence_count": 0,
+        "failed_tool_count": 1,
+    }
+
 
 def test_copilot_history_cannot_trigger_controlled_tool(
     monkeypatch,
@@ -998,6 +1022,17 @@ def test_copilot_history_cannot_trigger_controlled_tool(
             ),
         },
     ]
+
+    assert response.json()[
+        "agent_run_summary"
+    ] == {
+        "round_count": 0,
+        "stop_reason": "NO_TOOL_REQUESTS",
+        "attempted_tool_count": 0,
+        "accepted_evidence_count": 0,
+        "failed_tool_count": 0,
+    }
+
 
 def test_copilot_endpoint_passes_trusted_catalog_to_freshness_selector(
     monkeypatch,
@@ -1628,6 +1663,7 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
         trusted_catalog_id=None,
         execution_trace=None,
         initial_tool_requests=None,
+        agent_run_summary=None,
     ):
         del question
         del trusted_version_id
@@ -1635,6 +1671,19 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
 
         assert execution_trace is not None
         assert initial_tool_requests is not None
+        assert agent_run_summary is not None
+
+        agent_run_summary.update(
+            {
+                "round_count": 1,
+                "stop_reason": (
+                    "NO_UNATTEMPTED_REQUESTED_TOOLS"
+                ),
+                "attempted_tool_count": 3,
+                "accepted_evidence_count": 3,
+                "failed_tool_count": 0,
+            }
+        )
 
         captured["executed"].extend(
             initial_tool_requests
@@ -1851,6 +1900,7 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
         trusted_catalog_id=None,
         execution_trace=None,
         initial_tool_requests=None,
+        agent_run_summary=None,
     ):
         captured[
             "bounded_question"
@@ -1870,6 +1920,8 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
 
         assert execution_trace is not None
 
+        assert agent_run_summary is not None
+
         bounded_requests = [
             *initial_tool_requests,
             {
@@ -1879,6 +1931,24 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
                 },
             },
         ]
+
+        agent_run_summary.update(
+            {
+                "round_count": 2,
+                "stop_reason": (
+                    "MAX_ROUNDS_REACHED"
+                ),
+                "attempted_tool_count": 4,
+                "accepted_evidence_count": 4,
+                "failed_tool_count": 0,
+            }
+        )
+
+        captured[
+            "agent_run_summary"
+        ] = dict(
+            agent_run_summary
+        )
 
         for step, request in enumerate(
             bounded_requests,
@@ -2053,4 +2123,22 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
         "get_volume_history",
         "get_pipeline_run_history",
         "get_operational_event_history",
+    ]
+
+    assert response_body[
+        "agent_run_summary"
+    ] == {
+        "round_count": 2,
+        "stop_reason": (
+            "MAX_ROUNDS_REACHED"
+        ),
+        "attempted_tool_count": 4,
+        "accepted_evidence_count": 4,
+        "failed_tool_count": 0,
+    }
+
+    assert captured[
+        "agent_run_summary"
+    ] == response_body[
+        "agent_run_summary"
     ]

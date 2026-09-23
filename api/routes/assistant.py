@@ -322,6 +322,7 @@ def ask_catalog_copilot(
 
         controlled_tool_results = []
         tool_execution_trace = []
+        agent_run_summary = None
 
         latest_version_id = diagnosis.get(
             "latest_version_id"
@@ -370,6 +371,8 @@ def ask_catalog_copilot(
                 )
 
             if len(tool_requests) > 1:
+                agent_run_summary = {}
+
                 controlled_tool_results.extend(
                     execute_bounded_controlled_tool_rounds(
                         payload.question,
@@ -384,6 +387,9 @@ def ask_catalog_copilot(
                         ),
                         initial_tool_requests=(
                             tool_requests
+                        ),
+                        agent_run_summary=(
+                            agent_run_summary
                         ),
                     )
                 )
@@ -463,6 +469,37 @@ def ask_catalog_copilot(
                             tool_result
                         )
 
+                attempted_tool_count = len(
+                    tool_requests
+                )
+
+                accepted_evidence_count = len(
+                    controlled_tool_results
+                )
+
+                agent_run_summary = {
+                    "round_count": (
+                        1
+                        if attempted_tool_count > 0
+                        else 0
+                    ),
+                    "stop_reason": (
+                        "NO_UNATTEMPTED_REQUESTED_TOOLS"
+                        if attempted_tool_count > 0
+                        else "NO_TOOL_REQUESTS"
+                    ),
+                    "attempted_tool_count": (
+                        attempted_tool_count
+                    ),
+                    "accepted_evidence_count": (
+                        accepted_evidence_count
+                    ),
+                    "failed_tool_count": (
+                        attempted_tool_count
+                        - accepted_evidence_count
+                    ),
+                }
+
         if controlled_tool_results:
             copilot = answer_copilot_question(
                 payload.question,
@@ -512,6 +549,9 @@ def ask_catalog_copilot(
         version="2.6",
         tool_execution_trace=(
             tool_execution_trace
+        ),
+        agent_run_summary=(
+            agent_run_summary
         ),
     )
 
