@@ -22,6 +22,11 @@ from app.services.assistant_api import (
     AssistantApiError,
     ask_catalog_copilot,
 )
+from app.services.assistant_chat import (
+    build_agent_run_summary_items,
+    build_copilot_backend_result,
+    build_copilot_chat_message,
+)
 from src.assistant.ai_explainer import generate_quick_insight
 from src.assistant.fallback_rules import priority_action_plan, smart_diagnosis
 from src.assistant.prompt_builder import (
@@ -744,6 +749,40 @@ def render_chat_message(
                 ),
             )
 
+        agent_run_summary = (
+            copilot_meta.get(
+                "agent_run_summary"
+            )
+        )
+
+        agent_run_summary_items = (
+            build_agent_run_summary_items(
+                agent_run_summary
+            )
+        )
+
+        if agent_run_summary_items:
+            with st.expander(
+                "Agent run summary",
+                expanded=False,
+            ):
+                st.caption(
+                    "Run-level observability metadata. "
+                    "This is not Copilot evidence."
+                )
+
+                for label, value in (
+                    agent_run_summary_items
+                ):
+                    st.write(
+                        f"**{label}:**",
+                        (
+                            value
+                            if value is not None
+                            else "N/A"
+                        ),
+                    )
+
         tool_execution_trace = (
             copilot_meta.get(
                 "tool_execution_trace",
@@ -845,73 +884,6 @@ def render_chat_message(
                         )
 
                     st.divider()
-
-
-def build_copilot_chat_message(
-    answer: str,
-    backend_result: Dict[str, Any],
-) -> Dict[str, Any]:
-    return {
-        "role": "assistant",
-        "content": answer,
-        "copilot_meta": {
-            "ok": backend_result.get(
-                "ok",
-                False,
-            ),
-            "source": backend_result.get(
-                "source"
-            ),
-            "catalog_id": backend_result.get(
-                "catalog_id"
-            ),
-            "latest_version_id": (
-                backend_result.get(
-                    "latest_version_id"
-                )
-            ),
-            "overall_state": backend_result.get(
-                "overall_state"
-            ),
-            "grounded": backend_result.get(
-                "grounded"
-            ),
-            "provider": backend_result.get(
-                "provider"
-            ),
-            "model": backend_result.get(
-                "model"
-            ),
-            "used_llm": backend_result.get(
-                "used_llm"
-            ),
-            "fallback_reason": backend_result.get(
-                "fallback_reason"
-            ),
-            "error_type": backend_result.get(
-                "error_type"
-            ),
-            "source_finding_codes": (
-                backend_result.get(
-                    "source_finding_codes",
-                    [],
-                )
-            ),
-            "source_action_codes": (
-                backend_result.get(
-                    "source_action_codes",
-                    [],
-                )
-            ),
-            "tool_execution_trace": (
-                backend_result.get(
-                    "tool_execution_trace",
-                    [],
-                )
-                or []
-            ),
-        },
-    }
 
 
 def get_question_options() -> List[str]:
@@ -1110,71 +1082,9 @@ def ask_assistant_backend(
             "source": "Copilot unavailable",
         }
 
-    answer = data.get(
-        "answer"
+    return build_copilot_backend_result(
+        data
     )
-
-    return {
-        "ok": True,
-        "answer": (
-            str(answer)
-            if answer
-            else "Backend không trả về answer."
-        ),
-        "source": "FastAPI Copilot",
-        "catalog_id": data.get(
-            "catalog_id"
-        ),
-        "latest_version_id": data.get(
-            "latest_version_id"
-        ),
-        "overall_state": data.get(
-            "overall_state"
-        ),
-        "grounded": data.get(
-            "grounded",
-            True,
-        ),
-        "provider": data.get(
-            "provider"
-        ),
-        "model": data.get(
-            "model"
-        ),
-        "used_llm": bool(
-            data.get(
-                "used_llm",
-                False,
-            )
-        ),
-        "fallback_reason": data.get(
-            "fallback_reason"
-        ),
-        "error_type": data.get(
-            "error_type"
-        ),
-        "source_finding_codes": list(
-            data.get(
-                "source_finding_codes",
-                [],
-            )
-            or []
-        ),
-        "source_action_codes": list(
-            data.get(
-                "source_action_codes",
-                [],
-            )
-            or []
-        ),
-        "tool_execution_trace": list(
-            data.get(
-                "tool_execution_trace",
-                [],
-            )
-            or []
-        ),
-    }
 
 
 def main() -> None:

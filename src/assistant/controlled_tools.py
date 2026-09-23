@@ -1261,6 +1261,9 @@ def execute_bounded_controlled_tool_rounds(
     initial_tool_requests: (
         list[dict[str, Any]] | None
     ) = None,
+    agent_run_summary: (
+        dict[str, Any] | None
+    ) = None,
 ) -> list[dict[str, Any]]:
     results: list[
         dict[str, Any]
@@ -1269,6 +1272,16 @@ def execute_bounded_controlled_tool_rounds(
     attempted_tool_names: set[
         str
     ] = set()
+
+    attempted_tool_count = 0
+    round_count = 0
+
+    stop_reason = (
+        "MAX_ROUNDS_REACHED"
+    )
+
+    if agent_run_summary is not None:
+        agent_run_summary.clear()
 
     for round_number in range(
         1,
@@ -1312,11 +1325,25 @@ def execute_bounded_controlled_tool_rounds(
             )
 
         if not tool_requests:
+            stop_reason = (
+                "NO_TOOL_REQUESTS"
+                if round_number == 1
+                else (
+                    "NO_UNATTEMPTED_REQUESTED_TOOLS"
+                )
+            )
+
             break
 
         tool_requests = tool_requests[
             :CONTROLLED_TOOL_PLAN_LIMIT
         ]
+
+        round_count += 1
+
+        attempted_tool_count += len(
+            tool_requests
+        )
 
         attempted_tool_names.update(
             str(
@@ -1336,6 +1363,28 @@ def execute_bounded_controlled_tool_rounds(
 
         results.extend(
             round_results
+        )
+
+    if agent_run_summary is not None:
+        accepted_evidence_count = len(
+            results
+        )
+
+        agent_run_summary.update(
+            {
+                "round_count": round_count,
+                "stop_reason": stop_reason,
+                "attempted_tool_count": (
+                    attempted_tool_count
+                ),
+                "accepted_evidence_count": (
+                    accepted_evidence_count
+                ),
+                "failed_tool_count": (
+                    attempted_tool_count
+                    - accepted_evidence_count
+                ),
+            }
         )
 
     return results

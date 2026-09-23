@@ -1923,6 +1923,7 @@ def test_bounded_controlled_tool_rounds_stop_after_two_rounds(
 ):
     planned_rounds: list[str] = []
     executed_tools: list[str] = []
+    agent_run_summary: dict = {}
 
     def fake_first_round_planner(
         question,
@@ -2025,6 +2026,9 @@ def test_bounded_controlled_tool_rounds_stop_after_two_rounds(
             "Show evidence.",
             trusted_version_id=6,
             trusted_catalog_id=4,
+            agent_run_summary=(
+                agent_run_summary
+            ),
         )
     )
 
@@ -2045,6 +2049,190 @@ def test_bounded_controlled_tool_rounds_stop_after_two_rounds(
         "get_freshness_history",
         "get_volume_history",
     ]
+
+    assert agent_run_summary == {
+        "round_count": 2,
+        "stop_reason": "MAX_ROUNDS_REACHED",
+        "attempted_tool_count": 2,
+        "accepted_evidence_count": 2,
+        "failed_tool_count": 0,
+    }
+
+
+def test_bounded_controlled_tool_rounds_reports_one_round_summary(
+    monkeypatch,
+):
+    def fake_first_round_planner(
+        question,
+        *,
+        trusted_version_id,
+        trusted_catalog_id=None,
+    ):
+        del (
+            question,
+            trusted_version_id,
+            trusted_catalog_id,
+        )
+
+        return [
+            {
+                "name": "get_freshness_history",
+                "arguments": {
+                    "catalog_id": 4,
+                },
+            },
+        ]
+
+    def fake_follow_up_planner(
+        question,
+        *,
+        trusted_version_id,
+        trusted_catalog_id=None,
+        attempted_tool_names,
+    ):
+        del (
+            question,
+            trusted_version_id,
+            trusted_catalog_id,
+        )
+
+        assert attempted_tool_names == {
+            "get_freshness_history",
+        }
+
+        return []
+
+    def fake_execute_plan(
+        tool_requests,
+        *,
+        execution_trace=None,
+    ):
+        del execution_trace
+
+        return [
+            {
+                "name": request["name"],
+                "read_only": True,
+                "ok": True,
+                "result": [],
+            }
+            for request in tool_requests
+        ]
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "plan_controlled_tool_requests",
+        fake_first_round_planner,
+    )
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "plan_follow_up_controlled_tool_requests",
+        fake_follow_up_planner,
+    )
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool_plan",
+        fake_execute_plan,
+    )
+
+    agent_run_summary: dict = {}
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            "Show freshness evidence.",
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            agent_run_summary=(
+                agent_run_summary
+            ),
+        )
+    )
+
+    assert [
+        result["name"]
+        for result in results
+    ] == [
+        "get_freshness_history",
+    ]
+
+    assert agent_run_summary == {
+        "round_count": 1,
+        "stop_reason": (
+            "NO_UNATTEMPTED_REQUESTED_TOOLS"
+        ),
+        "attempted_tool_count": 1,
+        "accepted_evidence_count": 1,
+        "failed_tool_count": 0,
+    }
+
+
+def test_bounded_controlled_tool_rounds_reports_zero_tool_summary(
+    monkeypatch,
+):
+    def fake_first_round_planner(
+        question,
+        *,
+        trusted_version_id,
+        trusted_catalog_id=None,
+    ):
+        del (
+            question,
+            trusted_version_id,
+            trusted_catalog_id,
+        )
+
+        return []
+
+    def fail_execute_plan(
+        tool_requests,
+        *,
+        execution_trace=None,
+    ):
+        del tool_requests
+        del execution_trace
+
+        raise AssertionError(
+            "zero-tool run must not execute tools"
+        )
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "plan_controlled_tool_requests",
+        fake_first_round_planner,
+    )
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool_plan",
+        fail_execute_plan,
+    )
+
+    agent_run_summary: dict = {}
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            "Explain the current state.",
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            agent_run_summary=(
+                agent_run_summary
+            ),
+        )
+    )
+
+    assert results == []
+
+    assert agent_run_summary == {
+        "round_count": 0,
+        "stop_reason": "NO_TOOL_REQUESTS",
+        "attempted_tool_count": 0,
+        "accepted_evidence_count": 0,
+        "failed_tool_count": 0,
+    }
 
 
 def test_bounded_controlled_tool_rounds_keep_trace_steps_continuous(
@@ -2196,6 +2384,7 @@ def test_bounded_controlled_tool_rounds_do_not_retry_failed_attempt(
     )
 
     execution_trace: list[dict] = []
+    agent_run_summary: dict = {}
 
     results = (
         controlled_tools
@@ -2208,6 +2397,9 @@ def test_bounded_controlled_tool_rounds_do_not_retry_failed_attempt(
             trusted_version_id=6,
             trusted_catalog_id=4,
             execution_trace=execution_trace,
+            agent_run_summary=(
+                agent_run_summary
+            ),
         )
     )
 
@@ -2253,6 +2445,14 @@ def test_bounded_controlled_tool_rounds_do_not_retry_failed_attempt(
         "SUCCEEDED",
         "SUCCEEDED",
     ]
+
+    assert agent_run_summary == {
+        "round_count": 2,
+        "stop_reason": "MAX_ROUNDS_REACHED",
+        "attempted_tool_count": 4,
+        "accepted_evidence_count": 3,
+        "failed_tool_count": 1,
+    }
 
 
 def test_bounded_controlled_tool_rounds_can_use_initial_plan_without_replanning(

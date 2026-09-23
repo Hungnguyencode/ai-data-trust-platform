@@ -171,6 +171,36 @@ class AssistantCopilotRequest(BaseModel):
     )
 
 
+class AssistantAgentRunSummaryResponse(
+    BaseModel
+):
+    round_count: int = Field(
+        ...,
+        ge=0,
+    )
+
+    stop_reason: Literal[
+        "NO_TOOL_REQUESTS",
+        "NO_UNATTEMPTED_REQUESTED_TOOLS",
+        "MAX_ROUNDS_REACHED",
+    ]
+
+    attempted_tool_count: int = Field(
+        ...,
+        ge=0,
+    )
+
+    accepted_evidence_count: int = Field(
+        ...,
+        ge=0,
+    )
+
+    failed_tool_count: int = Field(
+        ...,
+        ge=0,
+    )
+
+
 class AssistantCopilotResponse(BaseModel):
     catalog_id: int
     grounded: bool = True
@@ -201,3 +231,8 @@ class AssistantCopilotResponse(BaseModel):
     ] = Field(
         default_factory=list
     )
+
+    agent_run_summary: (
+        AssistantAgentRunSummaryResponse
+        | None
+    ) = None
