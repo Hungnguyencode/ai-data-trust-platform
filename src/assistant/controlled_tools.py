@@ -49,6 +49,24 @@ VOLUME_HISTORY_LIMIT = 20
 CONTROLLED_TOOL_PLAN_LIMIT = 3
 CONTROLLED_TOOL_MAX_ROUNDS = 2
 
+CONTROLLED_TOOL_EVIDENCE_TYPES = {
+    "get_version_lineage": (
+        "version_lineage"
+    ),
+    "get_freshness_history": (
+        "freshness_history"
+    ),
+    "get_volume_history": (
+        "volume_history"
+    ),
+    "get_pipeline_run_history": (
+        "pipeline_run_history"
+    ),
+    "get_operational_event_history": (
+        "operational_event_history"
+    ),
+}
+
 LINEAGE_COLLECTION_LIMIT = 20
 
 LINEAGE_COLLECTION_FIELDS = (
@@ -703,6 +721,159 @@ def _build_controlled_tool_candidates(
     return plan
 
 
+def plan_controlled_evidence_requirements(
+    question: str,
+    *,
+    trusted_version_id: int,
+    trusted_catalog_id: int | None = None,
+) -> list[str]:
+    candidates = (
+        _build_controlled_tool_candidates(
+            question,
+            trusted_version_id=(
+                trusted_version_id
+            ),
+            trusted_catalog_id=(
+                trusted_catalog_id
+            ),
+        )
+    )
+
+    evidence: list[str] = []
+
+    for request in candidates:
+        tool_name = str(
+            request["name"]
+        )
+
+        evidence_type = (
+            CONTROLLED_TOOL_EVIDENCE_TYPES.get(
+                tool_name
+            )
+        )
+
+        if evidence_type is not None:
+            evidence.append(
+                evidence_type
+            )
+
+    return evidence
+
+
+def build_controlled_evidence_coverage(
+    *,
+    requested_evidence: list[str],
+    attempted_tool_names: list[str],
+    accepted_tool_names: list[str],
+) -> dict[str, Any]:
+    requested = list(
+        dict.fromkeys(
+            requested_evidence
+        )
+    )
+
+    requested_evidence_set = set(
+        requested
+    )
+
+    attempted_evidence: list[str] = []
+    attempted_evidence_set: set[str] = set()
+
+    for tool_name in attempted_tool_names:
+        evidence_type = (
+            CONTROLLED_TOOL_EVIDENCE_TYPES.get(
+                tool_name
+            )
+        )
+
+        if (
+            evidence_type is None
+            or evidence_type
+            not in requested_evidence_set
+            or evidence_type
+            in attempted_evidence_set
+        ):
+            continue
+
+        attempted_evidence.append(
+            evidence_type
+        )
+
+        attempted_evidence_set.add(
+            evidence_type
+        )
+
+    accepted_evidence: list[str] = []
+    accepted_evidence_set: set[str] = set()
+
+    for tool_name in accepted_tool_names:
+        evidence_type = (
+            CONTROLLED_TOOL_EVIDENCE_TYPES.get(
+                tool_name
+            )
+        )
+
+        if (
+            evidence_type is None
+            or evidence_type
+            not in requested_evidence_set
+            or evidence_type
+            not in attempted_evidence_set
+            or evidence_type
+            in accepted_evidence_set
+        ):
+            continue
+
+        accepted_evidence.append(
+            evidence_type
+        )
+
+        accepted_evidence_set.add(
+            evidence_type
+        )
+
+    missing_evidence = [
+        evidence_type
+        for evidence_type in requested
+        if evidence_type
+        not in accepted_evidence_set
+    ]
+
+    if not requested:
+        coverage_status = (
+            "NOT_APPLICABLE"
+        )
+
+    elif not accepted_evidence:
+        coverage_status = "NONE"
+
+    elif len(
+        accepted_evidence
+    ) == len(
+        requested
+    ):
+        coverage_status = "COMPLETE"
+
+    else:
+        coverage_status = "PARTIAL"
+
+    return {
+        "requested_evidence": requested,
+        "attempted_evidence": (
+            attempted_evidence
+        ),
+        "accepted_evidence": (
+            accepted_evidence
+        ),
+        "missing_evidence": (
+            missing_evidence
+        ),
+        "coverage_status": (
+            coverage_status
+        ),
+    }
+
+
 def plan_controlled_tool_requests(
     question: str,
     *,
@@ -1264,6 +1435,9 @@ def execute_bounded_controlled_tool_rounds(
     agent_run_summary: (
         dict[str, Any] | None
     ) = None,
+    agent_evidence_coverage: (
+        dict[str, Any] | None
+    ) = None,
 ) -> list[dict[str, Any]]:
     results: list[
         dict[str, Any]
@@ -1273,6 +1447,14 @@ def execute_bounded_controlled_tool_rounds(
         str
     ] = set()
 
+    attempted_tool_names_in_order: list[
+        str
+    ] = []
+
+    accepted_tool_names: list[
+        str
+    ] = []
+
     attempted_tool_count = 0
     round_count = 0
 
@@ -1280,8 +1462,25 @@ def execute_bounded_controlled_tool_rounds(
         "MAX_ROUNDS_REACHED"
     )
 
+    requested_evidence: list[str] = []
+
     if agent_run_summary is not None:
         agent_run_summary.clear()
+
+    if agent_evidence_coverage is not None:
+        agent_evidence_coverage.clear()
+
+        requested_evidence = (
+            plan_controlled_evidence_requirements(
+                question,
+                trusted_version_id=(
+                    trusted_version_id
+                ),
+                trusted_catalog_id=(
+                    trusted_catalog_id
+                ),
+            )
+        )
 
     for round_number in range(
         1,
@@ -1352,6 +1551,13 @@ def execute_bounded_controlled_tool_rounds(
             for request in tool_requests
         )
 
+        attempted_tool_names_in_order.extend(
+            str(
+                request["name"]
+            )
+            for request in tool_requests
+        )
+
         round_results = (
             execute_controlled_tool_plan(
                 tool_requests,
@@ -1363,6 +1569,13 @@ def execute_bounded_controlled_tool_rounds(
 
         results.extend(
             round_results
+        )
+
+        accepted_tool_names.extend(
+            str(
+                result["name"]
+            )
+            for result in round_results
         )
 
     if agent_run_summary is not None:
@@ -1385,6 +1598,21 @@ def execute_bounded_controlled_tool_rounds(
                     - accepted_evidence_count
                 ),
             }
+        )
+
+    if agent_evidence_coverage is not None:
+        agent_evidence_coverage.update(
+            build_controlled_evidence_coverage(
+                requested_evidence=(
+                    requested_evidence
+                ),
+                attempted_tool_names=(
+                    attempted_tool_names_in_order
+                ),
+                accepted_tool_names=(
+                    accepted_tool_names
+                ),
+            )
         )
 
     return results

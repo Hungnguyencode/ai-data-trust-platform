@@ -715,6 +715,22 @@ def test_copilot_endpoint_executes_selected_read_only_tool(
         "failed_tool_count": 0,
     }
 
+    assert response.json()[
+        "agent_evidence_coverage"
+    ] == {
+        "requested_evidence": [
+            "version_lineage",
+        ],
+        "attempted_evidence": [
+            "version_lineage",
+        ],
+        "accepted_evidence": [
+            "version_lineage",
+        ],
+        "missing_evidence": [],
+        "coverage_status": "COMPLETE",
+    }
+
 
 def test_copilot_endpoint_falls_back_when_read_only_tool_fails(
     monkeypatch,
@@ -876,6 +892,135 @@ def test_copilot_endpoint_falls_back_when_read_only_tool_fails(
         "failed_tool_count": 1,
     }
 
+    assert response.json()[
+        "agent_evidence_coverage"
+    ] == {
+        "requested_evidence": [
+            "version_lineage",
+        ],
+        "attempted_evidence": [
+            "version_lineage",
+        ],
+        "accepted_evidence": [],
+        "missing_evidence": [
+            "version_lineage",
+        ],
+        "coverage_status": "NONE",
+    }
+
+
+def test_copilot_endpoint_skips_agent_metadata_without_latest_version(
+    monkeypatch,
+):
+    diagnosis = _diagnosis()
+    diagnosis["latest_version_id"] = None
+
+    explanation = _explanation()
+    explanation["latest_version_id"] = None
+
+    copilot_result = _copilot_result()
+    copilot_result["latest_version_id"] = None
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: _context(),
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "reason_about_platform_context"
+        ),
+        lambda value: diagnosis,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "explain_platform_diagnosis"
+        ),
+        lambda value: explanation,
+    )
+
+    def fail_controlled_tool_path(
+        *args,
+        **kwargs,
+    ):
+        del args
+        del kwargs
+
+        raise AssertionError(
+            "controlled tools must not run "
+            "without a trusted latest version"
+        )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "plan_controlled_tool_requests"
+        ),
+        fail_controlled_tool_path,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "select_controlled_tool_request"
+        ),
+        fail_controlled_tool_path,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "execute_controlled_tool"
+        ),
+        fail_controlled_tool_path,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "answer_copilot_question"
+        ),
+        lambda *args, **kwargs: copilot_result,
+    )
+
+    response = client.post(
+        (
+            "/api/assistant/catalog/"
+            "1/copilot"
+        ),
+        json={
+            "question": (
+                "Show lineage for this dataset."
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload[
+        "latest_version_id"
+    ] is None
+
+    assert payload[
+        "tool_execution_trace"
+    ] == []
+
+    assert payload[
+        "agent_run_summary"
+    ] is None
+
+    assert payload[
+        "agent_evidence_coverage"
+    ] is None
+
 
 def test_copilot_history_cannot_trigger_controlled_tool(
     monkeypatch,
@@ -1031,6 +1176,16 @@ def test_copilot_history_cannot_trigger_controlled_tool(
         "attempted_tool_count": 0,
         "accepted_evidence_count": 0,
         "failed_tool_count": 0,
+    }
+
+    assert response.json()[
+        "agent_evidence_coverage"
+    ] == {
+        "requested_evidence": [],
+        "attempted_evidence": [],
+        "accepted_evidence": [],
+        "missing_evidence": [],
+        "coverage_status": "NOT_APPLICABLE",
     }
 
 
@@ -1664,6 +1819,7 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
         execution_trace=None,
         initial_tool_requests=None,
         agent_run_summary=None,
+        agent_evidence_coverage=None,
     ):
         del question
         del trusted_version_id
@@ -1672,6 +1828,7 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
         assert execution_trace is not None
         assert initial_tool_requests is not None
         assert agent_run_summary is not None
+        assert agent_evidence_coverage is not None
 
         agent_run_summary.update(
             {
@@ -1682,6 +1839,28 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
                 "attempted_tool_count": 3,
                 "accepted_evidence_count": 3,
                 "failed_tool_count": 0,
+            }
+        )
+
+        agent_evidence_coverage.update(
+            {
+                "requested_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                    "pipeline_run_history",
+                ],
+                "attempted_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                    "pipeline_run_history",
+                ],
+                "accepted_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                    "pipeline_run_history",
+                ],
+                "missing_evidence": [],
+                "coverage_status": "COMPLETE",
             }
         )
 
@@ -1901,6 +2080,7 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
         execution_trace=None,
         initial_tool_requests=None,
         agent_run_summary=None,
+        agent_evidence_coverage=None,
     ):
         captured[
             "bounded_question"
@@ -1922,6 +2102,8 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
 
         assert agent_run_summary is not None
 
+        assert agent_evidence_coverage is not None
+
         bounded_requests = [
             *initial_tool_requests,
             {
@@ -1942,6 +2124,37 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
                 "accepted_evidence_count": 4,
                 "failed_tool_count": 0,
             }
+        )
+
+        agent_evidence_coverage.update(
+            {
+                "requested_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                    "pipeline_run_history",
+                    "operational_event_history",
+                ],
+                "attempted_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                    "pipeline_run_history",
+                    "operational_event_history",
+                ],
+                "accepted_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                    "pipeline_run_history",
+                    "operational_event_history",
+                ],
+                "missing_evidence": [],
+                "coverage_status": "COMPLETE",
+            }
+        )
+
+        captured[
+            "agent_evidence_coverage"
+        ] = dict(
+            agent_evidence_coverage
         )
 
         captured[
@@ -2141,4 +2354,35 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
         "agent_run_summary"
     ] == response_body[
         "agent_run_summary"
+    ]
+
+    assert response_body[
+        "agent_evidence_coverage"
+    ] == {
+        "requested_evidence": [
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+            "operational_event_history",
+        ],
+        "attempted_evidence": [
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+            "operational_event_history",
+        ],
+        "accepted_evidence": [
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+            "operational_event_history",
+        ],
+        "missing_evidence": [],
+        "coverage_status": "COMPLETE",
+    }
+
+    assert captured[
+        "agent_evidence_coverage"
+    ] == response_body[
+        "agent_evidence_coverage"
     ]

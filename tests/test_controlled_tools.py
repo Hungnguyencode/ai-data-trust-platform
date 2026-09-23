@@ -1430,6 +1430,191 @@ def test_controlled_tool_planner_caps_plan_at_three_tools():
     ]
 
 
+def test_controlled_evidence_requirements_keep_all_requested_domains():
+    evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            (
+                "Show lineage, freshness, volume, "
+                "pipeline history, and operational events."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert evidence == [
+        "version_lineage",
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+
+def test_controlled_evidence_coverage_marks_failed_requested_evidence_missing():
+    coverage = (
+        controlled_tools
+        .build_controlled_evidence_coverage(
+            requested_evidence=[
+                "freshness_history",
+                "volume_history",
+            ],
+            attempted_tool_names=[
+                "get_freshness_history",
+                "get_volume_history",
+            ],
+            accepted_tool_names=[
+                "get_volume_history",
+            ],
+        )
+    )
+
+    assert coverage == {
+        "requested_evidence": [
+            "freshness_history",
+            "volume_history",
+        ],
+        "attempted_evidence": [
+            "freshness_history",
+            "volume_history",
+        ],
+        "accepted_evidence": [
+            "volume_history",
+        ],
+        "missing_evidence": [
+            "freshness_history",
+        ],
+        "coverage_status": "PARTIAL",
+    }
+
+
+def test_controlled_evidence_coverage_preserves_actual_attempt_and_accept_order():
+    coverage = (
+        controlled_tools
+        .build_controlled_evidence_coverage(
+            requested_evidence=[
+                "freshness_history",
+                "volume_history",
+                "pipeline_run_history",
+            ],
+            attempted_tool_names=[
+                "get_pipeline_run_history",
+                "get_freshness_history",
+                "get_volume_history",
+            ],
+            accepted_tool_names=[
+                "get_pipeline_run_history",
+                "get_volume_history",
+            ],
+        )
+    )
+
+    assert coverage == {
+        "requested_evidence": [
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+        ],
+        "attempted_evidence": [
+            "pipeline_run_history",
+            "freshness_history",
+            "volume_history",
+        ],
+        "accepted_evidence": [
+            "pipeline_run_history",
+            "volume_history",
+        ],
+        "missing_evidence": [
+            "freshness_history",
+        ],
+        "coverage_status": "PARTIAL",
+    }
+
+
+@pytest.mark.parametrize(
+    (
+        "requested_evidence",
+        "attempted_tool_names",
+        "accepted_tool_names",
+        "expected_status",
+        "expected_missing",
+    ),
+    [
+        (
+            [
+                "freshness_history",
+                "volume_history",
+            ],
+            [
+                "get_freshness_history",
+                "get_volume_history",
+            ],
+            [
+                "get_freshness_history",
+                "get_volume_history",
+            ],
+            "COMPLETE",
+            [],
+        ),
+        (
+            [
+                "freshness_history",
+                "volume_history",
+            ],
+            [
+                "get_freshness_history",
+                "get_volume_history",
+            ],
+            [],
+            "NONE",
+            [
+                "freshness_history",
+                "volume_history",
+            ],
+        ),
+        (
+            [],
+            [],
+            [],
+            "NOT_APPLICABLE",
+            [],
+        ),
+    ],
+)
+def test_controlled_evidence_coverage_reports_deterministic_status(
+    requested_evidence,
+    attempted_tool_names,
+    accepted_tool_names,
+    expected_status,
+    expected_missing,
+):
+    coverage = (
+        controlled_tools
+        .build_controlled_evidence_coverage(
+            requested_evidence=(
+                requested_evidence
+            ),
+            attempted_tool_names=(
+                attempted_tool_names
+            ),
+            accepted_tool_names=(
+                accepted_tool_names
+            ),
+        )
+    )
+
+    assert (
+        coverage["coverage_status"]
+        == expected_status
+    )
+
+    assert (
+        coverage["missing_evidence"]
+        == expected_missing
+    )
+
+
 def test_controlled_tool_follow_up_planner_returns_unattempted_requested_tools():
     question = (
         "Show lineage, freshness, volume, "
@@ -2452,6 +2637,76 @@ def test_bounded_controlled_tool_rounds_do_not_retry_failed_attempt(
         "attempted_tool_count": 4,
         "accepted_evidence_count": 3,
         "failed_tool_count": 1,
+    }
+
+
+def test_bounded_controlled_tool_rounds_reports_partial_evidence_coverage(
+    monkeypatch,
+):
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        if name == "get_freshness_history":
+            raise RuntimeError(
+                "simulated freshness read failure"
+            )
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    agent_evidence_coverage: dict = {}
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            (
+                "Show freshness and "
+                "volume history."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            agent_evidence_coverage=(
+                agent_evidence_coverage
+            ),
+        )
+    )
+
+    assert [
+        result["name"]
+        for result in results
+    ] == [
+        "get_volume_history",
+    ]
+
+    assert agent_evidence_coverage == {
+        "requested_evidence": [
+            "freshness_history",
+            "volume_history",
+        ],
+        "attempted_evidence": [
+            "freshness_history",
+            "volume_history",
+        ],
+        "accepted_evidence": [
+            "volume_history",
+        ],
+        "missing_evidence": [
+            "freshness_history",
+        ],
+        "coverage_status": "PARTIAL",
     }
 
 
