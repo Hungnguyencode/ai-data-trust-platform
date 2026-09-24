@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.services.assistant_chat import (
+    build_agent_evidence_answerability_items,
     build_agent_evidence_coverage_items,
     build_agent_evidence_sufficiency_items,
     build_agent_run_summary_items,
@@ -427,5 +428,197 @@ def test_build_agent_evidence_sufficiency_items_exposes_availability_fields():
 
 def test_build_agent_evidence_sufficiency_items_ignores_missing_sufficiency():
     assert build_agent_evidence_sufficiency_items(
+        None
+    ) == []
+
+
+def test_copilot_chat_metadata_preserves_agent_evidence_answerability():
+    agent_evidence_answerability = {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "freshness_history",
+            "volume_history",
+        ],
+        "answerable_evidence": [
+            "freshness_history",
+        ],
+        "insufficient_evidence": [
+            "volume_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_requirements": [
+            {
+                "evidence_type": (
+                    "freshness_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": 2,
+                "requirement_status": (
+                    "SATISFIED"
+                ),
+            },
+            {
+                "evidence_type": (
+                    "volume_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": 1,
+                "requirement_status": (
+                    "INSUFFICIENT_ITEMS"
+                ),
+            },
+        ],
+        "answerability_status": "PARTIAL",
+    }
+
+    backend_result = build_copilot_backend_result(
+        {
+            "catalog_id": 4,
+            "latest_version_id": 6,
+            "overall_state": "WARNING",
+            "answer": "Grounded answer.",
+            "grounded": True,
+            "provider": "disabled",
+            "model": None,
+            "used_llm": False,
+            "fallback_reason": (
+                "provider_disabled"
+            ),
+            "error_type": None,
+            "source_finding_codes": [],
+            "source_action_codes": [],
+            "tool_execution_trace": [],
+            "agent_run_summary": None,
+            "agent_evidence_coverage": None,
+            "agent_evidence_sufficiency": None,
+            "agent_evidence_answerability": (
+                agent_evidence_answerability
+            ),
+        }
+    )
+
+    assert backend_result.get(
+        "agent_evidence_answerability"
+    ) == agent_evidence_answerability
+
+    message = build_copilot_chat_message(
+        "Grounded answer.",
+        backend_result,
+    )
+
+    assert message[
+        "copilot_meta"
+    ].get(
+        "agent_evidence_answerability"
+    ) == agent_evidence_answerability
+
+
+def test_build_agent_evidence_answerability_items_exposes_requirement_fields():
+    items = build_agent_evidence_answerability_items(
+        {
+            "assessment_scope": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "assessed_evidence": [
+                "freshness_history",
+                "volume_history",
+            ],
+            "answerable_evidence": [
+                "freshness_history",
+            ],
+            "insufficient_evidence": [
+                "volume_history",
+            ],
+            "unavailable_evidence": [],
+            "evidence_requirements": [
+                {
+                    "evidence_type": (
+                        "freshness_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 2,
+                    "requirement_status": (
+                        "SATISFIED"
+                    ),
+                },
+                {
+                    "evidence_type": (
+                        "volume_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 1,
+                    "requirement_status": (
+                        "INSUFFICIENT_ITEMS"
+                    ),
+                },
+            ],
+            "answerability_status": "PARTIAL",
+        }
+    )
+
+    assert items == [
+        (
+            "Answerability status",
+            "PARTIAL",
+        ),
+        (
+            "Assessment scope",
+            "HISTORICAL_COMPARISON",
+        ),
+        (
+            "Assessed evidence",
+            [
+                "freshness_history",
+                "volume_history",
+            ],
+        ),
+        (
+            "Answerable evidence",
+            [
+                "freshness_history",
+            ],
+        ),
+        (
+            "Insufficient evidence",
+            [
+                "volume_history",
+            ],
+        ),
+        (
+            "Unavailable evidence",
+            [],
+        ),
+        (
+            "Evidence requirements",
+            [
+                {
+                    "evidence_type": (
+                        "freshness_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 2,
+                    "requirement_status": (
+                        "SATISFIED"
+                    ),
+                },
+                {
+                    "evidence_type": (
+                        "volume_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 1,
+                    "requirement_status": (
+                        "INSUFFICIENT_ITEMS"
+                    ),
+                },
+            ],
+        ),
+    ]
+
+
+def test_build_agent_evidence_answerability_items_ignores_missing_answerability():
+    assert build_agent_evidence_answerability_items(
         None
     ) == []

@@ -3,6 +3,9 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from api.main import app
+from api.schemas.assistant_schema import (
+    AssistantCopilotResponse,
+)
 from src.assistant.llm_provider import (
     LLMConfigurationError,
 )
@@ -1888,6 +1891,7 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
         agent_run_summary=None,
         agent_evidence_coverage=None,
         agent_evidence_sufficiency=None,
+        agent_evidence_answerability=None,
     ):
         del question
         del trusted_version_id
@@ -1898,6 +1902,7 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
         assert agent_run_summary is not None
         assert agent_evidence_coverage is not None
         assert agent_evidence_sufficiency is not None
+        assert agent_evidence_answerability is not None
 
         agent_run_summary.update(
             {
@@ -1981,6 +1986,62 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
                 ),
             }
         )
+
+        if agent_evidence_answerability is not None:
+            agent_evidence_answerability.update(
+                {
+                    "assessment_scope": (
+                        "HISTORICAL_COMPARISON"
+                    ),
+                    "assessed_evidence": [
+                        "freshness_history",
+                        "volume_history",
+                        "pipeline_run_history",
+                    ],
+                    "answerable_evidence": [],
+                    "insufficient_evidence": [
+                        "freshness_history",
+                        "volume_history",
+                        "pipeline_run_history",
+                    ],
+                    "unavailable_evidence": [],
+                    "evidence_requirements": [
+                        {
+                            "evidence_type": (
+                                "freshness_history"
+                            ),
+                            "minimum_item_count": 2,
+                            "observed_item_count": 0,
+                            "requirement_status": (
+                                "INSUFFICIENT_ITEMS"
+                            ),
+                        },
+                        {
+                            "evidence_type": (
+                                "volume_history"
+                            ),
+                            "minimum_item_count": 2,
+                            "observed_item_count": 0,
+                            "requirement_status": (
+                                "INSUFFICIENT_ITEMS"
+                            ),
+                        },
+                        {
+                            "evidence_type": (
+                                "pipeline_run_history"
+                            ),
+                            "minimum_item_count": 2,
+                            "observed_item_count": 0,
+                            "requirement_status": (
+                                "INSUFFICIENT_ITEMS"
+                            ),
+                        },
+                    ],
+                    "answerability_status": (
+                        "NOT_ANSWERABLE"
+                    ),
+                }
+            )
 
         captured["executed"].extend(
             initial_tool_requests
@@ -2094,6 +2155,61 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
         ],
         "sufficiency_status": (
             "INSUFFICIENT"
+        ),
+    }
+
+    assert response.json()[
+        "agent_evidence_answerability"
+    ] == {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+        ],
+        "answerable_evidence": [],
+        "insufficient_evidence": [
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_requirements": [
+            {
+                "evidence_type": (
+                    "freshness_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": 0,
+                "requirement_status": (
+                    "INSUFFICIENT_ITEMS"
+                ),
+            },
+            {
+                "evidence_type": (
+                    "volume_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": 0,
+                "requirement_status": (
+                    "INSUFFICIENT_ITEMS"
+                ),
+            },
+            {
+                "evidence_type": (
+                    "pipeline_run_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": 0,
+                "requirement_status": (
+                    "INSUFFICIENT_ITEMS"
+                ),
+            },
+        ],
+        "answerability_status": (
+            "NOT_ANSWERABLE"
         ),
     }
 
@@ -2249,6 +2365,7 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
         agent_run_summary=None,
         agent_evidence_coverage=None,
         agent_evidence_sufficiency=None,
+        agent_evidence_answerability=None,
     ):
         captured[
             "bounded_question"
@@ -2271,6 +2388,7 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
         assert agent_run_summary is not None
         assert agent_evidence_coverage is not None
         assert agent_evidence_sufficiency is not None
+        assert agent_evidence_answerability is not None
 
         bounded_requests = [
             *initial_tool_requests,
@@ -2375,6 +2493,73 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
                 ],
                 "sufficiency_status": (
                     "INSUFFICIENT"
+                ),
+            }
+        )
+
+        agent_evidence_answerability.update(
+            {
+                "assessment_scope": (
+                    "HISTORICAL_COMPARISON"
+                ),
+                "assessed_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                    "pipeline_run_history",
+                    "operational_event_history",
+                ],
+                "answerable_evidence": [],
+                "insufficient_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                    "pipeline_run_history",
+                    "operational_event_history",
+                ],
+                "unavailable_evidence": [],
+                "evidence_requirements": [
+                    {
+                        "evidence_type": (
+                            "freshness_history"
+                        ),
+                        "minimum_item_count": 2,
+                        "observed_item_count": 0,
+                        "requirement_status": (
+                            "INSUFFICIENT_ITEMS"
+                        ),
+                    },
+                    {
+                        "evidence_type": (
+                            "volume_history"
+                        ),
+                        "minimum_item_count": 2,
+                        "observed_item_count": 0,
+                        "requirement_status": (
+                            "INSUFFICIENT_ITEMS"
+                        ),
+                    },
+                    {
+                        "evidence_type": (
+                            "pipeline_run_history"
+                        ),
+                        "minimum_item_count": 2,
+                        "observed_item_count": 0,
+                        "requirement_status": (
+                            "INSUFFICIENT_ITEMS"
+                        ),
+                    },
+                    {
+                        "evidence_type": (
+                            "operational_event_history"
+                        ),
+                        "minimum_item_count": 2,
+                        "observed_item_count": 0,
+                        "requirement_status": (
+                            "INSUFFICIENT_ITEMS"
+                        ),
+                    },
+                ],
+                "answerability_status": (
+                    "NOT_ANSWERABLE"
                 ),
             }
         )
@@ -2626,3 +2811,170 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
     ] == captured[
         "agent_evidence_sufficiency"
     ]
+
+
+def test_copilot_response_exposes_agent_evidence_answerability():
+    response = AssistantCopilotResponse(
+        catalog_id=4,
+        latest_version_id=6,
+        overall_state="HEALTHY",
+        answer="Grounded answer.",
+        provider="test",
+        model="test-model",
+        used_llm=True,
+        agent_evidence_answerability={
+            "assessment_scope": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "assessed_evidence": [
+                "freshness_history",
+            ],
+            "answerable_evidence": [],
+            "insufficient_evidence": [
+                "freshness_history",
+            ],
+            "unavailable_evidence": [],
+            "evidence_requirements": [
+                {
+                    "evidence_type": (
+                        "freshness_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 1,
+                    "requirement_status": (
+                        "INSUFFICIENT_ITEMS"
+                    ),
+                },
+            ],
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+        },
+    )
+
+    assert (
+        response.agent_evidence_answerability
+        is not None
+    )
+
+    assert (
+        response
+        .agent_evidence_answerability
+        .answerability_status
+        == "NOT_ANSWERABLE"
+    )
+
+
+def test_copilot_endpoint_reports_direct_tool_evidence_answerability(
+    monkeypatch,
+):
+    diagnosis = _diagnosis()
+    explanation = _explanation()
+    copilot_result = _copilot_result()
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: _context(),
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "reason_about_platform_context"
+        ),
+        lambda value: diagnosis,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "explain_platform_diagnosis"
+        ),
+        lambda value: explanation,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "select_controlled_tool_request"
+        ),
+        lambda question, *,
+        trusted_version_id,
+        trusted_catalog_id: {
+            "name": "get_freshness_history",
+            "arguments": {
+                "catalog_id": trusted_catalog_id,
+            },
+        },
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "execute_controlled_tool"
+        ),
+        lambda name, arguments: {
+            "name": "get_freshness_history",
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "freshness_status": "FRESH",
+                },
+            ],
+        },
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "answer_copilot_question"
+        ),
+        lambda *args, **kwargs: copilot_result,
+    )
+
+    response = client.post(
+        "/api/assistant/catalog/4/copilot",
+        json={
+            "question": (
+                "Compare freshness history "
+                "over time."
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert response.json()[
+        "agent_evidence_answerability"
+    ] == {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "freshness_history",
+        ],
+        "answerable_evidence": [],
+        "insufficient_evidence": [
+            "freshness_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_requirements": [
+            {
+                "evidence_type": (
+                    "freshness_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": 1,
+                "requirement_status": (
+                    "INSUFFICIENT_ITEMS"
+                ),
+            },
+        ],
+        "answerability_status": (
+            "NOT_ANSWERABLE"
+        ),
+    }

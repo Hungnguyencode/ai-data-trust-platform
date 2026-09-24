@@ -3224,3 +3224,450 @@ def test_controlled_evidence_sufficiency_reports_boundary_statuses(
         sufficiency["sufficiency_status"]
         == expected_status
     )
+
+
+def test_controlled_evidence_answerability_requires_two_items_for_historical_comparison():
+    answerability = (
+        controlled_tools
+        .build_controlled_evidence_answerability(
+            question=(
+                "Compare freshness history "
+                "over time."
+            ),
+            evidence_sufficiency={
+                "requested_evidence": [
+                    "freshness_history",
+                ],
+                "available_evidence": [
+                    "freshness_history",
+                ],
+                "empty_evidence": [],
+                "unavailable_evidence": [],
+                "evidence_details": [
+                    {
+                        "evidence_type": (
+                            "freshness_history"
+                        ),
+                        "availability_status": (
+                            "AVAILABLE"
+                        ),
+                        "item_count": 1,
+                    },
+                ],
+                "sufficiency_status": (
+                    "SUFFICIENT"
+                ),
+            },
+        )
+    )
+
+    assert answerability == {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "freshness_history",
+        ],
+        "answerable_evidence": [],
+        "insufficient_evidence": [
+            "freshness_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_requirements": [
+            {
+                "evidence_type": (
+                    "freshness_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": 1,
+                "requirement_status": (
+                    "INSUFFICIENT_ITEMS"
+                ),
+            },
+        ],
+        "answerability_status": (
+            "NOT_ANSWERABLE"
+        ),
+    }
+
+
+def test_controlled_evidence_answerability_accepts_two_items_for_historical_comparison():
+    answerability = (
+        controlled_tools
+        .build_controlled_evidence_answerability(
+            question=(
+                "Compare freshness history "
+                "over time."
+            ),
+            evidence_sufficiency={
+                "requested_evidence": [
+                    "freshness_history",
+                ],
+                "available_evidence": [
+                    "freshness_history",
+                ],
+                "empty_evidence": [],
+                "unavailable_evidence": [],
+                "evidence_details": [
+                    {
+                        "evidence_type": (
+                            "freshness_history"
+                        ),
+                        "availability_status": (
+                            "AVAILABLE"
+                        ),
+                        "item_count": 2,
+                    },
+                ],
+                "sufficiency_status": (
+                    "SUFFICIENT"
+                ),
+            },
+        )
+    )
+
+    assert answerability == {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "freshness_history",
+        ],
+        "answerable_evidence": [
+            "freshness_history",
+        ],
+        "insufficient_evidence": [],
+        "unavailable_evidence": [],
+        "evidence_requirements": [
+            {
+                "evidence_type": (
+                    "freshness_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": 2,
+                "requirement_status": (
+                    "SATISFIED"
+                ),
+            },
+        ],
+        "answerability_status": (
+            "ANSWERABLE"
+        ),
+    }
+
+
+def test_controlled_evidence_answerability_reports_partial_for_mixed_history_counts():
+    answerability = (
+        controlled_tools
+        .build_controlled_evidence_answerability(
+            question=(
+                "Compare freshness and volume "
+                "history over time."
+            ),
+            evidence_sufficiency={
+                "requested_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                ],
+                "available_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                ],
+                "empty_evidence": [],
+                "unavailable_evidence": [],
+                "evidence_details": [
+                    {
+                        "evidence_type": (
+                            "freshness_history"
+                        ),
+                        "availability_status": (
+                            "AVAILABLE"
+                        ),
+                        "item_count": 2,
+                    },
+                    {
+                        "evidence_type": (
+                            "volume_history"
+                        ),
+                        "availability_status": (
+                            "AVAILABLE"
+                        ),
+                        "item_count": 1,
+                    },
+                ],
+                "sufficiency_status": (
+                    "SUFFICIENT"
+                ),
+            },
+        )
+    )
+
+    assert answerability == {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "freshness_history",
+            "volume_history",
+        ],
+        "answerable_evidence": [
+            "freshness_history",
+        ],
+        "insufficient_evidence": [
+            "volume_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_requirements": [
+            {
+                "evidence_type": (
+                    "freshness_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": 2,
+                "requirement_status": (
+                    "SATISFIED"
+                ),
+            },
+            {
+                "evidence_type": (
+                    "volume_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": 1,
+                "requirement_status": (
+                    "INSUFFICIENT_ITEMS"
+                ),
+            },
+        ],
+        "answerability_status": (
+            "PARTIAL"
+        ),
+    }
+
+
+def test_controlled_evidence_answerability_is_not_applicable_without_historical_comparison():
+    answerability = (
+        controlled_tools
+        .build_controlled_evidence_answerability(
+            question=(
+                "Show the latest freshness status."
+            ),
+            evidence_sufficiency={
+                "requested_evidence": [
+                    "freshness_history",
+                ],
+                "available_evidence": [
+                    "freshness_history",
+                ],
+                "empty_evidence": [],
+                "unavailable_evidence": [],
+                "evidence_details": [
+                    {
+                        "evidence_type": (
+                            "freshness_history"
+                        ),
+                        "availability_status": (
+                            "AVAILABLE"
+                        ),
+                        "item_count": 1,
+                    },
+                ],
+                "sufficiency_status": (
+                    "SUFFICIENT"
+                ),
+            },
+        )
+    )
+
+    assert answerability == {
+        "assessment_scope": (
+            "NOT_APPLICABLE"
+        ),
+        "assessed_evidence": [],
+        "answerable_evidence": [],
+        "insufficient_evidence": [],
+        "unavailable_evidence": [],
+        "evidence_requirements": [],
+        "answerability_status": (
+            "NOT_APPLICABLE"
+        ),
+    }
+
+
+def test_controlled_evidence_answerability_marks_unavailable_history_not_answerable():
+    answerability = (
+        controlled_tools
+        .build_controlled_evidence_answerability(
+            question=(
+                "Compare pipeline history "
+                "over time."
+            ),
+            evidence_sufficiency={
+                "requested_evidence": [
+                    "pipeline_run_history",
+                ],
+                "available_evidence": [],
+                "empty_evidence": [],
+                "unavailable_evidence": [
+                    "pipeline_run_history",
+                ],
+                "evidence_details": [
+                    {
+                        "evidence_type": (
+                            "pipeline_run_history"
+                        ),
+                        "availability_status": (
+                            "UNAVAILABLE"
+                        ),
+                        "item_count": None,
+                    },
+                ],
+                "sufficiency_status": (
+                    "INSUFFICIENT"
+                ),
+            },
+        )
+    )
+
+    assert answerability == {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "pipeline_run_history",
+        ],
+        "answerable_evidence": [],
+        "insufficient_evidence": [],
+        "unavailable_evidence": [
+            "pipeline_run_history",
+        ],
+        "evidence_requirements": [
+            {
+                "evidence_type": (
+                    "pipeline_run_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": None,
+                "requirement_status": (
+                    "UNAVAILABLE"
+                ),
+            },
+        ],
+        "answerability_status": (
+            "NOT_ANSWERABLE"
+        ),
+    }
+
+
+def test_bounded_controlled_tool_rounds_reports_partial_evidence_answerability(
+    monkeypatch,
+):
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        if name == "get_freshness_history":
+            return {
+                "name": name,
+                "read_only": True,
+                "ok": True,
+                "result": [
+                    {
+                        "freshness_status": "FRESH",
+                    },
+                    {
+                        "freshness_status": "FRESH",
+                    },
+                ],
+            }
+
+        if name == "get_volume_history":
+            return {
+                "name": name,
+                "read_only": True,
+                "ok": True,
+                "result": [
+                    {
+                        "volume_status": "NORMAL",
+                    },
+                ],
+            }
+
+        raise AssertionError(
+            f"Unexpected tool: {name}"
+        )
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    agent_evidence_answerability: dict = {}
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            (
+                "Compare freshness and volume "
+                "history over time."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            agent_evidence_answerability=(
+                agent_evidence_answerability
+            ),
+        )
+    )
+
+    assert [
+        result["name"]
+        for result in results
+    ] == [
+        "get_freshness_history",
+        "get_volume_history",
+    ]
+
+    assert agent_evidence_answerability == {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "freshness_history",
+            "volume_history",
+        ],
+        "answerable_evidence": [
+            "freshness_history",
+        ],
+        "insufficient_evidence": [
+            "volume_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_requirements": [
+            {
+                "evidence_type": (
+                    "freshness_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": 2,
+                "requirement_status": (
+                    "SATISFIED"
+                ),
+            },
+            {
+                "evidence_type": (
+                    "volume_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": 1,
+                "requirement_status": (
+                    "INSUFFICIENT_ITEMS"
+                ),
+            },
+        ],
+        "answerability_status": (
+            "PARTIAL"
+        ),
+    }
