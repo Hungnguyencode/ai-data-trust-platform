@@ -1059,6 +1059,255 @@ def build_controlled_evidence_sufficiency(
     }
 
 
+def build_controlled_evidence_answerability(
+    *,
+    question: str,
+    evidence_sufficiency: Mapping[str, Any],
+) -> dict[str, Any]:
+    normalized_question = (
+        question
+        .strip()
+        .lower()
+    )
+
+    comparison_terms = (
+        "compare",
+        "comparison",
+        "trend",
+        "over time",
+        "so sánh",
+        "xu hướng",
+        "theo thời gian",
+    )
+
+    is_historical_comparison = any(
+        term in normalized_question
+        for term in comparison_terms
+    )
+
+    if not is_historical_comparison:
+        return {
+            "assessment_scope": "NOT_APPLICABLE",
+            "assessed_evidence": [],
+            "answerable_evidence": [],
+            "insufficient_evidence": [],
+            "unavailable_evidence": [],
+            "evidence_requirements": [],
+            "answerability_status": (
+                "NOT_APPLICABLE"
+            ),
+        }
+
+    historical_evidence_types = {
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    }
+
+    requested_evidence = list(
+        dict.fromkeys(
+            evidence_sufficiency.get(
+                "requested_evidence",
+                [],
+            )
+            or []
+        )
+    )
+
+    assessed_evidence = [
+        evidence_type
+        for evidence_type in requested_evidence
+        if evidence_type
+        in historical_evidence_types
+    ]
+
+    if not assessed_evidence:
+        return {
+            "assessment_scope": "NOT_APPLICABLE",
+            "assessed_evidence": [],
+            "answerable_evidence": [],
+            "insufficient_evidence": [],
+            "unavailable_evidence": [],
+            "evidence_requirements": [],
+            "answerability_status": (
+                "NOT_APPLICABLE"
+            ),
+        }
+
+    detail_by_evidence: dict[
+        str,
+        Mapping[str, Any],
+    ] = {}
+
+    for detail in evidence_sufficiency.get(
+        "evidence_details",
+        [],
+    ) or []:
+        if not isinstance(
+            detail,
+            Mapping,
+        ):
+            continue
+
+        evidence_type = str(
+            detail.get(
+                "evidence_type",
+                "",
+            )
+            or ""
+        )
+
+        if (
+            evidence_type
+            in historical_evidence_types
+            and evidence_type
+            not in detail_by_evidence
+        ):
+            detail_by_evidence[
+                evidence_type
+            ] = detail
+
+    answerable_evidence: list[str] = []
+    insufficient_evidence: list[str] = []
+    unavailable_evidence: list[str] = []
+    evidence_requirements: list[
+        dict[str, Any]
+    ] = []
+
+    minimum_item_count = 2
+
+    for evidence_type in assessed_evidence:
+        detail = detail_by_evidence.get(
+            evidence_type
+        )
+
+        if detail is None:
+            observed_item_count = None
+            requirement_status = (
+                "UNAVAILABLE"
+            )
+
+            unavailable_evidence.append(
+                evidence_type
+            )
+
+        else:
+            availability_status = str(
+                detail.get(
+                    "availability_status",
+                    "",
+                )
+                or ""
+            )
+
+            observed_item_count = (
+                detail.get(
+                    "item_count"
+                )
+            )
+
+            if (
+                availability_status
+                == "UNAVAILABLE"
+                or observed_item_count
+                is None
+            ):
+                requirement_status = (
+                    "UNAVAILABLE"
+                )
+
+                unavailable_evidence.append(
+                    evidence_type
+                )
+
+            elif (
+                isinstance(
+                    observed_item_count,
+                    int,
+                )
+                and not isinstance(
+                    observed_item_count,
+                    bool,
+                )
+                and observed_item_count
+                >= minimum_item_count
+            ):
+                requirement_status = (
+                    "SATISFIED"
+                )
+
+                answerable_evidence.append(
+                    evidence_type
+                )
+
+            else:
+                requirement_status = (
+                    "INSUFFICIENT_ITEMS"
+                )
+
+                insufficient_evidence.append(
+                    evidence_type
+                )
+
+        evidence_requirements.append(
+            {
+                "evidence_type": (
+                    evidence_type
+                ),
+                "minimum_item_count": (
+                    minimum_item_count
+                ),
+                "observed_item_count": (
+                    observed_item_count
+                ),
+                "requirement_status": (
+                    requirement_status
+                ),
+            }
+        )
+
+    if (
+        len(answerable_evidence)
+        == len(assessed_evidence)
+    ):
+        answerability_status = (
+            "ANSWERABLE"
+        )
+
+    elif answerable_evidence:
+        answerability_status = "PARTIAL"
+
+    else:
+        answerability_status = (
+            "NOT_ANSWERABLE"
+        )
+
+    return {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": (
+            assessed_evidence
+        ),
+        "answerable_evidence": (
+            answerable_evidence
+        ),
+        "insufficient_evidence": (
+            insufficient_evidence
+        ),
+        "unavailable_evidence": (
+            unavailable_evidence
+        ),
+        "evidence_requirements": (
+            evidence_requirements
+        ),
+        "answerability_status": (
+            answerability_status
+        ),
+    }
+
+
 def plan_controlled_tool_requests(
     question: str,
     *,
@@ -1626,6 +1875,9 @@ def execute_bounded_controlled_tool_rounds(
     agent_evidence_sufficiency: (
         dict[str, Any] | None
     ) = None,
+    agent_evidence_answerability: (
+        dict[str, Any] | None
+    ) = None,
 ) -> list[dict[str, Any]]:
     results: list[
         dict[str, Any]
@@ -1661,9 +1913,13 @@ def execute_bounded_controlled_tool_rounds(
     if agent_evidence_sufficiency is not None:
         agent_evidence_sufficiency.clear()
 
+    if agent_evidence_answerability is not None:
+        agent_evidence_answerability.clear()
+
     if (
         agent_evidence_coverage is not None
         or agent_evidence_sufficiency is not None
+        or agent_evidence_answerability is not None
     ):
         requested_evidence = (
             plan_controlled_evidence_requirements(
@@ -1810,14 +2066,42 @@ def execute_bounded_controlled_tool_rounds(
             )
         )
 
-    if agent_evidence_sufficiency is not None:
-        agent_evidence_sufficiency.update(
+    evidence_sufficiency: (
+        dict[str, Any] | None
+    ) = None
+
+    if (
+        agent_evidence_sufficiency is not None
+        or agent_evidence_answerability is not None
+    ):
+        evidence_sufficiency = (
             build_controlled_evidence_sufficiency(
                 requested_evidence=(
                     requested_evidence
                 ),
                 controlled_tool_results=(
                     results
+                ),
+            )
+        )
+
+    if (
+        agent_evidence_sufficiency is not None
+        and evidence_sufficiency is not None
+    ):
+        agent_evidence_sufficiency.update(
+            evidence_sufficiency
+        )
+
+    if (
+        agent_evidence_answerability is not None
+        and evidence_sufficiency is not None
+    ):
+        agent_evidence_answerability.update(
+            build_controlled_evidence_answerability(
+                question=question,
+                evidence_sufficiency=(
+                    evidence_sufficiency
                 ),
             )
         )

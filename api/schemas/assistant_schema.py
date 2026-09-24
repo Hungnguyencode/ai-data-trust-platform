@@ -305,6 +305,75 @@ class AssistantAgentEvidenceSufficiencyResponse(
     ]
 
 
+class AssistantAgentEvidenceRequirementResponse(
+    BaseModel
+):
+    evidence_type: (
+        AssistantControlledEvidenceType
+    )
+
+    minimum_item_count: int = Field(
+        ge=1,
+    )
+
+    observed_item_count: int | None = Field(
+        default=None,
+        ge=0,
+    )
+
+    requirement_status: Literal[
+        "SATISFIED",
+        "INSUFFICIENT_ITEMS",
+        "UNAVAILABLE",
+    ]
+
+
+class AssistantAgentEvidenceAnswerabilityResponse(
+    BaseModel
+):
+    assessment_scope: Literal[
+        "HISTORICAL_COMPARISON",
+        "NOT_APPLICABLE",
+    ]
+
+    assessed_evidence: list[
+        AssistantControlledEvidenceType
+    ] = Field(
+        default_factory=list
+    )
+
+    answerable_evidence: list[
+        AssistantControlledEvidenceType
+    ] = Field(
+        default_factory=list
+    )
+
+    insufficient_evidence: list[
+        AssistantControlledEvidenceType
+    ] = Field(
+        default_factory=list
+    )
+
+    unavailable_evidence: list[
+        AssistantControlledEvidenceType
+    ] = Field(
+        default_factory=list
+    )
+
+    evidence_requirements: list[
+        AssistantAgentEvidenceRequirementResponse
+    ] = Field(
+        default_factory=list
+    )
+
+    answerability_status: Literal[
+        "ANSWERABLE",
+        "PARTIAL",
+        "NOT_ANSWERABLE",
+        "NOT_APPLICABLE",
+    ]
+
+
 class AssistantCopilotResponse(BaseModel):
     catalog_id: int
     grounded: bool = True
@@ -348,5 +417,9 @@ class AssistantCopilotResponse(BaseModel):
 
     agent_evidence_sufficiency: (
         AssistantAgentEvidenceSufficiencyResponse
+        | None
+    ) = None
+    agent_evidence_answerability: (
+        AssistantAgentEvidenceAnswerabilityResponse
         | None
     ) = None

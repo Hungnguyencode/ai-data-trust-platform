@@ -23,6 +23,7 @@ from app.services.assistant_api import (
     ask_catalog_copilot,
 )
 from app.services.assistant_chat import (
+    build_agent_evidence_answerability_items,
     build_agent_evidence_coverage_items,
     build_agent_evidence_sufficiency_items,
     build_agent_run_summary_items,
@@ -934,6 +935,119 @@ def render_chat_message(
                             f"{availability_status} "
                             f"(items: "
                             f"{item_count if item_count is not None else 'N/A'})"
+                        )
+
+        agent_evidence_answerability = (
+            copilot_meta.get(
+                "agent_evidence_answerability"
+            )
+        )
+
+        agent_evidence_answerability_items = (
+            build_agent_evidence_answerability_items(
+                agent_evidence_answerability
+            )
+        )
+
+        if agent_evidence_answerability_items:
+            with st.expander(
+                "Historical comparison answerability",
+                expanded=False,
+            ):
+                st.caption(
+                    "Deterministic structural "
+                    "answerability for historical "
+                    "comparisons. This checks minimum "
+                    "evidence record counts only; it "
+                    "does not guarantee semantic "
+                    "correctness, completeness, or truth."
+                )
+
+                for label, value in (
+                    agent_evidence_answerability_items
+                ):
+                    if label == "Evidence requirements":
+                        continue
+
+                    display_value = value
+
+                    if isinstance(
+                        value,
+                        list,
+                    ):
+                        display_value = (
+                            ", ".join(
+                                str(item)
+                                for item in value
+                            )
+                            if value
+                            else "None"
+                        )
+
+                    st.write(
+                        f"**{label}:**",
+                        (
+                            display_value
+                            if display_value is not None
+                            else "N/A"
+                        ),
+                    )
+
+                evidence_requirements = (
+                    agent_evidence_answerability.get(
+                        "evidence_requirements",
+                        [],
+                    )
+                    if isinstance(
+                        agent_evidence_answerability,
+                        dict,
+                    )
+                    else []
+                )
+
+                if evidence_requirements:
+                    st.markdown(
+                        "**Evidence requirements**"
+                    )
+
+                    for requirement in evidence_requirements:
+                        if not isinstance(
+                            requirement,
+                            dict,
+                        ):
+                            continue
+
+                        evidence_type = requirement.get(
+                            "evidence_type",
+                            "UNKNOWN",
+                        )
+
+                        minimum_item_count = (
+                            requirement.get(
+                                "minimum_item_count"
+                            )
+                        )
+
+                        observed_item_count = (
+                            requirement.get(
+                                "observed_item_count"
+                            )
+                        )
+
+                        requirement_status = (
+                            requirement.get(
+                                "requirement_status",
+                                "UNKNOWN",
+                            )
+                        )
+
+                        st.write(
+                            f"- `{evidence_type}`: "
+                            f"{requirement_status} "
+                            f"(observed: "
+                            f"{observed_item_count if observed_item_count is not None else 'N/A'}, "
+                            f"required: "
+                            f"{minimum_item_count if minimum_item_count is not None else 'N/A'})"
                         )
 
         tool_execution_trace = (

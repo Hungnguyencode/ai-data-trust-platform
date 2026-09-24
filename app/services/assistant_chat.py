@@ -147,6 +147,66 @@ def build_agent_evidence_sufficiency_items(
     ]
 
 
+def build_agent_evidence_answerability_items(
+    agent_evidence_answerability: Any,
+) -> list[tuple[str, Any]]:
+    if not isinstance(
+        agent_evidence_answerability,
+        dict,
+    ):
+        return []
+
+    return [
+        (
+            "Answerability status",
+            agent_evidence_answerability.get(
+                "answerability_status"
+            ),
+        ),
+        (
+            "Assessment scope",
+            agent_evidence_answerability.get(
+                "assessment_scope"
+            ),
+        ),
+        (
+            "Assessed evidence",
+            agent_evidence_answerability.get(
+                "assessed_evidence",
+                [],
+            ),
+        ),
+        (
+            "Answerable evidence",
+            agent_evidence_answerability.get(
+                "answerable_evidence",
+                [],
+            ),
+        ),
+        (
+            "Insufficient evidence",
+            agent_evidence_answerability.get(
+                "insufficient_evidence",
+                [],
+            ),
+        ),
+        (
+            "Unavailable evidence",
+            agent_evidence_answerability.get(
+                "unavailable_evidence",
+                [],
+            ),
+        ),
+        (
+            "Evidence requirements",
+            agent_evidence_answerability.get(
+                "evidence_requirements",
+                [],
+            ),
+        ),
+    ]
+
+
 def build_copilot_backend_result(
     data: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -222,6 +282,9 @@ def build_copilot_backend_result(
         ),
         "agent_evidence_sufficiency": data.get(
             "agent_evidence_sufficiency"
+        ),
+        "agent_evidence_answerability": data.get(
+            "agent_evidence_answerability"
         ),
     }
 
@@ -302,6 +365,11 @@ def build_copilot_chat_message(
             "agent_evidence_sufficiency": (
                 backend_result.get(
                     "agent_evidence_sufficiency"
+                )
+            ),
+            "agent_evidence_answerability": (
+                backend_result.get(
+                    "agent_evidence_answerability"
                 )
             ),
         },
