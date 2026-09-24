@@ -245,6 +245,66 @@ class AssistantAgentEvidenceCoverageResponse(
     ]
 
 
+class AssistantAgentEvidenceDetailResponse(
+    BaseModel
+):
+    evidence_type: (
+        AssistantControlledEvidenceType
+    )
+
+    availability_status: Literal[
+        "AVAILABLE",
+        "EMPTY",
+        "UNAVAILABLE",
+    ]
+
+    item_count: int | None = Field(
+        default=None,
+        ge=0,
+    )
+
+
+class AssistantAgentEvidenceSufficiencyResponse(
+    BaseModel
+):
+    requested_evidence: list[
+        AssistantControlledEvidenceType
+    ] = Field(
+        default_factory=list
+    )
+
+    available_evidence: list[
+        AssistantControlledEvidenceType
+    ] = Field(
+        default_factory=list
+    )
+
+    empty_evidence: list[
+        AssistantControlledEvidenceType
+    ] = Field(
+        default_factory=list
+    )
+
+    unavailable_evidence: list[
+        AssistantControlledEvidenceType
+    ] = Field(
+        default_factory=list
+    )
+
+    evidence_details: list[
+        AssistantAgentEvidenceDetailResponse
+    ] = Field(
+        default_factory=list
+    )
+
+    sufficiency_status: Literal[
+        "SUFFICIENT",
+        "PARTIAL",
+        "INSUFFICIENT",
+        "NOT_APPLICABLE",
+    ]
+
+
 class AssistantCopilotResponse(BaseModel):
     catalog_id: int
     grounded: bool = True
@@ -283,5 +343,10 @@ class AssistantCopilotResponse(BaseModel):
 
     agent_evidence_coverage: (
         AssistantAgentEvidenceCoverageResponse
+        | None
+    ) = None
+
+    agent_evidence_sufficiency: (
+        AssistantAgentEvidenceSufficiencyResponse
         | None
     ) = None

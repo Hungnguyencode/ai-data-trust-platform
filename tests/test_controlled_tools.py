@@ -2710,6 +2710,202 @@ def test_bounded_controlled_tool_rounds_reports_partial_evidence_coverage(
     }
 
 
+def test_bounded_controlled_tool_rounds_reports_partial_evidence_sufficiency(
+    monkeypatch,
+):
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        if name == "get_freshness_history":
+            return {
+                "name": name,
+                "read_only": True,
+                "ok": True,
+                "result": [
+                    {
+                        "freshness_status": "FRESH",
+                    },
+                ],
+            }
+
+        if name == "get_volume_history":
+            return {
+                "name": name,
+                "read_only": True,
+                "ok": True,
+                "result": [],
+            }
+
+        raise AssertionError(
+            f"Unexpected tool: {name}"
+        )
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    agent_evidence_sufficiency: dict = {}
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            (
+                "Show freshness and "
+                "volume history."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            agent_evidence_sufficiency=(
+                agent_evidence_sufficiency
+            ),
+        )
+    )
+
+    assert [
+        result["name"]
+        for result in results
+    ] == [
+        "get_freshness_history",
+        "get_volume_history",
+    ]
+
+    assert agent_evidence_sufficiency == {
+        "requested_evidence": [
+            "freshness_history",
+            "volume_history",
+        ],
+        "available_evidence": [
+            "freshness_history",
+        ],
+        "empty_evidence": [
+            "volume_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_details": [
+            {
+                "evidence_type": (
+                    "freshness_history"
+                ),
+                "availability_status": (
+                    "AVAILABLE"
+                ),
+                "item_count": 1,
+            },
+            {
+                "evidence_type": (
+                    "volume_history"
+                ),
+                "availability_status": (
+                    "EMPTY"
+                ),
+                "item_count": 0,
+            },
+        ],
+        "sufficiency_status": "PARTIAL",
+    }
+
+
+def test_bounded_controlled_tool_rounds_marks_failed_evidence_unavailable(
+    monkeypatch,
+):
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        if name == "get_freshness_history":
+            raise RuntimeError(
+                "simulated freshness read failure"
+            )
+
+        if name == "get_volume_history":
+            return {
+                "name": name,
+                "read_only": True,
+                "ok": True,
+                "result": [
+                    {
+                        "volume_status": "NORMAL",
+                    },
+                ],
+            }
+
+        raise AssertionError(
+            f"Unexpected tool: {name}"
+        )
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    agent_evidence_sufficiency: dict = {}
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            (
+                "Show freshness and "
+                "volume history."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            agent_evidence_sufficiency=(
+                agent_evidence_sufficiency
+            ),
+        )
+    )
+
+    assert [
+        result["name"]
+        for result in results
+    ] == [
+        "get_volume_history",
+    ]
+
+    assert agent_evidence_sufficiency == {
+        "requested_evidence": [
+            "freshness_history",
+            "volume_history",
+        ],
+        "available_evidence": [
+            "volume_history",
+        ],
+        "empty_evidence": [],
+        "unavailable_evidence": [
+            "freshness_history",
+        ],
+        "evidence_details": [
+            {
+                "evidence_type": (
+                    "freshness_history"
+                ),
+                "availability_status": (
+                    "UNAVAILABLE"
+                ),
+                "item_count": None,
+            },
+            {
+                "evidence_type": (
+                    "volume_history"
+                ),
+                "availability_status": (
+                    "AVAILABLE"
+                ),
+                "item_count": 1,
+            },
+        ],
+        "sufficiency_status": "PARTIAL",
+    }
+
+
 def test_bounded_controlled_tool_rounds_can_use_initial_plan_without_replanning(
     monkeypatch,
 ):
@@ -2830,3 +3026,201 @@ def test_bounded_controlled_tool_rounds_can_use_initial_plan_without_replanning(
         "get_freshness_history",
         "get_volume_history",
     ]
+
+
+def test_controlled_evidence_sufficiency_marks_empty_successful_results_insufficient():
+    sufficiency = (
+        controlled_tools
+        .build_controlled_evidence_sufficiency(
+            requested_evidence=[
+                "freshness_history",
+                "volume_history",
+                "pipeline_run_history",
+            ],
+            controlled_tool_results=[
+                {
+                    "name": "get_freshness_history",
+                    "read_only": True,
+                    "ok": True,
+                    "result": [],
+                },
+                {
+                    "name": "get_volume_history",
+                    "read_only": True,
+                    "ok": True,
+                    "result": [],
+                },
+                {
+                    "name": "get_pipeline_run_history",
+                    "read_only": True,
+                    "ok": True,
+                    "result": [],
+                },
+            ],
+        )
+    )
+
+    assert sufficiency == {
+        "requested_evidence": [
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+        ],
+        "available_evidence": [],
+        "empty_evidence": [
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_details": [
+            {
+                "evidence_type": "freshness_history",
+                "availability_status": "EMPTY",
+                "item_count": 0,
+            },
+            {
+                "evidence_type": "volume_history",
+                "availability_status": "EMPTY",
+                "item_count": 0,
+            },
+            {
+                "evidence_type": "pipeline_run_history",
+                "availability_status": "EMPTY",
+                "item_count": 0,
+            },
+        ],
+        "sufficiency_status": "INSUFFICIENT",
+    }
+
+
+def test_controlled_evidence_sufficiency_distinguishes_available_empty_and_unavailable():
+    sufficiency = (
+        controlled_tools
+        .build_controlled_evidence_sufficiency(
+            requested_evidence=[
+                "freshness_history",
+                "volume_history",
+                "pipeline_run_history",
+            ],
+            controlled_tool_results=[
+                {
+                    "name": "get_freshness_history",
+                    "read_only": True,
+                    "ok": True,
+                    "result": [
+                        {
+                            "freshness_status": "FRESH",
+                        },
+                    ],
+                },
+                {
+                    "name": "get_volume_history",
+                    "read_only": True,
+                    "ok": True,
+                    "result": [],
+                },
+            ],
+        )
+    )
+
+    assert sufficiency == {
+        "requested_evidence": [
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+        ],
+        "available_evidence": [
+            "freshness_history",
+        ],
+        "empty_evidence": [
+            "volume_history",
+        ],
+        "unavailable_evidence": [
+            "pipeline_run_history",
+        ],
+        "evidence_details": [
+            {
+                "evidence_type": "freshness_history",
+                "availability_status": "AVAILABLE",
+                "item_count": 1,
+            },
+            {
+                "evidence_type": "volume_history",
+                "availability_status": "EMPTY",
+                "item_count": 0,
+            },
+            {
+                "evidence_type": "pipeline_run_history",
+                "availability_status": "UNAVAILABLE",
+                "item_count": None,
+            },
+        ],
+        "sufficiency_status": "PARTIAL",
+    }
+
+
+@pytest.mark.parametrize(
+    (
+        "requested_evidence",
+        "controlled_tool_results",
+        "expected_status",
+    ),
+    [
+        (
+            [
+                "freshness_history",
+                "volume_history",
+            ],
+            [
+                {
+                    "name": "get_freshness_history",
+                    "read_only": True,
+                    "ok": True,
+                    "result": [
+                        {
+                            "freshness_status": "FRESH",
+                        },
+                    ],
+                },
+                {
+                    "name": "get_volume_history",
+                    "read_only": True,
+                    "ok": True,
+                    "result": [
+                        {
+                            "volume_status": "NORMAL",
+                        },
+                    ],
+                },
+            ],
+            "SUFFICIENT",
+        ),
+        (
+            [],
+            [],
+            "NOT_APPLICABLE",
+        ),
+    ],
+)
+def test_controlled_evidence_sufficiency_reports_boundary_statuses(
+    requested_evidence,
+    controlled_tool_results,
+    expected_status,
+):
+    sufficiency = (
+        controlled_tools
+        .build_controlled_evidence_sufficiency(
+            requested_evidence=(
+                requested_evidence
+            ),
+            controlled_tool_results=(
+                controlled_tool_results
+            ),
+        )
+    )
+
+    assert (
+        sufficiency["sufficiency_status"]
+        == expected_status
+    )

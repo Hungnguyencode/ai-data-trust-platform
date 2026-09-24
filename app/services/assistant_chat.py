@@ -93,6 +93,60 @@ def build_agent_evidence_coverage_items(
     ]
 
 
+def build_agent_evidence_sufficiency_items(
+    agent_evidence_sufficiency: Any,
+) -> list[tuple[str, Any]]:
+    if not isinstance(
+        agent_evidence_sufficiency,
+        dict,
+    ):
+        return []
+
+    return [
+        (
+            "Availability status",
+            agent_evidence_sufficiency.get(
+                "sufficiency_status"
+            ),
+        ),
+        (
+            "Requested evidence",
+            agent_evidence_sufficiency.get(
+                "requested_evidence",
+                [],
+            ),
+        ),
+        (
+            "Available evidence",
+            agent_evidence_sufficiency.get(
+                "available_evidence",
+                [],
+            ),
+        ),
+        (
+            "Empty evidence",
+            agent_evidence_sufficiency.get(
+                "empty_evidence",
+                [],
+            ),
+        ),
+        (
+            "Unavailable evidence",
+            agent_evidence_sufficiency.get(
+                "unavailable_evidence",
+                [],
+            ),
+        ),
+        (
+            "Evidence details",
+            agent_evidence_sufficiency.get(
+                "evidence_details",
+                [],
+            ),
+        ),
+    ]
+
+
 def build_copilot_backend_result(
     data: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -165,6 +219,9 @@ def build_copilot_backend_result(
         ),
         "agent_evidence_coverage": data.get(
             "agent_evidence_coverage"
+        ),
+        "agent_evidence_sufficiency": data.get(
+            "agent_evidence_sufficiency"
         ),
     }
 
@@ -240,6 +297,11 @@ def build_copilot_chat_message(
             "agent_evidence_coverage": (
                 backend_result.get(
                     "agent_evidence_coverage"
+                )
+            ),
+            "agent_evidence_sufficiency": (
+                backend_result.get(
+                    "agent_evidence_sufficiency"
                 )
             ),
         },

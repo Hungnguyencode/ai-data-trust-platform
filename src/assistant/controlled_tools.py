@@ -874,6 +874,191 @@ def build_controlled_evidence_coverage(
     }
 
 
+def build_controlled_evidence_sufficiency(
+    *,
+    requested_evidence: list[str],
+    controlled_tool_results: list[
+        Mapping[str, Any]
+    ],
+) -> dict[str, Any]:
+    requested = list(
+        dict.fromkeys(
+            requested_evidence
+        )
+    )
+
+    requested_set = set(
+        requested
+    )
+
+    result_by_evidence: dict[
+        str,
+        Any,
+    ] = {}
+
+    for item in controlled_tool_results:
+        if not isinstance(
+            item,
+            Mapping,
+        ):
+            continue
+
+        tool_name = str(
+            item.get(
+                "name",
+                "",
+            )
+            or ""
+        )
+
+        evidence_type = (
+            CONTROLLED_TOOL_EVIDENCE_TYPES.get(
+                tool_name
+            )
+        )
+
+        if (
+            evidence_type is None
+            or evidence_type
+            not in requested_set
+            or evidence_type
+            in result_by_evidence
+            or item.get("ok") is not True
+        ):
+            continue
+
+        result_by_evidence[
+            evidence_type
+        ] = item.get(
+            "result"
+        )
+
+    available_evidence: list[str] = []
+    empty_evidence: list[str] = []
+    unavailable_evidence: list[str] = []
+    evidence_details: list[
+        dict[str, Any]
+    ] = []
+
+    for evidence_type in requested:
+        if (
+            evidence_type
+            not in result_by_evidence
+        ):
+            unavailable_evidence.append(
+                evidence_type
+            )
+
+            evidence_details.append(
+                {
+                    "evidence_type": (
+                        evidence_type
+                    ),
+                    "availability_status": (
+                        "UNAVAILABLE"
+                    ),
+                    "item_count": None,
+                }
+            )
+
+            continue
+
+        result = result_by_evidence[
+            evidence_type
+        ]
+
+        if isinstance(
+            result,
+            Mapping,
+        ):
+            item_count = (
+                1
+                if result
+                else 0
+            )
+
+        elif isinstance(
+            result,
+            (list, tuple),
+        ):
+            item_count = len(
+                result
+            )
+
+        elif result is None:
+            item_count = 0
+
+        else:
+            item_count = 1
+
+        if item_count > 0:
+            availability_status = (
+                "AVAILABLE"
+            )
+
+            available_evidence.append(
+                evidence_type
+            )
+
+        else:
+            availability_status = "EMPTY"
+
+            empty_evidence.append(
+                evidence_type
+            )
+
+        evidence_details.append(
+            {
+                "evidence_type": (
+                    evidence_type
+                ),
+                "availability_status": (
+                    availability_status
+                ),
+                "item_count": item_count,
+            }
+        )
+
+    if not requested:
+        sufficiency_status = (
+            "NOT_APPLICABLE"
+        )
+
+    elif len(
+        available_evidence
+    ) == len(
+        requested
+    ):
+        sufficiency_status = "SUFFICIENT"
+
+    elif available_evidence:
+        sufficiency_status = "PARTIAL"
+
+    else:
+        sufficiency_status = (
+            "INSUFFICIENT"
+        )
+
+    return {
+        "requested_evidence": requested,
+        "available_evidence": (
+            available_evidence
+        ),
+        "empty_evidence": (
+            empty_evidence
+        ),
+        "unavailable_evidence": (
+            unavailable_evidence
+        ),
+        "evidence_details": (
+            evidence_details
+        ),
+        "sufficiency_status": (
+            sufficiency_status
+        ),
+    }
+
+
 def plan_controlled_tool_requests(
     question: str,
     *,
@@ -1438,6 +1623,9 @@ def execute_bounded_controlled_tool_rounds(
     agent_evidence_coverage: (
         dict[str, Any] | None
     ) = None,
+    agent_evidence_sufficiency: (
+        dict[str, Any] | None
+    ) = None,
 ) -> list[dict[str, Any]]:
     results: list[
         dict[str, Any]
@@ -1470,6 +1658,13 @@ def execute_bounded_controlled_tool_rounds(
     if agent_evidence_coverage is not None:
         agent_evidence_coverage.clear()
 
+    if agent_evidence_sufficiency is not None:
+        agent_evidence_sufficiency.clear()
+
+    if (
+        agent_evidence_coverage is not None
+        or agent_evidence_sufficiency is not None
+    ):
         requested_evidence = (
             plan_controlled_evidence_requirements(
                 question,
@@ -1611,6 +1806,18 @@ def execute_bounded_controlled_tool_rounds(
                 ),
                 accepted_tool_names=(
                     accepted_tool_names
+                ),
+            )
+        )
+
+    if agent_evidence_sufficiency is not None:
+        agent_evidence_sufficiency.update(
+            build_controlled_evidence_sufficiency(
+                requested_evidence=(
+                    requested_evidence
+                ),
+                controlled_tool_results=(
+                    results
                 ),
             )
         )
