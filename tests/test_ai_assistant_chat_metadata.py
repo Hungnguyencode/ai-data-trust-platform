@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.services.assistant_chat import (
     build_agent_evidence_coverage_items,
+    build_agent_evidence_sufficiency_items,
     build_agent_run_summary_items,
     build_copilot_backend_result,
     build_copilot_chat_message,
@@ -227,5 +228,204 @@ def test_build_agent_evidence_coverage_items_exposes_coverage_fields():
 
 def test_build_agent_evidence_coverage_items_ignores_missing_coverage():
     assert build_agent_evidence_coverage_items(
+        None
+    ) == []
+
+
+def test_copilot_chat_metadata_preserves_agent_evidence_sufficiency():
+    agent_evidence_sufficiency = {
+        "requested_evidence": [
+            "freshness_history",
+            "volume_history",
+        ],
+        "available_evidence": [
+            "freshness_history",
+        ],
+        "empty_evidence": [
+            "volume_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_details": [
+            {
+                "evidence_type": (
+                    "freshness_history"
+                ),
+                "availability_status": (
+                    "AVAILABLE"
+                ),
+                "item_count": 1,
+            },
+            {
+                "evidence_type": (
+                    "volume_history"
+                ),
+                "availability_status": (
+                    "EMPTY"
+                ),
+                "item_count": 0,
+            },
+        ],
+        "sufficiency_status": "PARTIAL",
+    }
+
+    backend_result = build_copilot_backend_result(
+        {
+            "catalog_id": 4,
+            "latest_version_id": 6,
+            "overall_state": "WARNING",
+            "answer": "Grounded answer.",
+            "grounded": True,
+            "provider": "disabled",
+            "model": None,
+            "used_llm": False,
+            "fallback_reason": (
+                "provider_disabled"
+            ),
+            "error_type": None,
+            "source_finding_codes": [],
+            "source_action_codes": [],
+            "tool_execution_trace": [],
+            "agent_run_summary": None,
+            "agent_evidence_coverage": None,
+            "agent_evidence_sufficiency": (
+                agent_evidence_sufficiency
+            ),
+        }
+    )
+
+    assert backend_result.get(
+        "agent_evidence_sufficiency"
+    ) == agent_evidence_sufficiency
+
+    message = build_copilot_chat_message(
+        "Grounded answer.",
+        backend_result,
+    )
+
+    assert message[
+        "copilot_meta"
+    ].get(
+        "agent_evidence_sufficiency"
+    ) == agent_evidence_sufficiency
+
+
+def test_build_agent_evidence_sufficiency_items_exposes_availability_fields():
+    items = build_agent_evidence_sufficiency_items(
+        {
+            "requested_evidence": [
+                "freshness_history",
+                "volume_history",
+                "pipeline_run_history",
+            ],
+            "available_evidence": [
+                "freshness_history",
+            ],
+            "empty_evidence": [
+                "volume_history",
+            ],
+            "unavailable_evidence": [
+                "pipeline_run_history",
+            ],
+            "evidence_details": [
+                {
+                    "evidence_type": (
+                        "freshness_history"
+                    ),
+                    "availability_status": (
+                        "AVAILABLE"
+                    ),
+                    "item_count": 1,
+                },
+                {
+                    "evidence_type": (
+                        "volume_history"
+                    ),
+                    "availability_status": (
+                        "EMPTY"
+                    ),
+                    "item_count": 0,
+                },
+                {
+                    "evidence_type": (
+                        "pipeline_run_history"
+                    ),
+                    "availability_status": (
+                        "UNAVAILABLE"
+                    ),
+                    "item_count": None,
+                },
+            ],
+            "sufficiency_status": "PARTIAL",
+        }
+    )
+
+    assert items == [
+        (
+            "Availability status",
+            "PARTIAL",
+        ),
+        (
+            "Requested evidence",
+            [
+                "freshness_history",
+                "volume_history",
+                "pipeline_run_history",
+            ],
+        ),
+        (
+            "Available evidence",
+            [
+                "freshness_history",
+            ],
+        ),
+        (
+            "Empty evidence",
+            [
+                "volume_history",
+            ],
+        ),
+        (
+            "Unavailable evidence",
+            [
+                "pipeline_run_history",
+            ],
+        ),
+        (
+            "Evidence details",
+            [
+                {
+                    "evidence_type": (
+                        "freshness_history"
+                    ),
+                    "availability_status": (
+                        "AVAILABLE"
+                    ),
+                    "item_count": 1,
+                },
+                {
+                    "evidence_type": (
+                        "volume_history"
+                    ),
+                    "availability_status": (
+                        "EMPTY"
+                    ),
+                    "item_count": 0,
+                },
+                {
+                    "evidence_type": (
+                        "pipeline_run_history"
+                    ),
+                    "availability_status": (
+                        "UNAVAILABLE"
+                    ),
+                    "item_count": None,
+                },
+            ],
+        ),
+    ]
+
+
+def test_build_agent_evidence_sufficiency_items_ignores_missing_sufficiency():
+    assert build_agent_evidence_sufficiency_items(
         None
     ) == []

@@ -731,6 +731,33 @@ def test_copilot_endpoint_executes_selected_read_only_tool(
         "coverage_status": "COMPLETE",
     }
 
+    assert response.json()[
+        "agent_evidence_sufficiency"
+    ] == {
+        "requested_evidence": [
+            "version_lineage",
+        ],
+        "available_evidence": [
+            "version_lineage",
+        ],
+        "empty_evidence": [],
+        "unavailable_evidence": [],
+        "evidence_details": [
+            {
+                "evidence_type": (
+                    "version_lineage"
+                ),
+                "availability_status": (
+                    "AVAILABLE"
+                ),
+                "item_count": 1,
+            },
+        ],
+        "sufficiency_status": (
+            "SUFFICIENT"
+        ),
+    }
+
 
 def test_copilot_endpoint_falls_back_when_read_only_tool_fails(
     monkeypatch,
@@ -906,6 +933,33 @@ def test_copilot_endpoint_falls_back_when_read_only_tool_fails(
             "version_lineage",
         ],
         "coverage_status": "NONE",
+    }
+
+    assert response.json()[
+        "agent_evidence_sufficiency"
+    ] == {
+        "requested_evidence": [
+            "version_lineage",
+        ],
+        "available_evidence": [],
+        "empty_evidence": [],
+        "unavailable_evidence": [
+            "version_lineage",
+        ],
+        "evidence_details": [
+            {
+                "evidence_type": (
+                    "version_lineage"
+                ),
+                "availability_status": (
+                    "UNAVAILABLE"
+                ),
+                "item_count": None,
+            },
+        ],
+        "sufficiency_status": (
+            "INSUFFICIENT"
+        ),
     }
 
 
@@ -1186,6 +1240,19 @@ def test_copilot_history_cannot_trigger_controlled_tool(
         "accepted_evidence": [],
         "missing_evidence": [],
         "coverage_status": "NOT_APPLICABLE",
+    }
+
+    assert response.json()[
+        "agent_evidence_sufficiency"
+    ] == {
+        "requested_evidence": [],
+        "available_evidence": [],
+        "empty_evidence": [],
+        "unavailable_evidence": [],
+        "evidence_details": [],
+        "sufficiency_status": (
+            "NOT_APPLICABLE"
+        ),
     }
 
 
@@ -1820,6 +1887,7 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
         initial_tool_requests=None,
         agent_run_summary=None,
         agent_evidence_coverage=None,
+        agent_evidence_sufficiency=None,
     ):
         del question
         del trusted_version_id
@@ -1829,6 +1897,7 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
         assert initial_tool_requests is not None
         assert agent_run_summary is not None
         assert agent_evidence_coverage is not None
+        assert agent_evidence_sufficiency is not None
 
         agent_run_summary.update(
             {
@@ -1861,6 +1930,55 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
                 ],
                 "missing_evidence": [],
                 "coverage_status": "COMPLETE",
+            }
+        )
+
+        agent_evidence_sufficiency.update(
+            {
+                "requested_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                    "pipeline_run_history",
+                ],
+                "available_evidence": [],
+                "empty_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                    "pipeline_run_history",
+                ],
+                "unavailable_evidence": [],
+                "evidence_details": [
+                    {
+                        "evidence_type": (
+                            "freshness_history"
+                        ),
+                        "availability_status": (
+                            "EMPTY"
+                        ),
+                        "item_count": 0,
+                    },
+                    {
+                        "evidence_type": (
+                            "volume_history"
+                        ),
+                        "availability_status": (
+                            "EMPTY"
+                        ),
+                        "item_count": 0,
+                    },
+                    {
+                        "evidence_type": (
+                            "pipeline_run_history"
+                        ),
+                        "availability_status": (
+                            "EMPTY"
+                        ),
+                        "item_count": 0,
+                    },
+                ],
+                "sufficiency_status": (
+                    "INSUFFICIENT"
+                ),
             }
         )
 
@@ -1929,6 +2047,55 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
     )
 
     assert response.status_code == 200
+
+    assert response.json()[
+        "agent_evidence_sufficiency"
+    ] == {
+        "requested_evidence": [
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+        ],
+        "available_evidence": [],
+        "empty_evidence": [
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_details": [
+            {
+                "evidence_type": (
+                    "freshness_history"
+                ),
+                "availability_status": (
+                    "EMPTY"
+                ),
+                "item_count": 0,
+            },
+            {
+                "evidence_type": (
+                    "volume_history"
+                ),
+                "availability_status": (
+                    "EMPTY"
+                ),
+                "item_count": 0,
+            },
+            {
+                "evidence_type": (
+                    "pipeline_run_history"
+                ),
+                "availability_status": (
+                    "EMPTY"
+                ),
+                "item_count": 0,
+            },
+        ],
+        "sufficiency_status": (
+            "INSUFFICIENT"
+        ),
+    }
 
     assert captured[
         "trusted_version_id"
@@ -2081,6 +2248,7 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
         initial_tool_requests=None,
         agent_run_summary=None,
         agent_evidence_coverage=None,
+        agent_evidence_sufficiency=None,
     ):
         captured[
             "bounded_question"
@@ -2101,8 +2269,8 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
         assert execution_trace is not None
 
         assert agent_run_summary is not None
-
         assert agent_evidence_coverage is not None
+        assert agent_evidence_sufficiency is not None
 
         bounded_requests = [
             *initial_tool_requests,
@@ -2151,10 +2319,76 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
             }
         )
 
+        agent_evidence_sufficiency.update(
+            {
+                "requested_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                    "pipeline_run_history",
+                    "operational_event_history",
+                ],
+                "available_evidence": [],
+                "empty_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                    "pipeline_run_history",
+                    "operational_event_history",
+                ],
+                "unavailable_evidence": [],
+                "evidence_details": [
+                    {
+                        "evidence_type": (
+                            "freshness_history"
+                        ),
+                        "availability_status": (
+                            "EMPTY"
+                        ),
+                        "item_count": 0,
+                    },
+                    {
+                        "evidence_type": (
+                            "volume_history"
+                        ),
+                        "availability_status": (
+                            "EMPTY"
+                        ),
+                        "item_count": 0,
+                    },
+                    {
+                        "evidence_type": (
+                            "pipeline_run_history"
+                        ),
+                        "availability_status": (
+                            "EMPTY"
+                        ),
+                        "item_count": 0,
+                    },
+                    {
+                        "evidence_type": (
+                            "operational_event_history"
+                        ),
+                        "availability_status": (
+                            "EMPTY"
+                        ),
+                        "item_count": 0,
+                    },
+                ],
+                "sufficiency_status": (
+                    "INSUFFICIENT"
+                ),
+            }
+        )
+
         captured[
             "agent_evidence_coverage"
         ] = dict(
             agent_evidence_coverage
+        )
+
+        captured[
+            "agent_evidence_sufficiency"
+        ] = dict(
+            agent_evidence_sufficiency
         )
 
         captured[
@@ -2385,4 +2619,10 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
         "agent_evidence_coverage"
     ] == response_body[
         "agent_evidence_coverage"
+    ]
+
+    assert response_body[
+        "agent_evidence_sufficiency"
+    ] == captured[
+        "agent_evidence_sufficiency"
     ]

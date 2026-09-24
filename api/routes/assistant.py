@@ -18,6 +18,7 @@ from api.schemas.assistant_schema import (
 )
 from src.assistant.controlled_tools import (
     build_controlled_evidence_coverage,
+    build_controlled_evidence_sufficiency,
     execute_bounded_controlled_tool_rounds,
     execute_controlled_tool,
     plan_controlled_evidence_requirements,
@@ -326,6 +327,7 @@ def ask_catalog_copilot(
         tool_execution_trace = []
         agent_run_summary = None
         agent_evidence_coverage = None
+        agent_evidence_sufficiency = None
 
         latest_version_id = diagnosis.get(
             "latest_version_id"
@@ -376,6 +378,7 @@ def ask_catalog_copilot(
             if len(tool_requests) > 1:
                 agent_run_summary = {}
                 agent_evidence_coverage = {}
+                agent_evidence_sufficiency = {}
 
                 controlled_tool_results.extend(
                     execute_bounded_controlled_tool_rounds(
@@ -397,6 +400,9 @@ def ask_catalog_copilot(
                         ),
                         agent_evidence_coverage=(
                             agent_evidence_coverage
+                        ),
+                        agent_evidence_sufficiency=(
+                            agent_evidence_sufficiency
                         ),
                     )
                 )
@@ -541,6 +547,17 @@ def ask_catalog_copilot(
                     )
                 )
 
+                agent_evidence_sufficiency = (
+                    build_controlled_evidence_sufficiency(
+                        requested_evidence=(
+                            requested_evidence
+                        ),
+                        controlled_tool_results=(
+                            controlled_tool_results
+                        ),
+                    )
+                )
+
         if controlled_tool_results:
             copilot = answer_copilot_question(
                 payload.question,
@@ -596,6 +613,9 @@ def ask_catalog_copilot(
         ),
         agent_evidence_coverage=(
             agent_evidence_coverage
+        ),
+        agent_evidence_sufficiency=(
+            agent_evidence_sufficiency
         ),
     )
 

@@ -24,6 +24,7 @@ from app.services.assistant_api import (
 )
 from app.services.assistant_chat import (
     build_agent_evidence_coverage_items,
+    build_agent_evidence_sufficiency_items,
     build_agent_run_summary_items,
     build_copilot_backend_result,
     build_copilot_chat_message,
@@ -832,6 +833,108 @@ def render_chat_message(
                             else "N/A"
                         ),
                     )
+
+        agent_evidence_sufficiency = (
+            copilot_meta.get(
+                "agent_evidence_sufficiency"
+            )
+        )
+
+        agent_evidence_sufficiency_items = (
+            build_agent_evidence_sufficiency_items(
+                agent_evidence_sufficiency
+            )
+        )
+
+        if agent_evidence_sufficiency_items:
+            with st.expander(
+                "Evidence availability",
+                expanded=False,
+            ):
+                st.caption(
+                    "Deterministic retrieval-data "
+                    "availability. This does not "
+                    "guarantee the evidence is "
+                    "semantically sufficient for "
+                    "every comparison."
+                )
+
+                for label, value in (
+                    agent_evidence_sufficiency_items
+                ):
+                    if label == "Evidence details":
+                        continue
+
+                    display_value = value
+
+                    if isinstance(
+                        value,
+                        list,
+                    ):
+                        display_value = (
+                            ", ".join(
+                                str(item)
+                                for item in value
+                            )
+                            if value
+                            else "None"
+                        )
+
+                    st.write(
+                        f"**{label}:**",
+                        (
+                            display_value
+                            if display_value is not None
+                            else "N/A"
+                        ),
+                    )
+
+                evidence_details = (
+                    agent_evidence_sufficiency.get(
+                        "evidence_details",
+                        [],
+                    )
+                    if isinstance(
+                        agent_evidence_sufficiency,
+                        dict,
+                    )
+                    else []
+                )
+
+                if evidence_details:
+                    st.markdown(
+                        "**Evidence details**"
+                    )
+
+                    for detail in evidence_details:
+                        if not isinstance(
+                            detail,
+                            dict,
+                        ):
+                            continue
+
+                        evidence_type = detail.get(
+                            "evidence_type",
+                            "UNKNOWN",
+                        )
+
+                        availability_status = (
+                            detail.get(
+                                "availability_status",
+                                "UNKNOWN",
+                            )
+                        )
+
+                        item_count = detail.get(
+                            "item_count"
+                        )
+
+                        st.write(
+                            f"- `{evidence_type}`: "
+                            f"{availability_status} "
+                            f"(items: "
+                            f"{item_count if item_count is not None else 'N/A'})"
+                        )
 
         tool_execution_trace = (
             copilot_meta.get(
