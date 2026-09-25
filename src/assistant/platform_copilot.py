@@ -4,6 +4,9 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from src.assistant.controlled_tools import (
+    CONTROLLED_TOOL_EVIDENCE_TYPES,
+)
 from src.assistant.llm_provider import (
     LLMProviderConfig,
     generate_llm_text,
@@ -334,6 +337,94 @@ def _build_historical_comparison_limitation(
     )
 
 
+def _filter_controlled_tool_results_for_answerability(
+    controlled_tool_results: list[
+        Mapping[str, Any]
+    ]
+    | None,
+    agent_evidence_answerability: (
+        Mapping[str, Any] | None
+    ),
+) -> list[Mapping[str, Any]]:
+    results = list(
+        controlled_tool_results or []
+    )
+
+    if not isinstance(
+        agent_evidence_answerability,
+        Mapping,
+    ):
+        return results
+
+    answerability_status = str(
+        agent_evidence_answerability.get(
+            "answerability_status",
+            "",
+        )
+        or ""
+    ).strip().upper()
+
+    if answerability_status != "PARTIAL":
+        return results
+
+    restricted_evidence: set[str] = set()
+
+    for field_name in (
+        "insufficient_evidence",
+        "unavailable_evidence",
+    ):
+        values = (
+            agent_evidence_answerability.get(
+                field_name,
+                [],
+            )
+            or []
+        )
+
+        if not isinstance(values, list):
+            continue
+
+        for value in values:
+            if isinstance(value, str):
+                restricted_evidence.add(
+                    value
+                )
+
+    if not restricted_evidence:
+        return results
+
+    filtered_results: list[
+        Mapping[str, Any]
+    ] = []
+
+    for tool_result in results:
+        tool_name = str(
+            tool_result.get(
+                "name",
+                "",
+            )
+            or ""
+        )
+
+        evidence_type = (
+            CONTROLLED_TOOL_EVIDENCE_TYPES.get(
+                tool_name
+            )
+        )
+
+        if (
+            evidence_type
+            in restricted_evidence
+        ):
+            continue
+
+        filtered_results.append(
+            tool_result
+        )
+
+    return filtered_results
+
+
 def answer_copilot_question(
     question: str,
     diagnosis: Mapping[str, Any],
@@ -353,13 +444,20 @@ def answer_copilot_question(
     config: LLMProviderConfig | None = None,
     client: Any | None = None,
 ) -> dict[str, Any]:
+    scoped_controlled_tool_results = (
+        _filter_controlled_tool_results_for_answerability(
+            controlled_tool_results,
+            agent_evidence_answerability,
+        )
+    )
+
     prompt = build_copilot_prompt(
         question,
         diagnosis,
         explanation,
         history=history,
         controlled_tool_results=(
-            controlled_tool_results
+            scoped_controlled_tool_results
         ),
         agent_evidence_answerability=(
             agent_evidence_answerability

@@ -1002,6 +1002,517 @@ def test_answer_copilot_question_passes_partial_answerability_policy_to_prompt()
     )
 
 
+def test_answer_copilot_question_filters_restricted_partial_evidence_from_llm_context():
+    class FakeModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            assert (
+                model
+                == "gemini-test-model"
+            )
+
+            assert (
+                "freshness-allowed-marker"
+                in contents
+            )
+
+            assert (
+                "volume-restricted-marker"
+                not in contents
+            )
+
+            assert (
+                '"answerability_status": '
+                '"PARTIAL"'
+                in contents
+            )
+
+            # Restricted payload must be removed,
+            # but limitation metadata must remain.
+            assert (
+                '"volume_history"'
+                in contents
+            )
+
+            return SimpleNamespace(
+                text=(
+                    "Freshness comparison is "
+                    "supported by the available "
+                    "evidence."
+                )
+            )
+
+    fake_client = SimpleNamespace(
+        models=FakeModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    controlled_tool_results = [
+        {
+            "name": "get_freshness_history",
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "marker": (
+                        "freshness-allowed-marker"
+                    ),
+                },
+                {
+                    "marker": (
+                        "freshness-allowed-marker-2"
+                    ),
+                },
+            ],
+        },
+        {
+            "name": "get_volume_history",
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "marker": (
+                        "volume-restricted-marker"
+                    ),
+                },
+            ],
+        },
+    ]
+
+    result = answer_copilot_question(
+        (
+            "Compare freshness and volume "
+            "history over time."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=(
+            controlled_tool_results
+        ),
+        agent_evidence_answerability={
+            "assessment_scope": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "assessed_evidence": [
+                "freshness_history",
+                "volume_history",
+            ],
+            "answerable_evidence": [
+                "freshness_history",
+            ],
+            "insufficient_evidence": [
+                "volume_history",
+            ],
+            "unavailable_evidence": [],
+            "evidence_requirements": [
+                {
+                    "evidence_type": (
+                        "freshness_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 2,
+                    "requirement_status": (
+                        "SATISFIED"
+                    ),
+                },
+                {
+                    "evidence_type": (
+                        "volume_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 1,
+                    "requirement_status": (
+                        "INSUFFICIENT_ITEMS"
+                    ),
+                },
+            ],
+            "answerability_status": (
+                "PARTIAL"
+            ),
+        },
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is True
+
+    assert (
+        result["answer"]
+        == (
+            "Freshness comparison is "
+            "supported by the available "
+            "evidence."
+        )
+    )
+
+
+def test_answer_copilot_question_preserves_non_restricted_evidence_for_partial_answerability():
+    class FakeModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            assert (
+                model
+                == "gemini-test-model"
+            )
+
+            assert (
+                "freshness-allowed-marker"
+                in contents
+            )
+
+            assert (
+                "lineage-preserved-marker"
+                in contents
+            )
+
+            assert (
+                "volume-restricted-marker"
+                not in contents
+            )
+
+            return SimpleNamespace(
+                text=(
+                    "Grounded partial "
+                    "comparison answer."
+                )
+            )
+
+    fake_client = SimpleNamespace(
+        models=FakeModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    controlled_tool_results = [
+        {
+            "name": "get_freshness_history",
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "marker": (
+                        "freshness-allowed-marker"
+                    ),
+                },
+                {
+                    "marker": (
+                        "freshness-allowed-marker-2"
+                    ),
+                },
+            ],
+        },
+        {
+            "name": "get_volume_history",
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "marker": (
+                        "volume-restricted-marker"
+                    ),
+                },
+            ],
+        },
+        {
+            "name": "get_version_lineage",
+            "read_only": True,
+            "ok": True,
+            "result": {
+                "marker": (
+                    "lineage-preserved-marker"
+                ),
+            },
+        },
+    ]
+
+    result = answer_copilot_question(
+        (
+            "Compare freshness and volume "
+            "history and show lineage."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=(
+            controlled_tool_results
+        ),
+        agent_evidence_answerability={
+            "assessment_scope": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "assessed_evidence": [
+                "freshness_history",
+                "volume_history",
+            ],
+            "answerable_evidence": [
+                "freshness_history",
+            ],
+            "insufficient_evidence": [
+                "volume_history",
+            ],
+            "unavailable_evidence": [],
+            "evidence_requirements": [],
+            "answerability_status": (
+                "PARTIAL"
+            ),
+        },
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is True
+
+    assert (
+        result["answer"]
+        == (
+            "Grounded partial "
+            "comparison answer."
+        )
+    )
+
+
+def test_answer_copilot_question_filters_unavailable_partial_evidence_from_llm_context():
+    class FakeModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            assert (
+                model
+                == "gemini-test-model"
+            )
+
+            assert (
+                "freshness-allowed-marker"
+                in contents
+            )
+
+            assert (
+                "pipeline-unavailable-marker"
+                not in contents
+            )
+
+            assert (
+                '"pipeline_run_history"'
+                in contents
+            )
+
+            return SimpleNamespace(
+                text=(
+                    "Grounded partial "
+                    "comparison answer."
+                )
+            )
+
+    fake_client = SimpleNamespace(
+        models=FakeModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "Compare freshness and pipeline "
+            "history over time."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            {
+                "name": "get_freshness_history",
+                "read_only": True,
+                "ok": True,
+                "result": [
+                    {
+                        "marker": (
+                            "freshness-allowed-marker"
+                        ),
+                    },
+                    {
+                        "marker": (
+                            "freshness-allowed-marker-2"
+                        ),
+                    },
+                ],
+            },
+            {
+                "name": "get_pipeline_run_history",
+                "read_only": True,
+                "ok": True,
+                "result": [
+                    {
+                        "marker": (
+                            "pipeline-unavailable-marker"
+                        ),
+                    },
+                ],
+            },
+        ],
+        agent_evidence_answerability={
+            "assessment_scope": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "assessed_evidence": [
+                "freshness_history",
+                "pipeline_run_history",
+            ],
+            "answerable_evidence": [
+                "freshness_history",
+            ],
+            "insufficient_evidence": [],
+            "unavailable_evidence": [
+                "pipeline_run_history",
+            ],
+            "evidence_requirements": [],
+            "answerability_status": (
+                "PARTIAL"
+            ),
+        },
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is True
+
+
+@pytest.mark.parametrize(
+    (
+        "answerability_status",
+        "assessment_scope",
+    ),
+    [
+        (
+            "ANSWERABLE",
+            "HISTORICAL_COMPARISON",
+        ),
+        (
+            "NOT_APPLICABLE",
+            "NOT_APPLICABLE",
+        ),
+    ],
+)
+def test_answer_copilot_question_preserves_all_evidence_when_partial_filtering_does_not_apply(
+    answerability_status,
+    assessment_scope,
+):
+    class FakeModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            assert (
+                model
+                == "gemini-test-model"
+            )
+
+            assert (
+                "freshness-preserved-marker"
+                in contents
+            )
+
+            assert (
+                "volume-preserved-marker"
+                in contents
+            )
+
+            return SimpleNamespace(
+                text="Grounded answer."
+            )
+
+    fake_client = SimpleNamespace(
+        models=FakeModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "Compare freshness and volume "
+            "history."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            {
+                "name": "get_freshness_history",
+                "read_only": True,
+                "ok": True,
+                "result": [
+                    {
+                        "marker": (
+                            "freshness-preserved-marker"
+                        ),
+                    },
+                ],
+            },
+            {
+                "name": "get_volume_history",
+                "read_only": True,
+                "ok": True,
+                "result": [
+                    {
+                        "marker": (
+                            "volume-preserved-marker"
+                        ),
+                    },
+                ],
+            },
+        ],
+        agent_evidence_answerability={
+            "assessment_scope": (
+                assessment_scope
+            ),
+            "assessed_evidence": [],
+            "answerable_evidence": [],
+            "insufficient_evidence": [
+                "volume_history",
+            ],
+            "unavailable_evidence": [],
+            "evidence_requirements": [],
+            "answerability_status": (
+                answerability_status
+            ),
+        },
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is True
+    assert result["answer"] == "Grounded answer."
+
+
 def test_answer_copilot_question_skips_llm_when_historical_comparison_not_answerable():
     class FailIfCalledModels:
         def generate_content(
