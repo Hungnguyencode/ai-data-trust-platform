@@ -151,6 +151,7 @@ def test_copilot_endpoint_returns_grounded_answer(
         explanation_value,
         *,
         history=None,
+        agent_evidence_answerability=None,
     ):
         captured["question"] = question
         captured["diagnosis"] = diagnosis_value
@@ -158,6 +159,7 @@ def test_copilot_endpoint_returns_grounded_answer(
             explanation_value
         )
         captured["history"] = history
+        del agent_evidence_answerability
         return copilot_result
 
     monkeypatch.setattr(
@@ -297,11 +299,13 @@ def test_copilot_endpoint_returns_500_for_llm_config_error(
         explanation,
         *,
         history=None,
+        agent_evidence_answerability=None,
     ):
         del question
         del diagnosis
         del explanation
         del history
+        del agent_evidence_answerability
 
         raise LLMConfigurationError(
             "Unsupported LLM_PROVIDER: magic"
@@ -603,11 +607,13 @@ def test_copilot_endpoint_executes_selected_read_only_tool(
         *,
         history=None,
         controlled_tool_results=None,
+        agent_evidence_answerability=None,
     ):
         del question
         del diagnosis_value
         del explanation_value
         del history
+        del agent_evidence_answerability
 
         captured[
             "controlled_tool_results"
@@ -834,11 +840,13 @@ def test_copilot_endpoint_falls_back_when_read_only_tool_fails(
         *,
         history=None,
         controlled_tool_results=None,
+        agent_evidence_answerability=None,
     ):
         del question
         del diagnosis_value
         del explanation_value
         del history
+        del agent_evidence_answerability
 
         captured[
             "controlled_tool_results"
@@ -1158,10 +1166,12 @@ def test_copilot_history_cannot_trigger_controlled_tool(
         *,
         history=None,
         controlled_tool_results=None,
+        agent_evidence_answerability=None,
     ):
         del question
         del diagnosis_value
         del explanation_value
+        del agent_evidence_answerability
 
         captured["history"] = history
         captured[
@@ -1352,11 +1362,13 @@ def test_copilot_endpoint_passes_trusted_catalog_to_freshness_selector(
         *,
         history=None,
         controlled_tool_results=None,
+        agent_evidence_answerability=None,
     ):
         del question
         del diagnosis_value
         del explanation_value
         del history
+        del agent_evidence_answerability
 
         captured[
             "controlled_tool_results"
@@ -1480,11 +1492,13 @@ def test_copilot_endpoint_executes_volume_tool_with_trusted_catalog(
         *,
         history=None,
         controlled_tool_results=None,
+        agent_evidence_answerability=None,
     ):
         del question
         del diagnosis_value
         del explanation_value
         del history
+        del agent_evidence_answerability
 
         captured[
             "controlled_tool_results"
@@ -1598,11 +1612,13 @@ def test_copilot_endpoint_executes_pipeline_tool_with_trusted_catalog(
         *,
         history=None,
         controlled_tool_results=None,
+        agent_evidence_answerability=None,
     ):
         del question
         del diagnosis_value
         del explanation_value
         del history
+        del agent_evidence_answerability
 
         captured[
             "controlled_tool_results"
@@ -1716,11 +1732,13 @@ def test_copilot_endpoint_executes_operational_event_tool_with_trusted_catalog(
         *,
         history=None,
         controlled_tool_results=None,
+        agent_evidence_answerability=None,
     ):
         del question
         del diagnosis_value
         del explanation_value
         del history
+        del agent_evidence_answerability
 
         captured[
             "controlled_tool_results"
@@ -2076,11 +2094,13 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
         *,
         history=None,
         controlled_tool_results=None,
+        agent_evidence_answerability=None,
     ):
         del question
         del diagnosis_value
         del explanation_value
         del history
+        del agent_evidence_answerability
 
         captured[
             "controlled_tool_results"
@@ -2674,11 +2694,13 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
         *,
         history=None,
         controlled_tool_results=None,
+        agent_evidence_answerability=None,
     ):
         del question
         del diagnosis_value
         del explanation_value
         del history
+        del agent_evidence_answerability
 
         captured[
             "controlled_tool_results"
@@ -2871,6 +2893,7 @@ def test_copilot_endpoint_reports_direct_tool_evidence_answerability(
     diagnosis = _diagnosis()
     explanation = _explanation()
     copilot_result = _copilot_result()
+    captured: dict = {}
 
     monkeypatch.setattr(
         (
@@ -2928,12 +2951,34 @@ def test_copilot_endpoint_reports_direct_tool_evidence_answerability(
         },
     )
 
+    def fake_answer_copilot_question(
+        question,
+        diagnosis_value,
+        explanation_value,
+        *,
+        history=None,
+        controlled_tool_results=None,
+        agent_evidence_answerability=None,
+    ):
+        del question
+        del diagnosis_value
+        del explanation_value
+        del history
+        del controlled_tool_results
+
+        captured[
+            "agent_evidence_answerability"
+        ] = agent_evidence_answerability
+
+        return copilot_result
+
+
     monkeypatch.setattr(
         (
             "api.routes.assistant."
             "answer_copilot_question"
         ),
-        lambda *args, **kwargs: copilot_result,
+        fake_answer_copilot_question,
     )
 
     response = client.post(
@@ -2978,3 +3023,12 @@ def test_copilot_endpoint_reports_direct_tool_evidence_answerability(
             "NOT_ANSWERABLE"
         ),
     }
+
+    assert (
+        captured[
+            "agent_evidence_answerability"
+        ]
+        == response.json()[
+            "agent_evidence_answerability"
+        ]
+    )

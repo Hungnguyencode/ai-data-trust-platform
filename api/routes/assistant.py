@@ -582,6 +582,9 @@ def ask_catalog_copilot(
                 controlled_tool_results=(
                     controlled_tool_results
                 ),
+                agent_evidence_answerability=(
+                    agent_evidence_answerability
+                ),
             )
 
         else:
@@ -590,6 +593,9 @@ def ask_catalog_copilot(
                 diagnosis,
                 explanation,
                 history=history,
+                agent_evidence_answerability=(
+                    agent_evidence_answerability
+                ),
             )
 
     except LLMConfigurationError as exc:

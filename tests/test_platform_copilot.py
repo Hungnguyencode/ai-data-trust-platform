@@ -701,3 +701,489 @@ def test_copilot_prompt_allows_controlled_tool_evidence_without_changing_authori
         "deterministic conclusions."
         in prompt
     )
+
+
+def test_copilot_prompt_blocks_historical_comparison_when_not_answerable():
+    prompt = build_copilot_prompt(
+        "Compare freshness history over time.",
+        _diagnosis(),
+        _explanation(),
+        agent_evidence_answerability={
+            "assessment_scope": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "assessed_evidence": [
+                "freshness_history",
+            ],
+            "answerable_evidence": [],
+            "insufficient_evidence": [
+                "freshness_history",
+            ],
+            "unavailable_evidence": [],
+            "evidence_requirements": [
+                {
+                    "evidence_type": (
+                        "freshness_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 1,
+                    "requirement_status": (
+                        "INSUFFICIENT_ITEMS"
+                    ),
+                },
+            ],
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+        },
+    )
+
+    assert (
+        "Do not make historical comparison "
+        "or trend claims."
+        in prompt
+    )
+
+    assert (
+        '"answerability_status": '
+        '"NOT_ANSWERABLE"'
+        in prompt
+    )
+
+
+def test_copilot_prompt_limits_historical_comparison_when_partially_answerable():
+    prompt = build_copilot_prompt(
+        (
+            "Compare freshness and volume "
+            "history over time."
+        ),
+        _diagnosis(),
+        _explanation(),
+        agent_evidence_answerability={
+            "assessment_scope": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "assessed_evidence": [
+                "freshness_history",
+                "volume_history",
+            ],
+            "answerable_evidence": [
+                "freshness_history",
+            ],
+            "insufficient_evidence": [
+                "volume_history",
+            ],
+            "unavailable_evidence": [],
+            "evidence_requirements": [
+                {
+                    "evidence_type": (
+                        "freshness_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 2,
+                    "requirement_status": (
+                        "SATISFIED"
+                    ),
+                },
+                {
+                    "evidence_type": (
+                        "volume_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 1,
+                    "requirement_status": (
+                        "INSUFFICIENT_ITEMS"
+                    ),
+                },
+            ],
+            "answerability_status": "PARTIAL",
+        },
+    )
+
+    assert (
+        "Only make historical comparison "
+        "or trend claims for evidence domains "
+        "listed in answerable_evidence."
+        in prompt
+    )
+
+    assert (
+        "Do not make historical comparison "
+        "or trend claims for evidence domains "
+        "listed in insufficient_evidence or "
+        "unavailable_evidence."
+        in prompt
+    )
+
+    assert (
+        '"answerability_status": "PARTIAL"'
+        in prompt
+    )
+
+
+def test_copilot_prompt_allows_grounded_historical_comparison_when_answerable():
+    prompt = build_copilot_prompt(
+        (
+            "Compare freshness and volume "
+            "history over time."
+        ),
+        _diagnosis(),
+        _explanation(),
+        agent_evidence_answerability={
+            "assessment_scope": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "assessed_evidence": [
+                "freshness_history",
+                "volume_history",
+            ],
+            "answerable_evidence": [
+                "freshness_history",
+                "volume_history",
+            ],
+            "insufficient_evidence": [],
+            "unavailable_evidence": [],
+            "evidence_requirements": [
+                {
+                    "evidence_type": (
+                        "freshness_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 2,
+                    "requirement_status": (
+                        "SATISFIED"
+                    ),
+                },
+                {
+                    "evidence_type": (
+                        "volume_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 3,
+                    "requirement_status": (
+                        "SATISFIED"
+                    ),
+                },
+            ],
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+        },
+    )
+
+    assert (
+        "Historical comparison or trend claims "
+        "may be made only from the provided "
+        "controlled evidence for evidence domains "
+        "listed in answerable_evidence."
+        in prompt
+    )
+
+    assert (
+        '"answerability_status": "ANSWERABLE"'
+        in prompt
+    )
+
+
+def test_answer_copilot_question_passes_partial_answerability_policy_to_prompt():
+    class FakeModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            assert (
+                model
+                == "gemini-test-model"
+            )
+
+            assert (
+                '"answerability_status": '
+                '"PARTIAL"'
+                in contents
+            )
+
+            assert (
+                "Only make historical comparison "
+                "or trend claims for evidence domains "
+                "listed in answerable_evidence."
+                in contents
+            )
+
+            assert (
+                "Do not make historical comparison "
+                "or trend claims for evidence domains "
+                "listed in insufficient_evidence or "
+                "unavailable_evidence."
+                in contents
+            )
+
+            return SimpleNamespace(
+                text=(
+                    "Freshness can be compared, "
+                    "but volume evidence is "
+                    "insufficient."
+                )
+            )
+
+    fake_client = SimpleNamespace(
+        models=FakeModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "Compare freshness and volume "
+            "history over time."
+        ),
+        _diagnosis(),
+        _explanation(),
+        agent_evidence_answerability={
+            "assessment_scope": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "assessed_evidence": [
+                "freshness_history",
+                "volume_history",
+            ],
+            "answerable_evidence": [
+                "freshness_history",
+            ],
+            "insufficient_evidence": [
+                "volume_history",
+            ],
+            "unavailable_evidence": [],
+            "evidence_requirements": [
+                {
+                    "evidence_type": (
+                        "freshness_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 2,
+                    "requirement_status": (
+                        "SATISFIED"
+                    ),
+                },
+                {
+                    "evidence_type": (
+                        "volume_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 1,
+                    "requirement_status": (
+                        "INSUFFICIENT_ITEMS"
+                    ),
+                },
+            ],
+            "answerability_status": (
+                "PARTIAL"
+            ),
+        },
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is True
+
+    assert (
+        result["answer"]
+        == (
+            "Freshness can be compared, "
+            "but volume evidence is "
+            "insufficient."
+        )
+    )
+
+
+def test_answer_copilot_question_skips_llm_when_historical_comparison_not_answerable():
+    class FailIfCalledModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+            del contents
+
+            raise AssertionError(
+                "LLM must not be called when "
+                "historical comparison is "
+                "deterministically not answerable"
+            )
+
+    fake_client = SimpleNamespace(
+        models=FailIfCalledModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        "Compare freshness history over time.",
+        _diagnosis(),
+        _explanation(),
+        agent_evidence_answerability={
+            "assessment_scope": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "assessed_evidence": [
+                "freshness_history",
+            ],
+            "answerable_evidence": [],
+            "insufficient_evidence": [
+                "freshness_history",
+            ],
+            "unavailable_evidence": [],
+            "evidence_requirements": [
+                {
+                    "evidence_type": (
+                        "freshness_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 1,
+                    "requirement_status": (
+                        "INSUFFICIENT_ITEMS"
+                    ),
+                },
+            ],
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+        },
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is False
+
+    assert (
+        result["fallback_reason"]
+        == "historical_comparison_not_answerable"
+    )
+
+    assert result["error_type"] is None
+
+    assert (
+        result["answer"]
+        == (
+            "Platform evidence is insufficient "
+            "for the requested historical "
+            "comparison."
+        )
+    )
+
+
+def test_answer_copilot_question_returns_vietnamese_deterministic_limitation():
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "So sánh lịch sử độ tươi "
+            "theo thời gian."
+        ),
+        _diagnosis(),
+        _explanation(),
+        agent_evidence_answerability={
+            "assessment_scope": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "assessed_evidence": [
+                "freshness_history",
+            ],
+            "answerable_evidence": [],
+            "insufficient_evidence": [
+                "freshness_history",
+            ],
+            "unavailable_evidence": [],
+            "evidence_requirements": [
+                {
+                    "evidence_type": (
+                        "freshness_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 1,
+                    "requirement_status": (
+                        "INSUFFICIENT_ITEMS"
+                    ),
+                },
+            ],
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+        },
+        config=config,
+        client=None,
+    )
+
+    assert result["used_llm"] is False
+
+    assert (
+        result["answer"]
+        == (
+            "Bằng chứng nền tảng không đủ "
+            "để thực hiện phép so sánh "
+            "lịch sử được yêu cầu."
+        )
+    )
+
+
+def test_copilot_prompt_preserves_normal_behavior_when_answerability_not_applicable():
+    prompt = build_copilot_prompt(
+        "What should I fix first?",
+        _diagnosis(),
+        _explanation(),
+        agent_evidence_answerability={
+            "assessment_scope": "NOT_APPLICABLE",
+            "assessed_evidence": [],
+            "answerable_evidence": [],
+            "insufficient_evidence": [],
+            "unavailable_evidence": [],
+            "evidence_requirements": [],
+            "answerability_status": (
+                "NOT_APPLICABLE"
+            ),
+        },
+    )
+
+    assert (
+        '"answerability_status": '
+        '"NOT_APPLICABLE"'
+        in prompt
+    )
+
+    assert (
+        "Do not make historical comparison "
+        "or trend claims."
+        not in prompt
+    )
+
+    assert (
+        "Only make historical comparison "
+        "or trend claims for evidence domains "
+        "listed in answerable_evidence."
+        not in prompt
+    )
+
+    assert (
+        "Historical comparison or trend claims "
+        "may be made only from the provided "
+        "controlled evidence"
+        not in prompt
+    )
