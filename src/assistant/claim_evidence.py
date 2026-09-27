@@ -270,3 +270,128 @@ def build_claim_evidence_assessment_from_sufficiency(
             observed_item_counts
         ),
     )
+
+
+def build_claim_evidence_assessments_from_sufficiency(
+    *,
+    requirements: list[dict[str, object]],
+    evidence_sufficiency: Mapping[str, object],
+) -> list[dict[str, object]]:
+    requirements_by_claim_type: dict[
+        str,
+        list[dict[str, object]],
+    ] = {}
+
+    claim_type_order: list[str] = []
+
+    for requirement in requirements:
+        claim_type = str(
+            requirement["claim_type"]
+        )
+
+        if claim_type not in requirements_by_claim_type:
+            requirements_by_claim_type[
+                claim_type
+            ] = []
+            claim_type_order.append(
+                claim_type
+            )
+
+        requirements_by_claim_type[
+            claim_type
+        ].append(
+            requirement
+        )
+
+    assessments: list[
+        dict[str, object]
+    ] = []
+
+    for claim_type in claim_type_order:
+        assessments.append(
+            build_claim_evidence_assessment_from_sufficiency(
+                requirements=(
+                    requirements_by_claim_type[
+                        claim_type
+                    ]
+                ),
+                evidence_sufficiency=(
+                    evidence_sufficiency
+                ),
+            )
+        )
+
+    return assessments
+
+
+def plan_claim_evidence_requirements(
+    *,
+    question: str,
+    requested_evidence: list[str],
+) -> list[dict[str, object]]:
+    if not isinstance(question, str):
+        raise ValueError(
+            "question must be a string"
+        )
+
+    normalized_question = (
+        question
+        .strip()
+        .lower()
+    )
+
+    if not normalized_question:
+        return []
+
+    comparison_terms = (
+        "compare",
+        "comparison",
+        "trend",
+        "over time",
+        "so sánh",
+        "xu hướng",
+        "theo thời gian",
+    )
+
+    current_state_terms = (
+        "latest",
+        "current",
+        "most recent",
+        "newest",
+        "mới nhất",
+        "hiện tại",
+        "gần nhất",
+    )
+
+    claim_types: list[str] = []
+
+    if any(
+        term in normalized_question
+        for term in comparison_terms
+    ):
+        claim_types.append(
+            "HISTORICAL_COMPARISON"
+        )
+
+    if any(
+        term in normalized_question
+        for term in current_state_terms
+    ):
+        claim_types.append(
+            "CURRENT_STATE"
+        )
+
+    evidence_types = list(
+        dict.fromkeys(
+            requested_evidence
+        )
+    )
+
+    return [
+        build_claim_evidence_requirement(
+            claim_type=claim_type,
+            evidence_type=evidence_type,
+        )
+        for claim_type in claim_types
+        for evidence_type in evidence_types
+    ]

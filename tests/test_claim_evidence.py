@@ -4,7 +4,9 @@ from src.assistant.claim_evidence import (
     assess_claim_evidence,
     build_claim_evidence_assessment,
     build_claim_evidence_assessment_from_sufficiency,
+    build_claim_evidence_assessments_from_sufficiency,
     build_claim_evidence_requirement,
+    plan_claim_evidence_requirements,
 )
 
 
@@ -442,3 +444,140 @@ def test_claim_evidence_from_sufficiency_treats_unavailable_as_unavailable():
         ]
         == "UNAVAILABLE"
     )
+
+
+def test_same_evidence_supports_current_state_but_not_historical_comparison():
+    requirements = [
+        build_claim_evidence_requirement(
+            claim_type="CURRENT_STATE",
+            evidence_type="volume_history",
+        ),
+        build_claim_evidence_requirement(
+            claim_type="HISTORICAL_COMPARISON",
+            evidence_type="volume_history",
+        ),
+    ]
+
+    assessments = (
+        build_claim_evidence_assessments_from_sufficiency(
+            requirements=requirements,
+            evidence_sufficiency={
+                "evidence_details": [
+                    {
+                        "evidence_type": "volume_history",
+                        "availability_status": "AVAILABLE",
+                        "item_count": 1,
+                    },
+                ],
+            },
+        )
+    )
+
+    assert len(assessments) == 2
+
+    assert assessments[0][
+        "claim_type"
+    ] == "CURRENT_STATE"
+    assert assessments[0][
+        "satisfied_evidence"
+    ] == [
+        "volume_history",
+    ]
+    assert assessments[0][
+        "answerability_status"
+    ] == "ANSWERABLE"
+
+    assert assessments[1][
+        "claim_type"
+    ] == "HISTORICAL_COMPARISON"
+    assert assessments[1][
+        "insufficient_evidence"
+    ] == [
+        "volume_history",
+    ]
+    assert assessments[1][
+        "answerability_status"
+    ] == "NOT_ANSWERABLE"
+
+
+def test_multi_claim_assessment_preserves_claim_type_order():
+    requirements = [
+        build_claim_evidence_requirement(
+            claim_type="HISTORICAL_COMPARISON",
+            evidence_type="freshness_history",
+        ),
+        build_claim_evidence_requirement(
+            claim_type="CURRENT_STATE",
+            evidence_type="volume_history",
+        ),
+        build_claim_evidence_requirement(
+            claim_type="HISTORICAL_COMPARISON",
+            evidence_type="volume_history",
+        ),
+    ]
+
+    assessments = (
+        build_claim_evidence_assessments_from_sufficiency(
+            requirements=requirements,
+            evidence_sufficiency={
+                "evidence_details": [
+                    {
+                        "evidence_type": "freshness_history",
+                        "availability_status": "AVAILABLE",
+                        "item_count": 2,
+                    },
+                    {
+                        "evidence_type": "volume_history",
+                        "availability_status": "AVAILABLE",
+                        "item_count": 1,
+                    },
+                ],
+            },
+        )
+    )
+
+    assert [
+        assessment["claim_type"]
+        for assessment in assessments
+    ] == [
+        "HISTORICAL_COMPARISON",
+        "CURRENT_STATE",
+    ]
+
+    assert assessments[0][
+        "assessed_evidence"
+    ] == [
+        "freshness_history",
+        "volume_history",
+    ]
+
+    assert assessments[1][
+        "assessed_evidence"
+    ] == [
+        "volume_history",
+    ]
+
+
+def test_plan_claim_evidence_requirements_detects_mixed_claims():
+    requirements = plan_claim_evidence_requirements(
+        question=(
+            "Compare volume over time and tell me "
+            "the latest volume."
+        ),
+        requested_evidence=[
+            "volume_history",
+        ],
+    )
+
+    assert requirements == [
+        {
+            "claim_type": "HISTORICAL_COMPARISON",
+            "evidence_type": "volume_history",
+            "minimum_item_count": 2,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "volume_history",
+            "minimum_item_count": 1,
+        },
+    ]

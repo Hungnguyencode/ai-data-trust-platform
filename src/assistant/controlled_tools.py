@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -22,7 +23,9 @@ from database.repositories.volume_repository import (
 )
 from src.assistant.claim_evidence import (
     build_claim_evidence_assessment_from_sufficiency,
+    build_claim_evidence_assessments_from_sufficiency,
     build_claim_evidence_requirement,
+    plan_claim_evidence_requirements,
 )
 from src.assistant.platform_context import (
     _json_safe,
@@ -762,6 +765,127 @@ def plan_controlled_evidence_requirements(
             )
 
     return evidence
+
+
+def _split_claim_scoped_segments(
+    question: str,
+) -> list[str]:
+    segments = re.split(
+        (
+            r"\band\s+(?="
+            r"tell me\b|"
+            r"show me\b|"
+            r"what(?:'s| is)\b"
+            r")"
+            r"|\bthen\b"
+            r"|\bvà\s+(?="
+            r"cho tôi biết\b|"
+            r"cho mình biết\b"
+            r")"
+            r"|\brồi\b"
+        ),
+        question,
+        flags=re.IGNORECASE,
+    )
+
+    return [
+        segment.strip()
+        for segment in segments
+        if segment.strip()
+    ]
+
+
+def plan_claim_scoped_evidence_requirements(
+    question: str,
+    *,
+    trusted_version_id: int,
+    trusted_catalog_id: int | None = None,
+) -> list[dict[str, object]]:
+    if not isinstance(question, str):
+        raise ValueError(
+            "question must be a string."
+        )
+
+    if not question.strip():
+        return []
+
+    requirements: list[
+        dict[str, object]
+    ] = []
+
+    seen_requirements: set[
+        tuple[str, str]
+    ] = set()
+
+    for segment in _split_claim_scoped_segments(
+        question
+    ):
+        requested_evidence = (
+            plan_controlled_evidence_requirements(
+                segment,
+                trusted_version_id=(
+                    trusted_version_id
+                ),
+                trusted_catalog_id=(
+                    trusted_catalog_id
+                ),
+            )
+        )
+
+        segment_requirements = (
+            plan_claim_evidence_requirements(
+                question=segment,
+                requested_evidence=(
+                    requested_evidence
+                ),
+            )
+        )
+
+        for requirement in segment_requirements:
+            key = (
+                str(requirement["claim_type"]),
+                str(requirement["evidence_type"]),
+            )
+
+            if key in seen_requirements:
+                continue
+
+            seen_requirements.add(key)
+            requirements.append(requirement)
+
+    return requirements
+
+
+def build_claim_scoped_evidence_assessments(
+    question: str,
+    *,
+    trusted_version_id: int,
+    trusted_catalog_id: int | None = None,
+    evidence_sufficiency: Mapping[str, object],
+) -> list[dict[str, object]]:
+    requirements = (
+        plan_claim_scoped_evidence_requirements(
+            question,
+            trusted_version_id=(
+                trusted_version_id
+            ),
+            trusted_catalog_id=(
+                trusted_catalog_id
+            ),
+        )
+    )
+
+    if not requirements:
+        return []
+
+    return (
+        build_claim_evidence_assessments_from_sufficiency(
+            requirements=requirements,
+            evidence_sufficiency=(
+                evidence_sufficiency
+            ),
+        )
+    )
 
 
 def build_controlled_evidence_coverage(

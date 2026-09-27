@@ -3671,3 +3671,155 @@ def test_bounded_controlled_tool_rounds_reports_partial_evidence_answerability(
             "PARTIAL"
         ),
     }
+
+
+def test_claim_scoped_evidence_requirements_associate_claims_to_domains():
+    requirements = (
+        controlled_tools
+        .plan_claim_scoped_evidence_requirements(
+            (
+                "Compare freshness over time "
+                "and tell me the latest volume."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert requirements == [
+        {
+            "claim_type": "HISTORICAL_COMPARISON",
+            "evidence_type": "freshness_history",
+            "minimum_item_count": 2,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "volume_history",
+            "minimum_item_count": 1,
+        },
+    ]
+
+
+def test_claim_scoped_evidence_requirements_keep_multi_domain_historical_claim():
+    requirements = (
+        controlled_tools
+        .plan_claim_scoped_evidence_requirements(
+            (
+                "Compare freshness and volume "
+                "over time."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert requirements == [
+        {
+            "claim_type": "HISTORICAL_COMPARISON",
+            "evidence_type": "freshness_history",
+            "minimum_item_count": 2,
+        },
+        {
+            "claim_type": "HISTORICAL_COMPARISON",
+            "evidence_type": "volume_history",
+            "minimum_item_count": 2,
+        },
+    ]
+
+
+def test_claim_scoped_evidence_requirements_support_vietnamese_mixed_claims():
+    requirements = (
+        controlled_tools
+        .plan_claim_scoped_evidence_requirements(
+            (
+                "So sánh freshness theo thời gian "
+                "và cho mình biết volume mới nhất."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert requirements == [
+        {
+            "claim_type": "HISTORICAL_COMPARISON",
+            "evidence_type": "freshness_history",
+            "minimum_item_count": 2,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "volume_history",
+            "minimum_item_count": 1,
+        },
+    ]
+
+
+def test_claim_scoped_evidence_assessments_apply_requirements_per_claim():
+    assessments = (
+        controlled_tools
+        .build_claim_scoped_evidence_assessments(
+            (
+                "Compare freshness and volume "
+                "over time and tell me the "
+                "latest volume."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            evidence_sufficiency={
+                "requested_evidence": [
+                    "freshness_history",
+                    "volume_history",
+                ],
+                "evidence_details": [
+                    {
+                        "evidence_type": (
+                            "freshness_history"
+                        ),
+                        "availability_status": (
+                            "AVAILABLE"
+                        ),
+                        "item_count": 2,
+                    },
+                    {
+                        "evidence_type": (
+                            "volume_history"
+                        ),
+                        "availability_status": (
+                            "AVAILABLE"
+                        ),
+                        "item_count": 1,
+                    },
+                ],
+            },
+        )
+    )
+
+    assert len(assessments) == 2
+
+    historical = assessments[0]
+
+    assert historical["claim_type"] == (
+        "HISTORICAL_COMPARISON"
+    )
+    assert historical["satisfied_evidence"] == [
+        "freshness_history",
+    ]
+    assert historical["insufficient_evidence"] == [
+        "volume_history",
+    ]
+    assert historical["answerability_status"] == (
+        "PARTIAL"
+    )
+
+    current_state = assessments[1]
+
+    assert current_state["claim_type"] == (
+        "CURRENT_STATE"
+    )
+    assert current_state["satisfied_evidence"] == [
+        "volume_history",
+    ]
+    assert current_state["insufficient_evidence"] == []
+    assert current_state["answerability_status"] == (
+        "ANSWERABLE"
+    )
