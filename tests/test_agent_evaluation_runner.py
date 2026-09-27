@@ -4,6 +4,7 @@ from src.assistant.evaluation_runner import (
     run_cross_layer_not_answerable_evaluation,
     run_cross_layer_partial_answerability_evaluation,
     run_empty_retrieval_availability_evaluation,
+    run_mixed_claim_scoped_answerability_evaluation,
     run_mutation_request_boundary_evaluation,
     run_non_comparison_not_applicable_evaluation,
     run_not_answerable_response_gate_evaluation,
@@ -132,8 +133,8 @@ def test_agent_evaluation_suite_builds_complete_passing_report():
 
     assert report["evaluation_version"] == "v1"
     assert report["overall_status"] == "PASS"
-    assert report["scenario_count"] == 9
-    assert report["passed_count"] == 9
+    assert report["scenario_count"] == 10
+    assert report["passed_count"] == 10
     assert report["failed_count"] == 0
 
     assert [
@@ -149,9 +150,26 @@ def test_agent_evaluation_suite_builds_complete_passing_report():
         "non_comparison_not_applicable",
         "mutation_request_boundary",
         "cross_layer_answerable",
+        "mixed_claim_scoped_answerability",
     ]
 
     assert all(
         scenario["status"] == "PASS"
         for scenario in report["scenarios"]
     )
+
+
+def test_mixed_claim_scoped_answerability_uses_real_pipeline():
+    observed = (
+        run_mixed_claim_scoped_answerability_evaluation()
+    )
+
+    assert observed == {
+        "historical_claim_status": (
+            "NOT_ANSWERABLE"
+        ),
+        "current_claim_status": "ANSWERABLE",
+        "historical_payload_count": 0,
+        "current_payload_count": 1,
+        "used_llm": True,
+    }
