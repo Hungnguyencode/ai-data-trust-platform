@@ -56,3 +56,13 @@ jobs:
 
       - name: Compile Python modules
         run: python -m compileall api src database app orchestration
+
+      - name: Generate AI agent evaluation artifact
+        run: python -m src.assistant.evaluation_artifact
+
+      - name: Upload AI agent evaluation artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-agent-evaluation-report
+          path: agent-evaluation-report.json
