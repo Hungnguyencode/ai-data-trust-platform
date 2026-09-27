@@ -343,6 +343,7 @@ def test_canonical_evaluation_scenarios_cover_harness_v1():
         "non_comparison_not_applicable",
         "mutation_request_boundary",
         "cross_layer_answerable",
+        "mixed_claim_scoped_answerability",
     ]
 
     assert len(
@@ -454,4 +455,27 @@ def test_cross_layer_answerable_contract_requires_visible_payloads():
         "answerability_status": "ANSWERABLE",
         "used_llm": True,
         "all_requested_payload_visible": True,
+    }
+
+
+def test_mixed_claim_scoped_answerability_contract():
+    scenarios = (
+        get_canonical_agent_evaluation_scenarios()
+    )
+
+    scenario = next(
+        scenario
+        for scenario in scenarios
+        if scenario["scenario_id"]
+        == "mixed_claim_scoped_answerability"
+    )
+
+    assert scenario["expected"] == {
+        "historical_claim_status": (
+            "NOT_ANSWERABLE"
+        ),
+        "current_claim_status": "ANSWERABLE",
+        "historical_payload_count": 0,
+        "current_payload_count": 1,
+        "used_llm": True,
     }

@@ -191,6 +191,28 @@ def get_canonical_agent_evaluation_scenarios(
                 "all_requested_payload_visible": True,
             },
         },
+        {
+            "scenario_id": (
+                "mixed_claim_scoped_answerability"
+            ),
+            "description": (
+                "Mixed claims must preserve "
+                "supported current-state evidence "
+                "while restricting unsupported "
+                "historical comparison evidence."
+            ),
+            "expected": {
+                "historical_claim_status": (
+                    "NOT_ANSWERABLE"
+                ),
+                "current_claim_status": (
+                    "ANSWERABLE"
+                ),
+                "historical_payload_count": 0,
+                "current_payload_count": 1,
+                "used_llm": True,
+            },
+        },
     ]
 
 

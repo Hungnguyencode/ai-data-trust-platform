@@ -180,6 +180,9 @@ def _run_copilot_evaluation(
         Any,
     ],
     models: Any,
+    claim_scoped_controlled_tool_results: (
+        list[dict[str, Any]] | None
+    ) = None,
 ) -> dict[str, Any]:
     return answer_copilot_question(
         question,
@@ -187,6 +190,9 @@ def _run_copilot_evaluation(
         _evaluation_explanation(),
         controlled_tool_results=(
             controlled_tool_results
+        ),
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_controlled_tool_results
         ),
         agent_evidence_answerability=(
             evidence_answerability
@@ -925,6 +931,146 @@ def run_cross_layer_answerable_evaluation(
     }
 
 
+def run_mixed_claim_scoped_answerability_evaluation(
+) -> dict[str, Any]:
+    question = (
+        "Compare volume over time "
+        "and tell me the latest volume."
+    )
+
+    controlled_tool_results = [
+        {
+            "name": "get_volume_history",
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "marker": "volume-latest-1",
+                },
+            ],
+        },
+    ]
+
+    evidence_sufficiency, evidence_answerability = (
+        _build_evidence_assessment(
+            question=question,
+            requested_evidence=[
+                "volume_history",
+            ],
+            controlled_tool_results=(
+                controlled_tool_results
+            ),
+        )
+    )
+
+    claim_evidence_assessments = (
+        controlled_tools
+        .build_claim_scoped_evidence_assessments(
+            question,
+            trusted_version_id=7,
+            trusted_catalog_id=1,
+            evidence_sufficiency=(
+                evidence_sufficiency
+            ),
+        )
+    )
+
+    claim_scoped_controlled_tool_results = (
+        controlled_tools
+        .build_claim_scoped_controlled_tool_results(
+            controlled_tool_results=(
+                controlled_tool_results
+            ),
+            claim_evidence_assessments=(
+                claim_evidence_assessments
+            ),
+        )
+    )
+
+    historical_scope = next(
+        scope
+        for scope
+        in claim_scoped_controlled_tool_results
+        if scope["claim_type"]
+        == "HISTORICAL_COMPARISON"
+    )
+
+    current_scope = next(
+        scope
+        for scope
+        in claim_scoped_controlled_tool_results
+        if scope["claim_type"]
+        == "CURRENT_STATE"
+    )
+
+    provider_observation = {
+        "called": False,
+    }
+
+    class InspectPromptModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+            del contents
+
+            provider_observation[
+                "called"
+            ] = True
+
+            return SimpleNamespace(
+                text=(
+                    "Historical comparison is "
+                    "unsupported, while the latest "
+                    "volume is available."
+                )
+            )
+
+    result = _run_copilot_evaluation(
+        question=question,
+        controlled_tool_results=(
+            controlled_tool_results
+        ),
+        evidence_answerability=(
+            evidence_answerability
+        ),
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_controlled_tool_results
+        ),
+        models=InspectPromptModels(),
+    )
+
+    return {
+        "historical_claim_status": str(
+            historical_scope[
+                "answerability_status"
+            ]
+        ),
+        "current_claim_status": str(
+            current_scope[
+                "answerability_status"
+            ]
+        ),
+        "historical_payload_count": len(
+            historical_scope[
+                "controlled_tool_results"
+            ]
+        ),
+        "current_payload_count": len(
+            current_scope[
+                "controlled_tool_results"
+            ]
+        ),
+        "used_llm": bool(
+            result["used_llm"]
+            and provider_observation["called"]
+        ),
+    }
+
+
 def run_agent_evaluation_suite(
 ) -> dict[str, Any]:
     observed_results = {
@@ -954,6 +1100,9 @@ def run_agent_evaluation_suite(
         ),
         "cross_layer_answerable": (
             run_cross_layer_answerable_evaluation()
+        ),
+        "mixed_claim_scoped_answerability": (
+            run_mixed_claim_scoped_answerability_evaluation()
         ),
     }
 

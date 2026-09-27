@@ -98,8 +98,8 @@ def test_generate_agent_evaluation_artifact_runs_real_suite(
 
     assert report["evaluation_version"] == "v1"
     assert report["overall_status"] == "PASS"
-    assert report["scenario_count"] == 9
-    assert report["passed_count"] == 9
+    assert report["scenario_count"] == 10
+    assert report["passed_count"] == 10
     assert report["failed_count"] == 0
 
     assert output_path.read_text(
