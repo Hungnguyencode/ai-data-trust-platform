@@ -2136,3 +2136,117 @@ def execute_bounded_controlled_tool_rounds(
         )
 
     return results
+
+
+def build_claim_scoped_controlled_tool_results(
+    *,
+    controlled_tool_results: list[
+        Mapping[str, Any]
+    ],
+    claim_evidence_assessments: list[
+        Mapping[str, Any]
+    ],
+) -> list[dict[str, Any]]:
+    scoped_results: list[
+        dict[str, Any]
+    ] = []
+
+    for assessment in claim_evidence_assessments:
+        claim_type = str(
+            assessment.get(
+                "claim_type",
+                "",
+            )
+            or ""
+        )
+
+        answerability_status = str(
+            assessment.get(
+                "answerability_status",
+                "",
+            )
+            or ""
+        )
+
+        permitted_evidence = [
+            str(evidence_type)
+            for evidence_type in (
+                assessment.get(
+                    "satisfied_evidence",
+                    [],
+                )
+                or []
+            )
+        ]
+
+        restricted_evidence = list(
+            dict.fromkeys(
+                [
+                    str(evidence_type)
+                    for field_name in (
+                        "insufficient_evidence",
+                        "unavailable_evidence",
+                    )
+                    for evidence_type in (
+                        assessment.get(
+                            field_name,
+                            [],
+                        )
+                        or []
+                    )
+                ]
+            )
+        )
+
+        permitted_evidence_set = set(
+            permitted_evidence
+        )
+
+        permitted_tool_results: list[
+            Mapping[str, Any]
+        ] = []
+
+        for tool_result in controlled_tool_results:
+            tool_name = str(
+                tool_result.get(
+                    "name",
+                    "",
+                )
+                or ""
+            )
+
+            evidence_type = (
+                CONTROLLED_TOOL_EVIDENCE_TYPES.get(
+                    tool_name
+                )
+            )
+
+            if (
+                evidence_type
+                not in permitted_evidence_set
+            ):
+                continue
+
+            permitted_tool_results.append(
+                tool_result
+            )
+
+        scoped_results.append(
+            {
+                "claim_type": claim_type,
+                "answerability_status": (
+                    answerability_status
+                ),
+                "permitted_evidence": (
+                    permitted_evidence
+                ),
+                "restricted_evidence": (
+                    restricted_evidence
+                ),
+                "controlled_tool_results": (
+                    permitted_tool_results
+                ),
+            }
+        )
+
+    return scoped_results

@@ -3823,3 +3823,144 @@ def test_claim_scoped_evidence_assessments_apply_requirements_per_claim():
     assert current_state["answerability_status"] == (
         "ANSWERABLE"
     )
+
+
+def test_claim_scoped_controlled_tool_results_scope_evidence_per_claim():
+    controlled_tool_results = [
+        {
+            "name": "get_freshness_history",
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {"marker": "freshness-1"},
+                {"marker": "freshness-2"},
+            ],
+        },
+        {
+            "name": "get_volume_history",
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {"marker": "volume-latest"},
+            ],
+        },
+    ]
+
+    claim_evidence_assessments = [
+        {
+            "claim_type": "HISTORICAL_COMPARISON",
+            "satisfied_evidence": [
+                "freshness_history",
+            ],
+            "insufficient_evidence": [
+                "volume_history",
+            ],
+            "unavailable_evidence": [],
+            "answerability_status": "PARTIAL",
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "satisfied_evidence": [
+                "volume_history",
+            ],
+            "insufficient_evidence": [],
+            "unavailable_evidence": [],
+            "answerability_status": "ANSWERABLE",
+        },
+    ]
+
+    scoped_results = (
+        controlled_tools
+        .build_claim_scoped_controlled_tool_results(
+            controlled_tool_results=(
+                controlled_tool_results
+            ),
+            claim_evidence_assessments=(
+                claim_evidence_assessments
+            ),
+        )
+    )
+
+    assert scoped_results == [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": "PARTIAL",
+            "permitted_evidence": [
+                "freshness_history",
+            ],
+            "restricted_evidence": [
+                "volume_history",
+            ],
+            "controlled_tool_results": [
+                controlled_tool_results[0],
+            ],
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": "ANSWERABLE",
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                controlled_tool_results[1],
+            ],
+        },
+    ]
+
+
+def test_claim_scoped_controlled_tool_results_hide_not_answerable_payload():
+    controlled_tool_results = [
+        {
+            "name": "get_volume_history",
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {"marker": "volume-single-row"},
+            ],
+        },
+    ]
+
+    claim_evidence_assessments = [
+        {
+            "claim_type": "HISTORICAL_COMPARISON",
+            "satisfied_evidence": [],
+            "insufficient_evidence": [
+                "volume_history",
+            ],
+            "unavailable_evidence": [],
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+        },
+    ]
+
+    scoped_results = (
+        controlled_tools
+        .build_claim_scoped_controlled_tool_results(
+            controlled_tool_results=(
+                controlled_tool_results
+            ),
+            claim_evidence_assessments=(
+                claim_evidence_assessments
+            ),
+        )
+    )
+
+    assert scoped_results == [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+            "permitted_evidence": [],
+            "restricted_evidence": [
+                "volume_history",
+            ],
+            "controlled_tool_results": [],
+        },
+    ]
