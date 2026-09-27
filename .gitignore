@@ -48,3 +48,6 @@ data/raw/
 data/processed/
 data/quarantine/
 data/lifecycle_test/
+
+# AI evaluation artifacts
+agent-evaluation-report.json
