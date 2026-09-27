@@ -1698,3 +1698,320 @@ def test_copilot_prompt_preserves_normal_behavior_when_answerability_not_applica
         "controlled evidence"
         not in prompt
     )
+
+
+def test_copilot_prompt_uses_claim_scoped_evidence_when_provided():
+    controlled_tool_results = [
+        {
+            "name": "get_freshness_history",
+            "result": [
+                {"marker": "freshness-allowed"},
+            ],
+        },
+        {
+            "name": "get_volume_history",
+            "result": [
+                {"marker": "volume-latest"},
+            ],
+        },
+        {
+            "name": "get_pipeline_run_history",
+            "result": [
+                {
+                    "marker": (
+                        "pipeline-unscoped-should-not-leak"
+                    ),
+                },
+            ],
+        },
+    ]
+
+    claim_scoped_results = [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": "PARTIAL",
+            "permitted_evidence": [
+                "freshness_history",
+            ],
+            "restricted_evidence": [
+                "volume_history",
+            ],
+            "controlled_tool_results": [
+                controlled_tool_results[0],
+            ],
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": "ANSWERABLE",
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                controlled_tool_results[1],
+            ],
+        },
+    ]
+
+    prompt = build_copilot_prompt(
+        (
+            "Compare freshness over time "
+            "and tell me the latest volume."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=(
+            controlled_tool_results
+        ),
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+    )
+
+    assert (
+        "Claim-scoped controlled evidence"
+        in prompt
+    )
+    assert "HISTORICAL_COMPARISON" in prompt
+    assert "CURRENT_STATE" in prompt
+    assert "freshness-allowed" in prompt
+    assert "volume-latest" in prompt
+
+    assert (
+        "pipeline-unscoped-should-not-leak"
+        not in prompt
+    )
+
+
+def test_copilot_prompt_keeps_legacy_controlled_evidence_without_claim_scope():
+    controlled_tool_results = [
+        {
+            "name": "get_volume_history",
+            "result": [
+                {
+                    "marker": (
+                        "legacy-volume-marker"
+                    ),
+                },
+            ],
+        },
+    ]
+
+    prompt = build_copilot_prompt(
+        "Show volume history.",
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=(
+            controlled_tool_results
+        ),
+    )
+
+    assert (
+        "Controlled tool results "
+        "(read-only supplementary evidence)"
+        in prompt
+    )
+    assert (
+        "Claim-scoped controlled evidence"
+        not in prompt
+    )
+    assert "legacy-volume-marker" in prompt
+
+
+def test_copilot_answer_passes_claim_scoped_evidence_to_provider():
+    controlled_tool_results = [
+        {
+            "name": "get_freshness_history",
+            "result": [
+                {"marker": "freshness-scoped"},
+            ],
+        },
+        {
+            "name": "get_volume_history",
+            "result": [
+                {"marker": "volume-scoped"},
+            ],
+        },
+        {
+            "name": "get_pipeline_run_history",
+            "result": [
+                {
+                    "marker": (
+                        "pipeline-global-should-not-leak"
+                    ),
+                },
+            ],
+        },
+    ]
+
+    claim_scoped_results = [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": "PARTIAL",
+            "permitted_evidence": [
+                "freshness_history",
+            ],
+            "restricted_evidence": [
+                "volume_history",
+            ],
+            "controlled_tool_results": [
+                controlled_tool_results[0],
+            ],
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": "ANSWERABLE",
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                controlled_tool_results[1],
+            ],
+        },
+    ]
+
+    observed = {
+        "contents": "",
+    }
+
+    class InspectPromptModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+
+            observed["contents"] = contents
+
+            return SimpleNamespace(
+                text=(
+                    "Freshness comparison is limited, "
+                    "and the latest volume is available."
+                )
+            )
+
+    fake_client = SimpleNamespace(
+        models=InspectPromptModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "Compare freshness over time "
+            "and tell me the latest volume."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=(
+            controlled_tool_results
+        ),
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is True
+
+    assert (
+        "Claim-scoped controlled evidence"
+        in observed["contents"]
+    )
+    assert (
+        "freshness-scoped"
+        in observed["contents"]
+    )
+    assert (
+        "volume-scoped"
+        in observed["contents"]
+    )
+    assert (
+        "pipeline-global-should-not-leak"
+        not in observed["contents"]
+    )
+
+
+def test_copilot_answer_empty_claim_scope_does_not_fallback_to_global_evidence():
+    controlled_tool_results = [
+        {
+            "name": "get_volume_history",
+            "result": [
+                {
+                    "marker": (
+                        "global-volume-must-not-leak"
+                    ),
+                },
+            ],
+        },
+    ]
+
+    observed = {
+        "contents": "",
+    }
+
+    class InspectPromptModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+
+            observed["contents"] = contents
+
+            return SimpleNamespace(
+                text=(
+                    "Platform evidence is "
+                    "insufficient."
+                )
+            )
+
+    fake_client = SimpleNamespace(
+        models=InspectPromptModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        "Tell me the latest volume.",
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=(
+            controlled_tool_results
+        ),
+        claim_scoped_controlled_tool_results=[],
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is True
+
+    assert (
+        "Claim-scoped controlled evidence"
+        in observed["contents"]
+    )
+
+    assert (
+        "global-volume-must-not-leak"
+        not in observed["contents"]
+    )
