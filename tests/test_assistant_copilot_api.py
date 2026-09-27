@@ -151,6 +151,7 @@ def test_copilot_endpoint_returns_grounded_answer(
         explanation_value,
         *,
         history=None,
+        claim_scoped_controlled_tool_results=None,
         agent_evidence_answerability=None,
     ):
         captured["question"] = question
@@ -160,6 +161,7 @@ def test_copilot_endpoint_returns_grounded_answer(
         )
         captured["history"] = history
         del agent_evidence_answerability
+        del claim_scoped_controlled_tool_results
         return copilot_result
 
     monkeypatch.setattr(
@@ -299,6 +301,7 @@ def test_copilot_endpoint_returns_500_for_llm_config_error(
         explanation,
         *,
         history=None,
+        claim_scoped_controlled_tool_results=None,
         agent_evidence_answerability=None,
     ):
         del question
@@ -306,6 +309,7 @@ def test_copilot_endpoint_returns_500_for_llm_config_error(
         del explanation
         del history
         del agent_evidence_answerability
+        del claim_scoped_controlled_tool_results
 
         raise LLMConfigurationError(
             "Unsupported LLM_PROVIDER: magic"
@@ -607,6 +611,7 @@ def test_copilot_endpoint_executes_selected_read_only_tool(
         *,
         history=None,
         controlled_tool_results=None,
+        claim_scoped_controlled_tool_results=None,
         agent_evidence_answerability=None,
     ):
         del question
@@ -614,6 +619,7 @@ def test_copilot_endpoint_executes_selected_read_only_tool(
         del explanation_value
         del history
         del agent_evidence_answerability
+        del claim_scoped_controlled_tool_results
 
         captured[
             "controlled_tool_results"
@@ -840,6 +846,7 @@ def test_copilot_endpoint_falls_back_when_read_only_tool_fails(
         *,
         history=None,
         controlled_tool_results=None,
+        claim_scoped_controlled_tool_results=None,
         agent_evidence_answerability=None,
     ):
         del question
@@ -847,6 +854,7 @@ def test_copilot_endpoint_falls_back_when_read_only_tool_fails(
         del explanation_value
         del history
         del agent_evidence_answerability
+        del claim_scoped_controlled_tool_results
 
         captured[
             "controlled_tool_results"
@@ -1166,12 +1174,14 @@ def test_copilot_history_cannot_trigger_controlled_tool(
         *,
         history=None,
         controlled_tool_results=None,
+        claim_scoped_controlled_tool_results=None,
         agent_evidence_answerability=None,
     ):
         del question
         del diagnosis_value
         del explanation_value
         del agent_evidence_answerability
+        del claim_scoped_controlled_tool_results
 
         captured["history"] = history
         captured[
@@ -1362,6 +1372,7 @@ def test_copilot_endpoint_passes_trusted_catalog_to_freshness_selector(
         *,
         history=None,
         controlled_tool_results=None,
+        claim_scoped_controlled_tool_results=None,
         agent_evidence_answerability=None,
     ):
         del question
@@ -1369,6 +1380,7 @@ def test_copilot_endpoint_passes_trusted_catalog_to_freshness_selector(
         del explanation_value
         del history
         del agent_evidence_answerability
+        del claim_scoped_controlled_tool_results
 
         captured[
             "controlled_tool_results"
@@ -1492,6 +1504,7 @@ def test_copilot_endpoint_executes_volume_tool_with_trusted_catalog(
         *,
         history=None,
         controlled_tool_results=None,
+        claim_scoped_controlled_tool_results=None,
         agent_evidence_answerability=None,
     ):
         del question
@@ -1499,6 +1512,7 @@ def test_copilot_endpoint_executes_volume_tool_with_trusted_catalog(
         del explanation_value
         del history
         del agent_evidence_answerability
+        del claim_scoped_controlled_tool_results
 
         captured[
             "controlled_tool_results"
@@ -1612,6 +1626,7 @@ def test_copilot_endpoint_executes_pipeline_tool_with_trusted_catalog(
         *,
         history=None,
         controlled_tool_results=None,
+        claim_scoped_controlled_tool_results=None,
         agent_evidence_answerability=None,
     ):
         del question
@@ -1619,6 +1634,7 @@ def test_copilot_endpoint_executes_pipeline_tool_with_trusted_catalog(
         del explanation_value
         del history
         del agent_evidence_answerability
+        del claim_scoped_controlled_tool_results
 
         captured[
             "controlled_tool_results"
@@ -1732,6 +1748,7 @@ def test_copilot_endpoint_executes_operational_event_tool_with_trusted_catalog(
         *,
         history=None,
         controlled_tool_results=None,
+        claim_scoped_controlled_tool_results=None,
         agent_evidence_answerability=None,
     ):
         del question
@@ -1739,6 +1756,7 @@ def test_copilot_endpoint_executes_operational_event_tool_with_trusted_catalog(
         del explanation_value
         del history
         del agent_evidence_answerability
+        del claim_scoped_controlled_tool_results
 
         captured[
             "controlled_tool_results"
@@ -2094,6 +2112,7 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
         *,
         history=None,
         controlled_tool_results=None,
+        claim_scoped_controlled_tool_results=None,
         agent_evidence_answerability=None,
     ):
         del question
@@ -2101,6 +2120,7 @@ def test_copilot_endpoint_executes_multi_tool_evidence_plan(
         del explanation_value
         del history
         del agent_evidence_answerability
+        del claim_scoped_controlled_tool_results
 
         captured[
             "controlled_tool_results"
@@ -2694,6 +2714,7 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
         *,
         history=None,
         controlled_tool_results=None,
+        claim_scoped_controlled_tool_results=None,
         agent_evidence_answerability=None,
     ):
         del question
@@ -2701,6 +2722,7 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
         del explanation_value
         del history
         del agent_evidence_answerability
+        del claim_scoped_controlled_tool_results
 
         captured[
             "controlled_tool_results"
@@ -2958,6 +2980,7 @@ def test_copilot_endpoint_reports_direct_tool_evidence_answerability(
         *,
         history=None,
         controlled_tool_results=None,
+        claim_scoped_controlled_tool_results=None,
         agent_evidence_answerability=None,
     ):
         del question
@@ -2965,6 +2988,7 @@ def test_copilot_endpoint_reports_direct_tool_evidence_answerability(
         del explanation_value
         del history
         del controlled_tool_results
+        del claim_scoped_controlled_tool_results
 
         captured[
             "agent_evidence_answerability"
@@ -3031,4 +3055,309 @@ def test_copilot_endpoint_reports_direct_tool_evidence_answerability(
         == response.json()[
             "agent_evidence_answerability"
         ]
+    )
+
+
+def test_copilot_endpoint_forwards_claim_scoped_controlled_evidence(
+    monkeypatch,
+):
+    diagnosis = _diagnosis()
+    explanation = _explanation()
+    copilot_result = _copilot_result()
+
+    captured = {
+        "claim_scoped_controlled_tool_results": None,
+    }
+
+    volume_result = {
+        "name": "get_volume_history",
+        "read_only": True,
+        "ok": True,
+        "result": [
+            {
+                "marker": "latest-volume-row",
+            },
+        ],
+    }
+
+    tool_request = {
+        "name": "get_volume_history",
+        "arguments": {
+            "catalog_id": 4,
+        },
+    }
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: _context(),
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "reason_about_platform_context"
+        ),
+        lambda value: diagnosis,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "explain_platform_diagnosis"
+        ),
+        lambda value: explanation,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "plan_controlled_tool_requests"
+        ),
+        lambda question, *,
+        trusted_version_id,
+        trusted_catalog_id: [
+            tool_request
+        ],
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "select_controlled_tool_request"
+        ),
+        lambda question, *,
+        trusted_version_id,
+        trusted_catalog_id: (
+            tool_request
+        ),
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "execute_controlled_tool"
+        ),
+        lambda name, arguments: volume_result,
+    )
+
+    def fake_answer_copilot_question(
+        question,
+        diagnosis_value,
+        explanation_value,
+        *,
+        history=None,
+        controlled_tool_results=None,
+        claim_scoped_controlled_tool_results=None,
+        agent_evidence_answerability=None,
+    ):
+        del question
+        del diagnosis_value
+        del explanation_value
+        del history
+        del controlled_tool_results
+        del agent_evidence_answerability
+
+        captured[
+            "claim_scoped_controlled_tool_results"
+        ] = claim_scoped_controlled_tool_results
+
+        return copilot_result
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "answer_copilot_question"
+        ),
+        fake_answer_copilot_question,
+    )
+
+    response = client.post(
+        "/api/assistant/catalog/4/copilot",
+        json={
+            "question": (
+                "Compare volume over time "
+                "and tell me the latest volume."
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert captured[
+        "claim_scoped_controlled_tool_results"
+    ] == [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+            "permitted_evidence": [],
+            "restricted_evidence": [
+                "volume_history",
+            ],
+            "controlled_tool_results": [],
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                volume_result,
+            ],
+        },
+    ]
+
+
+def test_copilot_endpoint_keeps_legacy_evidence_when_no_claim_scope(
+    monkeypatch,
+):
+    diagnosis = _diagnosis()
+    explanation = _explanation()
+    copilot_result = _copilot_result()
+
+    captured = {
+        "controlled_tool_results": None,
+        "claim_scoped_controlled_tool_results": (
+            "not-called"
+        ),
+    }
+
+    freshness_result = {
+        "name": "get_freshness_history",
+        "read_only": True,
+        "ok": True,
+        "result": [
+            {
+                "marker": "legacy-freshness-row",
+            },
+        ],
+    }
+
+    tool_request = {
+        "name": "get_freshness_history",
+        "arguments": {
+            "catalog_id": 4,
+        },
+    }
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: _context(),
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "reason_about_platform_context"
+        ),
+        lambda value: diagnosis,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "explain_platform_diagnosis"
+        ),
+        lambda value: explanation,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "plan_controlled_tool_requests"
+        ),
+        lambda question, *,
+        trusted_version_id,
+        trusted_catalog_id: [
+            tool_request
+        ],
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "select_controlled_tool_request"
+        ),
+        lambda question, *,
+        trusted_version_id,
+        trusted_catalog_id: (
+            tool_request
+        ),
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "execute_controlled_tool"
+        ),
+        lambda name, arguments: freshness_result,
+    )
+
+    def fake_answer_copilot_question(
+        question,
+        diagnosis_value,
+        explanation_value,
+        *,
+        history=None,
+        controlled_tool_results=None,
+        claim_scoped_controlled_tool_results=None,
+        agent_evidence_answerability=None,
+    ):
+        del question
+        del diagnosis_value
+        del explanation_value
+        del history
+        del agent_evidence_answerability
+
+        captured[
+            "controlled_tool_results"
+        ] = controlled_tool_results
+
+        captured[
+            "claim_scoped_controlled_tool_results"
+        ] = claim_scoped_controlled_tool_results
+
+        return copilot_result
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "answer_copilot_question"
+        ),
+        fake_answer_copilot_question,
+    )
+
+    response = client.post(
+        "/api/assistant/catalog/4/copilot",
+        json={
+            "question": "Show freshness history.",
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert captured[
+        "controlled_tool_results"
+    ] == [
+        freshness_result,
+    ]
+
+    assert (
+        captured[
+            "claim_scoped_controlled_tool_results"
+        ]
+        is None
     )

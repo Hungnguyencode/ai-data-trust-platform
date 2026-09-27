@@ -17,6 +17,8 @@ from api.schemas.assistant_schema import (
     AssistantPlatformExplanationResponse,
 )
 from src.assistant.controlled_tools import (
+    build_claim_scoped_controlled_tool_results,
+    build_claim_scoped_evidence_assessments,
     build_controlled_evidence_answerability,
     build_controlled_evidence_coverage,
     build_controlled_evidence_sufficiency,
@@ -330,6 +332,7 @@ def ask_catalog_copilot(
         agent_evidence_coverage = None
         agent_evidence_sufficiency = None
         agent_evidence_answerability = None
+        claim_scoped_controlled_tool_results = None
 
         latest_version_id = diagnosis.get(
             "latest_version_id"
@@ -573,6 +576,34 @@ def ask_catalog_copilot(
                     )
                 )
 
+        if agent_evidence_sufficiency is not None:
+            claim_evidence_assessments = (
+                build_claim_scoped_evidence_assessments(
+                    payload.question,
+                    trusted_version_id=(
+                        latest_version_id
+                    ),
+                    trusted_catalog_id=(
+                        catalog_id
+                    ),
+                    evidence_sufficiency=(
+                        agent_evidence_sufficiency
+                    ),
+                )
+            )
+
+            if claim_evidence_assessments:
+                claim_scoped_controlled_tool_results = (
+                    build_claim_scoped_controlled_tool_results(
+                        controlled_tool_results=(
+                            controlled_tool_results
+                        ),
+                        claim_evidence_assessments=(
+                            claim_evidence_assessments
+                        ),
+                    )
+                )
+
         if controlled_tool_results:
             copilot = answer_copilot_question(
                 payload.question,
@@ -581,6 +612,9 @@ def ask_catalog_copilot(
                 history=history,
                 controlled_tool_results=(
                     controlled_tool_results
+                ),
+                claim_scoped_controlled_tool_results=(
+                    claim_scoped_controlled_tool_results
                 ),
                 agent_evidence_answerability=(
                     agent_evidence_answerability
@@ -593,6 +627,9 @@ def ask_catalog_copilot(
                 diagnosis,
                 explanation,
                 history=history,
+                claim_scoped_controlled_tool_results=(
+                    claim_scoped_controlled_tool_results
+                ),
                 agent_evidence_answerability=(
                     agent_evidence_answerability
                 ),
