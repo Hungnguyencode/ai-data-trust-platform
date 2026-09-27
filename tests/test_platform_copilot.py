@@ -2015,3 +2015,225 @@ def test_copilot_answer_empty_claim_scope_does_not_fallback_to_global_evidence()
         "global-volume-must-not-leak"
         not in observed["contents"]
     )
+
+
+def test_copilot_answer_allows_supported_claim_when_historical_claim_is_not_answerable():
+    controlled_tool_results = [
+        {
+            "name": "get_volume_history",
+            "result": [
+                {
+                    "marker": (
+                        "latest-volume-supported"
+                    ),
+                },
+            ],
+        },
+    ]
+
+    claim_scoped_results = [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+            "permitted_evidence": [],
+            "restricted_evidence": [
+                "volume_history",
+            ],
+            "controlled_tool_results": [],
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                controlled_tool_results[0],
+            ],
+        },
+    ]
+
+    legacy_answerability = {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "volume_history",
+        ],
+        "answerable_evidence": [],
+        "insufficient_evidence": [
+            "volume_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_requirements": [],
+        "answerability_status": (
+            "NOT_ANSWERABLE"
+        ),
+    }
+
+    observed = {
+        "called": False,
+        "contents": "",
+    }
+
+    class InspectPromptModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+
+            observed["called"] = True
+            observed["contents"] = contents
+
+            return SimpleNamespace(
+                text=(
+                    "The historical trend is "
+                    "unsupported, but the latest "
+                    "volume is available."
+                )
+            )
+
+    fake_client = SimpleNamespace(
+        models=InspectPromptModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "Compare volume over time "
+            "and tell me the latest volume."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=(
+            controlled_tool_results
+        ),
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+        agent_evidence_answerability=(
+            legacy_answerability
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert observed["called"] is True
+    assert result["used_llm"] is True
+
+    assert (
+        "latest-volume-supported"
+        in observed["contents"]
+    )
+
+
+def test_copilot_answer_skips_provider_when_all_claims_are_not_answerable():
+    claim_scoped_results = [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+            "permitted_evidence": [],
+            "restricted_evidence": [
+                "volume_history",
+            ],
+            "controlled_tool_results": [],
+        },
+    ]
+
+    legacy_answerability = {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "volume_history",
+        ],
+        "answerable_evidence": [],
+        "insufficient_evidence": [
+            "volume_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_requirements": [],
+        "answerability_status": (
+            "NOT_ANSWERABLE"
+        ),
+    }
+
+    class FailIfCalledModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+            del contents
+
+            raise AssertionError(
+                "LLM provider must not be called "
+                "when all claim scopes are "
+                "NOT_ANSWERABLE."
+            )
+
+    fake_client = SimpleNamespace(
+        models=FailIfCalledModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        "Compare volume over time.",
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            {
+                "name": "get_volume_history",
+                "result": [
+                    {
+                        "marker": (
+                            "insufficient-volume"
+                        ),
+                    },
+                ],
+            },
+        ],
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+        agent_evidence_answerability=(
+            legacy_answerability
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is False
+    assert result["provider"] == "deterministic"
+    assert (
+        result["fallback_reason"]
+        == "historical_comparison_not_answerable"
+    )

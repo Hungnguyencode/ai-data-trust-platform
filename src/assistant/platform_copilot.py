@@ -538,7 +538,46 @@ def answer_copilot_question(
             or ""
         ).strip().upper()
 
-    if answerability_status == "NOT_ANSWERABLE":
+    claim_scoped_mode = (
+        claim_scoped_controlled_tool_results
+        is not None
+    )
+
+    claim_scoped_has_supported_claim = False
+
+    if claim_scoped_mode:
+        for claim_scope in (
+            claim_scoped_controlled_tool_results
+            or []
+        ):
+            if not isinstance(
+                claim_scope,
+                Mapping,
+            ):
+                continue
+
+            claim_status = str(
+                claim_scope.get(
+                    "answerability_status",
+                    "",
+                )
+                or ""
+            ).strip().upper()
+
+            if claim_status in {
+                "ANSWERABLE",
+                "PARTIAL",
+            }:
+                claim_scoped_has_supported_claim = True
+                break
+
+    if (
+        answerability_status == "NOT_ANSWERABLE"
+        and not (
+            claim_scoped_mode
+            and claim_scoped_has_supported_claim
+        )
+    ):
         return {
             "catalog_id": explanation.get(
                 "catalog_id"
