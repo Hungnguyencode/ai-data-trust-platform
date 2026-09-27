@@ -20,6 +20,10 @@ from database.repositories.pipeline_run_repository import (
 from database.repositories.volume_repository import (
     get_volume_history,
 )
+from src.assistant.claim_evidence import (
+    build_claim_evidence_assessment_from_sufficiency,
+    build_claim_evidence_requirement,
+)
 from src.assistant.platform_context import (
     _json_safe,
 )
@@ -1135,175 +1139,76 @@ def build_controlled_evidence_answerability(
             ),
         }
 
-    detail_by_evidence: dict[
-        str,
-        Mapping[str, Any],
-    ] = {}
-
-    for detail in evidence_sufficiency.get(
-        "evidence_details",
-        [],
-    ) or []:
-        if not isinstance(
-            detail,
-            Mapping,
-        ):
-            continue
-
-        evidence_type = str(
-            detail.get(
-                "evidence_type",
-                "",
-            )
-            or ""
+    requirements = [
+        build_claim_evidence_requirement(
+            claim_type=(
+                "HISTORICAL_COMPARISON"
+            ),
+            evidence_type=evidence_type,
         )
+        for evidence_type in assessed_evidence
+    ]
 
-        if (
-            evidence_type
-            in historical_evidence_types
-            and evidence_type
-            not in detail_by_evidence
-        ):
-            detail_by_evidence[
-                evidence_type
-            ] = detail
-
-    answerable_evidence: list[str] = []
-    insufficient_evidence: list[str] = []
-    unavailable_evidence: list[str] = []
-    evidence_requirements: list[
-        dict[str, Any]
-    ] = []
-
-    minimum_item_count = 2
-
-    for evidence_type in assessed_evidence:
-        detail = detail_by_evidence.get(
-            evidence_type
+    claim_assessment = (
+        build_claim_evidence_assessment_from_sufficiency(
+            requirements=requirements,
+            evidence_sufficiency=(
+                evidence_sufficiency
+            ),
         )
+    )
 
-        if detail is None:
-            observed_item_count = None
-            requirement_status = (
-                "UNAVAILABLE"
-            )
-
-            unavailable_evidence.append(
-                evidence_type
-            )
-
-        else:
-            availability_status = str(
-                detail.get(
-                    "availability_status",
-                    "",
-                )
-                or ""
-            )
-
-            observed_item_count = (
-                detail.get(
-                    "item_count"
-                )
-            )
-
-            if (
-                availability_status
-                == "UNAVAILABLE"
-                or observed_item_count
-                is None
-            ):
-                requirement_status = (
-                    "UNAVAILABLE"
-                )
-
-                unavailable_evidence.append(
-                    evidence_type
-                )
-
-            elif (
-                isinstance(
-                    observed_item_count,
-                    int,
-                )
-                and not isinstance(
-                    observed_item_count,
-                    bool,
-                )
-                and observed_item_count
-                >= minimum_item_count
-            ):
-                requirement_status = (
-                    "SATISFIED"
-                )
-
-                answerable_evidence.append(
-                    evidence_type
-                )
-
-            else:
-                requirement_status = (
-                    "INSUFFICIENT_ITEMS"
-                )
-
-                insufficient_evidence.append(
-                    evidence_type
-                )
-
-        evidence_requirements.append(
-            {
-                "evidence_type": (
-                    evidence_type
-                ),
-                "minimum_item_count": (
-                    minimum_item_count
-                ),
-                "observed_item_count": (
-                    observed_item_count
-                ),
-                "requirement_status": (
-                    requirement_status
-                ),
-            }
-        )
-
-    if (
-        len(answerable_evidence)
-        == len(assessed_evidence)
-    ):
-        answerability_status = (
-            "ANSWERABLE"
-        )
-
-    elif answerable_evidence:
-        answerability_status = "PARTIAL"
-
-    else:
-        answerability_status = (
-            "NOT_ANSWERABLE"
-        )
+    evidence_requirements = [
+        {
+            "evidence_type": requirement[
+                "evidence_type"
+            ],
+            "minimum_item_count": requirement[
+                "minimum_item_count"
+            ],
+            "observed_item_count": requirement[
+                "observed_item_count"
+            ],
+            "requirement_status": requirement[
+                "requirement_status"
+            ],
+        }
+        for requirement in claim_assessment[
+            "evidence_requirements"
+        ]
+    ]
 
     return {
         "assessment_scope": (
             "HISTORICAL_COMPARISON"
         ),
-        "assessed_evidence": (
-            assessed_evidence
+        "assessed_evidence": list(
+            claim_assessment[
+                "assessed_evidence"
+            ]
         ),
-        "answerable_evidence": (
-            answerable_evidence
+        "answerable_evidence": list(
+            claim_assessment[
+                "satisfied_evidence"
+            ]
         ),
-        "insufficient_evidence": (
-            insufficient_evidence
+        "insufficient_evidence": list(
+            claim_assessment[
+                "insufficient_evidence"
+            ]
         ),
-        "unavailable_evidence": (
-            unavailable_evidence
+        "unavailable_evidence": list(
+            claim_assessment[
+                "unavailable_evidence"
+            ]
         ),
         "evidence_requirements": (
             evidence_requirements
         ),
-        "answerability_status": (
-            answerability_status
+        "answerability_status": str(
+            claim_assessment[
+                "answerability_status"
+            ]
         ),
     }
 
