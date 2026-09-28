@@ -141,3 +141,121 @@ def build_claim_response_plan(
         )
 
     return plan
+
+
+def execute_claim_response_plan(
+    *,
+    plan: list[Mapping[str, Any]],
+    answer_claim,
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+
+    for item in plan:
+        if not isinstance(item, Mapping):
+            raise ValueError(
+                "claim response plan item "
+                "must be a mapping."
+            )
+
+        claim_index = int(
+            item.get(
+                "claim_index",
+                0,
+            )
+        )
+
+        claim_text = str(
+            item.get(
+                "claim_text",
+                "",
+            )
+            or ""
+        )
+
+        claim_type = str(
+            item.get(
+                "claim_type",
+                "",
+            )
+            or ""
+        )
+
+        answerability_status = str(
+            item.get(
+                "answerability_status",
+                "",
+            )
+            or ""
+        ).strip().upper()
+
+        response_mode = str(
+            item.get(
+                "response_mode",
+                "",
+            )
+            or ""
+        ).strip().upper()
+
+        controlled_tool_results = list(
+            item.get(
+                "controlled_tool_results",
+                [],
+            )
+            or []
+        )
+
+        if response_mode == (
+            "DETERMINISTIC_LIMITATION"
+        ):
+            if controlled_tool_results:
+                raise ValueError(
+                    "unsupported claim must not "
+                    "contain controlled tool results."
+                )
+
+            results.append(
+                {
+                    "claim_index": claim_index,
+                    "claim_text": claim_text,
+                    "claim_type": claim_type,
+                    "answerability_status": (
+                        answerability_status
+                    ),
+                    "response_mode": (
+                        response_mode
+                    ),
+                    "used_llm": False,
+                    "answer": None,
+                }
+            )
+            continue
+
+        if response_mode != "LLM":
+            raise ValueError(
+                "unsupported claim "
+                "response mode: "
+                f"{response_mode!r}."
+            )
+
+        answer = answer_claim(
+            claim_text=claim_text,
+            controlled_tool_results=(
+                controlled_tool_results
+            ),
+        )
+
+        results.append(
+            {
+                "claim_index": claim_index,
+                "claim_text": claim_text,
+                "claim_type": claim_type,
+                "answerability_status": (
+                    answerability_status
+                ),
+                "response_mode": response_mode,
+                "used_llm": True,
+                "answer": answer,
+            }
+        )
+
+    return results
