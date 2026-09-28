@@ -1876,7 +1876,7 @@ def test_copilot_answer_passes_claim_scoped_evidence_to_provider():
     ]
 
     observed = {
-        "contents": "",
+        "contents": [],
     }
 
     class InspectPromptModels:
@@ -1888,13 +1888,12 @@ def test_copilot_answer_passes_claim_scoped_evidence_to_provider():
         ):
             del model
 
-            observed["contents"] = contents
+            observed["contents"].append(
+                contents
+            )
 
             return SimpleNamespace(
-                text=(
-                    "Freshness comparison is limited, "
-                    "and the latest volume is available."
-                )
+                text="Claim-local answer."
             )
 
     fake_client = SimpleNamespace(
@@ -1927,21 +1926,56 @@ def test_copilot_answer_passes_claim_scoped_evidence_to_provider():
 
     assert result["used_llm"] is True
 
+    assert len(observed["contents"]) == 2
+
+    freshness_prompt = observed[
+        "contents"
+    ][0]
+
+    volume_prompt = observed[
+        "contents"
+    ][1]
+
     assert (
-        "Claim-scoped controlled evidence"
-        in observed["contents"]
+        "Compare freshness over time"
+        in freshness_prompt
     )
     assert (
         "freshness-scoped"
-        in observed["contents"]
+        in freshness_prompt
     )
     assert (
         "volume-scoped"
-        in observed["contents"]
+        not in freshness_prompt
+    )
+    assert (
+        "tell me the latest volume."
+        not in freshness_prompt
     )
     assert (
         "pipeline-global-should-not-leak"
-        not in observed["contents"]
+        not in freshness_prompt
+    )
+
+    assert (
+        "tell me the latest volume."
+        in volume_prompt
+    )
+    assert (
+        "volume-scoped"
+        in volume_prompt
+    )
+    assert (
+        "freshness-scoped"
+        not in volume_prompt
+    )
+    assert (
+        "Compare freshness over time"
+        not in volume_prompt
+    )
+    assert (
+        "pipeline-global-should-not-leak"
+        not in volume_prompt
     )
 
 
@@ -2140,6 +2174,156 @@ def test_copilot_answer_allows_supported_claim_when_historical_claim_is_not_answ
     assert (
         "latest-volume-supported"
         in observed["contents"]
+    )
+
+
+def test_copilot_isolates_supported_claim_before_provider_call():
+    volume_result = {
+        "name": "get_volume_history",
+        "result": [
+            {
+                "marker": (
+                    "current-volume-only"
+                ),
+            },
+        ],
+    }
+
+    claim_scoped_results = [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+            "permitted_evidence": [],
+            "restricted_evidence": [
+                "volume_history",
+            ],
+            "controlled_tool_results": [],
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                volume_result,
+            ],
+        },
+    ]
+
+    legacy_answerability = {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "volume_history",
+        ],
+        "answerable_evidence": [],
+        "insufficient_evidence": [
+            "volume_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_requirements": [],
+        "answerability_status": (
+            "NOT_ANSWERABLE"
+        ),
+    }
+
+    observed = {
+        "call_count": 0,
+        "contents": "",
+    }
+
+    class InspectPromptModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+
+            observed["call_count"] += 1
+            observed["contents"] = contents
+
+            return SimpleNamespace(
+                text=(
+                    "The latest volume is "
+                    "available."
+                )
+            )
+
+    fake_client = SimpleNamespace(
+        models=InspectPromptModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "Compare volume over time "
+            "and tell me the latest volume."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            volume_result,
+        ],
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+        agent_evidence_answerability=(
+            legacy_answerability
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is True
+    assert observed["call_count"] == 1
+
+    assert (
+        "tell me the latest volume."
+        in observed["contents"]
+    )
+
+    assert (
+        "current-volume-only"
+        in observed["contents"]
+    )
+
+    assert (
+        "Compare volume over time"
+        not in observed["contents"]
+    )
+
+    assert (
+        "HISTORICAL_COMPARISON"
+        not in observed["contents"]
+    )
+
+    assert (
+        "Platform evidence is insufficient "
+        "for the requested historical "
+        "comparison."
+        in result["answer"]
+    )
+
+    assert (
+        "The latest volume is available."
+        in result["answer"]
     )
 
 
