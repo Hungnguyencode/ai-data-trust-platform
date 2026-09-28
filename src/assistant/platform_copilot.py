@@ -4,6 +4,10 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from src.assistant.claim_response import (
+    build_claim_response_plan,
+    execute_claim_response_plan,
+)
 from src.assistant.controlled_tools import (
     CONTROLLED_TOOL_EVIDENCE_TYPES,
 )
@@ -390,6 +394,47 @@ def _build_historical_comparison_limitation(
     )
 
 
+def _build_claim_local_fallback(
+    claim_text: str,
+) -> str:
+    normalized_claim = str(
+        claim_text or ""
+    ).strip().lower()
+
+    vietnamese_markers = (
+        "cho mình",
+        "cho minh",
+        "cho tôi",
+        "cho toi",
+        "mới nhất",
+        "moi nhat",
+        "hiện tại",
+        "hien tai",
+        "so sánh",
+        "so sanh",
+        "xu hướng",
+        "xu huong",
+        "theo thời gian",
+        "theo thoi gian",
+        "lịch sử",
+        "lich su",
+    )
+
+    if any(
+        marker in normalized_claim
+        for marker in vietnamese_markers
+    ):
+        return (
+            "Không thể tạo câu trả lời "
+            "có căn cứ cho yêu cầu này."
+        )
+
+    return (
+        "A grounded response could not be "
+        "generated for this claim."
+    )
+
+
 def _filter_controlled_tool_results_for_answerability(
     controlled_tool_results: list[
         Mapping[str, Any]
@@ -569,7 +614,7 @@ def answer_copilot_question(
                 "PARTIAL",
             }:
                 claim_scoped_has_supported_claim = True
-                break
+
 
     if (
         answerability_status == "NOT_ANSWERABLE"
@@ -614,6 +659,186 @@ def answer_copilot_question(
                 "historical_comparison_not_answerable"
             ),
             "error_type": None,
+        }
+
+    if (
+        claim_scoped_mode
+        and claim_scoped_has_supported_claim
+    ):
+        claim_response_plan = (
+            build_claim_response_plan(
+                question=question,
+                claim_scoped_controlled_tool_results=(
+                    claim_scoped_controlled_tool_results
+                    or []
+                ),
+            )
+        )
+
+        generation_results = []
+
+        def answer_claim(
+            *,
+            claim_text,
+            controlled_tool_results,
+        ):
+            claim_prompt = build_copilot_prompt(
+                claim_text,
+                diagnosis,
+                explanation,
+                history=history,
+                controlled_tool_results=(
+                    controlled_tool_results
+                ),
+            )
+
+            claim_result = generate_llm_text(
+                claim_prompt,
+                config=config,
+                client=client,
+            )
+
+            generation_results.append(
+                claim_result
+            )
+
+            if (
+                claim_result.used_llm
+                and claim_result.text
+            ):
+                return claim_result.text
+
+            return _build_claim_local_fallback(
+                claim_text
+            )
+
+        claim_results = (
+            execute_claim_response_plan(
+                plan=claim_response_plan,
+                answer_claim=answer_claim,
+            )
+        )
+
+        answers = []
+
+        for item in claim_results:
+            response_mode = str(
+                item.get(
+                    "response_mode",
+                    "",
+                )
+                or ""
+            ).strip().upper()
+
+            if response_mode == (
+                "DETERMINISTIC_LIMITATION"
+            ):
+                claim_type = str(
+                    item.get(
+                        "claim_type",
+                        "",
+                    )
+                    or ""
+                ).strip().upper()
+
+                if claim_type == (
+                    "HISTORICAL_COMPARISON"
+                ):
+                    answers.append(
+                        _build_historical_comparison_limitation(
+                            str(
+                                item.get(
+                                    "claim_text",
+                                    "",
+                                )
+                                or ""
+                            )
+                        )
+                    )
+
+                continue
+
+            item_answer = item.get("answer")
+
+            if item_answer:
+                answers.append(
+                    str(item_answer).strip()
+                )
+
+        answer = (
+            "\n\n".join(answers)
+            if answers
+            else str(
+                explanation["explanation"]
+            ).strip()
+        )
+
+        used_llm = any(
+            result.used_llm
+            for result in generation_results
+        )
+
+        first_generation = (
+            generation_results[0]
+            if generation_results
+            else None
+        )
+
+        return {
+            "catalog_id": explanation.get(
+                "catalog_id"
+            ),
+            "latest_version_id": explanation.get(
+                "latest_version_id"
+            ),
+            "overall_state": explanation.get(
+                "overall_state"
+            ),
+            "answer": answer,
+            "source_finding_codes": list(
+                explanation.get(
+                    "source_finding_codes",
+                    [],
+                )
+                or []
+            ),
+            "source_action_codes": list(
+                explanation.get(
+                    "source_action_codes",
+                    [],
+                )
+                or []
+            ),
+            "provider": (
+                first_generation.provider
+                if first_generation is not None
+                else "deterministic"
+            ),
+            "model": (
+                first_generation.model
+                if first_generation is not None
+                else None
+            ),
+            "used_llm": used_llm,
+            "fallback_reason": (
+                None
+                if used_llm
+                else (
+                    first_generation.fallback_reason
+                    if first_generation
+                    is not None
+                    else None
+                )
+            ),
+            "error_type": (
+                None
+                if used_llm
+                else (
+                    first_generation.error_type
+                    if first_generation is not None
+                    else None
+                )
+            ),
         }
 
     result = generate_llm_text(

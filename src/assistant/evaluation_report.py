@@ -213,6 +213,26 @@ def get_canonical_agent_evaluation_scenarios(
                 "used_llm": True,
             },
         },
+        {
+            "scenario_id": (
+                "claim_level_response_isolation"
+            ),
+            "description": (
+                "Claim-level response execution must "
+                "isolate supported claim prompts and "
+                "compose unsupported claims "
+                "deterministically."
+            ),
+            "expected": {
+                "provider_call_count": 1,
+                "supported_claim_visible": True,
+                "unsupported_claim_visible": False,
+                "supported_payload_visible": True,
+                "cross_claim_payload_visible": False,
+                "deterministic_limitation_visible": True,
+                "supported_answer_visible": True,
+            },
+        },
     ]
 
 

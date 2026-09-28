@@ -344,6 +344,7 @@ def test_canonical_evaluation_scenarios_cover_harness_v1():
         "mutation_request_boundary",
         "cross_layer_answerable",
         "mixed_claim_scoped_answerability",
+        "claim_level_response_isolation",
     ]
 
     assert len(

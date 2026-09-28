@@ -1,3 +1,4 @@
+from src.assistant import evaluation_runner
 from src.assistant.evaluation_runner import (
     run_agent_evaluation_suite,
     run_cross_layer_answerable_evaluation,
@@ -133,8 +134,8 @@ def test_agent_evaluation_suite_builds_complete_passing_report():
 
     assert report["evaluation_version"] == "v1"
     assert report["overall_status"] == "PASS"
-    assert report["scenario_count"] == 10
-    assert report["passed_count"] == 10
+    assert report["scenario_count"] == 11
+    assert report["passed_count"] == 11
     assert report["failed_count"] == 0
 
     assert [
@@ -151,6 +152,7 @@ def test_agent_evaluation_suite_builds_complete_passing_report():
         "mutation_request_boundary",
         "cross_layer_answerable",
         "mixed_claim_scoped_answerability",
+        "claim_level_response_isolation",
     ]
 
     assert all(
@@ -172,4 +174,21 @@ def test_mixed_claim_scoped_answerability_uses_real_pipeline():
         "historical_payload_count": 0,
         "current_payload_count": 1,
         "used_llm": True,
+    }
+
+
+def test_claim_level_response_isolation_uses_real_copilot_path():
+    observed = (
+        evaluation_runner
+        .run_claim_level_response_isolation_evaluation()
+    )
+
+    assert observed == {
+        "provider_call_count": 1,
+        "supported_claim_visible": True,
+        "unsupported_claim_visible": False,
+        "supported_payload_visible": True,
+        "cross_claim_payload_visible": False,
+        "deterministic_limitation_visible": True,
+        "supported_answer_visible": True,
     }

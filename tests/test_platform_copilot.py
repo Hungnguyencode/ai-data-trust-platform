@@ -1876,7 +1876,7 @@ def test_copilot_answer_passes_claim_scoped_evidence_to_provider():
     ]
 
     observed = {
-        "contents": "",
+        "contents": [],
     }
 
     class InspectPromptModels:
@@ -1888,13 +1888,12 @@ def test_copilot_answer_passes_claim_scoped_evidence_to_provider():
         ):
             del model
 
-            observed["contents"] = contents
+            observed["contents"].append(
+                contents
+            )
 
             return SimpleNamespace(
-                text=(
-                    "Freshness comparison is limited, "
-                    "and the latest volume is available."
-                )
+                text="Claim-local answer."
             )
 
     fake_client = SimpleNamespace(
@@ -1927,21 +1926,542 @@ def test_copilot_answer_passes_claim_scoped_evidence_to_provider():
 
     assert result["used_llm"] is True
 
+    assert len(observed["contents"]) == 2
+
+    freshness_prompt = observed[
+        "contents"
+    ][0]
+
+    volume_prompt = observed[
+        "contents"
+    ][1]
+
     assert (
-        "Claim-scoped controlled evidence"
-        in observed["contents"]
+        "Compare freshness over time"
+        in freshness_prompt
     )
     assert (
         "freshness-scoped"
-        in observed["contents"]
+        in freshness_prompt
     )
     assert (
         "volume-scoped"
-        in observed["contents"]
+        not in freshness_prompt
+    )
+    assert (
+        "tell me the latest volume."
+        not in freshness_prompt
     )
     assert (
         "pipeline-global-should-not-leak"
-        not in observed["contents"]
+        not in freshness_prompt
+    )
+
+    assert (
+        "tell me the latest volume."
+        in volume_prompt
+    )
+    assert (
+        "volume-scoped"
+        in volume_prompt
+    )
+    assert (
+        "freshness-scoped"
+        not in volume_prompt
+    )
+    assert (
+        "Compare freshness over time"
+        not in volume_prompt
+    )
+    assert (
+        "pipeline-global-should-not-leak"
+        not in volume_prompt
+    )
+
+
+def test_copilot_uses_claim_local_fallback_when_one_supported_claim_provider_fails():
+    freshness_result = {
+        "name": "get_freshness_history",
+        "result": [
+            {
+                "marker": (
+                    "freshness-claim-only"
+                ),
+            },
+        ],
+    }
+
+    volume_result = {
+        "name": "get_volume_history",
+        "result": [
+            {
+                "marker": (
+                    "volume-claim-only"
+                ),
+            },
+        ],
+    }
+
+    claim_scoped_results = [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "PARTIAL"
+            ),
+            "permitted_evidence": [
+                "freshness_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                freshness_result,
+            ],
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                volume_result,
+            ],
+        },
+    ]
+
+    observed = {
+        "contents": [],
+    }
+
+    class MixedOutcomeModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+
+            observed["contents"].append(
+                contents
+            )
+
+            if (
+                "tell me the latest volume."
+                in contents
+            ):
+                raise RuntimeError(
+                    "provider failed"
+                )
+
+            return SimpleNamespace(
+                text=(
+                    "Freshness comparison "
+                    "is available."
+                )
+            )
+
+    fake_client = SimpleNamespace(
+        models=MixedOutcomeModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "Compare freshness over time "
+            "and tell me the latest volume."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            freshness_result,
+            volume_result,
+        ],
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert len(observed["contents"]) == 2
+    assert result["used_llm"] is True
+
+    assert (
+        "Freshness comparison is available."
+        in result["answer"]
+    )
+
+    assert (
+        "A grounded response could not be "
+        "generated for this claim."
+        in result["answer"]
+    )
+
+    assert (
+        _explanation()["explanation"]
+        not in result["answer"]
+    )
+
+
+def test_copilot_continues_after_earlier_claim_provider_failure():
+    freshness_result = {
+        "name": "get_freshness_history",
+        "result": [
+            {
+                "marker": (
+                    "freshness-claim-only"
+                ),
+            },
+        ],
+    }
+
+    volume_result = {
+        "name": "get_volume_history",
+        "result": [
+            {
+                "marker": (
+                    "volume-claim-only"
+                ),
+            },
+        ],
+    }
+
+    claim_scoped_results = [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "PARTIAL"
+            ),
+            "permitted_evidence": [
+                "freshness_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                freshness_result,
+            ],
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                volume_result,
+            ],
+        },
+    ]
+
+    observed = {
+        "contents": [],
+    }
+
+    class MixedOutcomeModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+
+            observed["contents"].append(
+                contents
+            )
+
+            if (
+                "Compare freshness over time"
+                in contents
+            ):
+                raise RuntimeError(
+                    "provider failed"
+                )
+
+            return SimpleNamespace(
+                text=(
+                    "The latest volume is "
+                    "available."
+                )
+            )
+
+    fake_client = SimpleNamespace(
+        models=MixedOutcomeModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "Compare freshness over time "
+            "and tell me the latest volume."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            freshness_result,
+            volume_result,
+        ],
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert len(observed["contents"]) == 2
+    assert result["used_llm"] is True
+
+    assert (
+        "A grounded response could not be "
+        "generated for this claim."
+        in result["answer"]
+    )
+
+    assert (
+        "The latest volume is available."
+        in result["answer"]
+    )
+
+    assert result["fallback_reason"] is None
+    assert result["error_type"] is None
+
+
+def test_copilot_reports_provider_failure_when_all_supported_claims_fail():
+    freshness_result = {
+        "name": "get_freshness_history",
+        "result": [
+            {
+                "marker": (
+                    "freshness-claim-only"
+                ),
+            },
+        ],
+    }
+
+    volume_result = {
+        "name": "get_volume_history",
+        "result": [
+            {
+                "marker": (
+                    "volume-claim-only"
+                ),
+            },
+        ],
+    }
+
+    claim_scoped_results = [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "PARTIAL"
+            ),
+            "permitted_evidence": [
+                "freshness_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                freshness_result,
+            ],
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                volume_result,
+            ],
+        },
+    ]
+
+    observed = {
+        "call_count": 0,
+    }
+
+    class FailAllModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+            del contents
+
+            observed["call_count"] += 1
+
+            raise RuntimeError(
+                "provider failed"
+            )
+
+    fake_client = SimpleNamespace(
+        models=FailAllModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "Compare freshness over time "
+            "and tell me the latest volume."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            freshness_result,
+            volume_result,
+        ],
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert observed["call_count"] == 2
+
+    assert result["used_llm"] is False
+    assert result["provider"] == "gemini"
+    assert (
+        result["fallback_reason"]
+        == "provider_error"
+    )
+    assert (
+        result["error_type"]
+        == "RuntimeError"
+    )
+
+    assert (
+        result["answer"].count(
+            "A grounded response could not be "
+            "generated for this claim."
+        )
+        == 2
+    )
+
+    assert (
+        _explanation()["explanation"]
+        not in result["answer"]
+    )
+
+
+def test_copilot_uses_vietnamese_claim_local_fallback_on_provider_failure():
+    volume_result = {
+        "name": "get_volume_history",
+        "result": [
+            {
+                "marker": (
+                    "volume-claim-only"
+                ),
+            },
+        ],
+    }
+
+    claim_scoped_results = [
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                volume_result,
+            ],
+        },
+    ]
+
+    class FailModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+            del contents
+
+            raise RuntimeError(
+                "provider failed"
+            )
+
+    fake_client = SimpleNamespace(
+        models=FailModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        "Cho mình biết volume mới nhất.",
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            volume_result,
+        ],
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is False
+
+    assert (
+        result["fallback_reason"]
+        == "provider_error"
+    )
+
+    assert (
+        result["error_type"]
+        == "RuntimeError"
+    )
+
+    assert (
+        result["answer"]
+        == (
+            "Không thể tạo câu trả lời "
+            "có căn cứ cho yêu cầu này."
+        )
     )
 
 
@@ -2140,6 +2660,317 @@ def test_copilot_answer_allows_supported_claim_when_historical_claim_is_not_answ
     assert (
         "latest-volume-supported"
         in observed["contents"]
+    )
+
+
+def test_copilot_isolates_supported_claim_before_provider_call():
+    volume_result = {
+        "name": "get_volume_history",
+        "result": [
+            {
+                "marker": (
+                    "current-volume-only"
+                ),
+            },
+        ],
+    }
+
+    claim_scoped_results = [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+            "permitted_evidence": [],
+            "restricted_evidence": [
+                "volume_history",
+            ],
+            "controlled_tool_results": [],
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                volume_result,
+            ],
+        },
+    ]
+
+    legacy_answerability = {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "volume_history",
+        ],
+        "answerable_evidence": [],
+        "insufficient_evidence": [
+            "volume_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_requirements": [],
+        "answerability_status": (
+            "NOT_ANSWERABLE"
+        ),
+    }
+
+    observed = {
+        "call_count": 0,
+        "contents": "",
+    }
+
+    class InspectPromptModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+
+            observed["call_count"] += 1
+            observed["contents"] = contents
+
+            return SimpleNamespace(
+                text=(
+                    "The latest volume is "
+                    "available."
+                )
+            )
+
+    fake_client = SimpleNamespace(
+        models=InspectPromptModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "Compare volume over time "
+            "and tell me the latest volume."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            volume_result,
+        ],
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+        agent_evidence_answerability=(
+            legacy_answerability
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is True
+    assert observed["call_count"] == 1
+
+    assert (
+        "tell me the latest volume."
+        in observed["contents"]
+    )
+
+    assert (
+        "current-volume-only"
+        in observed["contents"]
+    )
+
+    assert (
+        "Compare volume over time"
+        not in observed["contents"]
+    )
+
+    assert (
+        "HISTORICAL_COMPARISON"
+        not in observed["contents"]
+    )
+
+    assert (
+        "Platform evidence is insufficient "
+        "for the requested historical "
+        "comparison."
+        in result["answer"]
+    )
+
+    assert (
+        "The latest volume is available."
+        in result["answer"]
+    )
+
+
+def test_copilot_composes_unsupported_claim_with_supported_claim_provider_failure():
+    volume_result = {
+        "name": "get_volume_history",
+        "result": [
+            {
+                "marker": (
+                    "current-volume-only"
+                ),
+            },
+        ],
+    }
+
+    claim_scoped_results = [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+            "permitted_evidence": [],
+            "restricted_evidence": [
+                "volume_history",
+            ],
+            "controlled_tool_results": [],
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                volume_result,
+            ],
+        },
+    ]
+
+    legacy_answerability = {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "volume_history",
+        ],
+        "answerable_evidence": [],
+        "insufficient_evidence": [
+            "volume_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_requirements": [],
+        "answerability_status": (
+            "NOT_ANSWERABLE"
+        ),
+    }
+
+    observed = {
+        "call_count": 0,
+        "contents": "",
+    }
+
+    class FailSupportedClaimModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+
+            observed["call_count"] += 1
+            observed["contents"] = contents
+
+            raise RuntimeError(
+                "provider failed"
+            )
+
+    fake_client = SimpleNamespace(
+        models=FailSupportedClaimModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "Compare volume over time "
+            "and tell me the latest volume."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            volume_result,
+        ],
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+        agent_evidence_answerability=(
+            legacy_answerability
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert observed["call_count"] == 1
+
+    assert (
+        "tell me the latest volume."
+        in observed["contents"]
+    )
+    assert (
+        "current-volume-only"
+        in observed["contents"]
+    )
+    assert (
+        "Compare volume over time"
+        not in observed["contents"]
+    )
+
+    assert result["used_llm"] is False
+    assert result["provider"] == "gemini"
+    assert (
+        result["fallback_reason"]
+        == "provider_error"
+    )
+    assert (
+        result["error_type"]
+        == "RuntimeError"
+    )
+
+    historical_limitation = (
+        "Platform evidence is insufficient "
+        "for the requested historical "
+        "comparison."
+    )
+
+    claim_fallback = (
+        "A grounded response could not be "
+        "generated for this claim."
+    )
+
+    assert historical_limitation in result["answer"]
+    assert claim_fallback in result["answer"]
+
+    assert (
+        result["answer"].index(
+            historical_limitation
+        )
+        < result["answer"].index(
+            claim_fallback
+        )
     )
 
 
