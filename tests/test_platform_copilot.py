@@ -2247,6 +2247,136 @@ def test_copilot_continues_after_earlier_claim_provider_failure():
     assert result["error_type"] is None
 
 
+def test_copilot_reports_provider_failure_when_all_supported_claims_fail():
+    freshness_result = {
+        "name": "get_freshness_history",
+        "result": [
+            {
+                "marker": (
+                    "freshness-claim-only"
+                ),
+            },
+        ],
+    }
+
+    volume_result = {
+        "name": "get_volume_history",
+        "result": [
+            {
+                "marker": (
+                    "volume-claim-only"
+                ),
+            },
+        ],
+    }
+
+    claim_scoped_results = [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "PARTIAL"
+            ),
+            "permitted_evidence": [
+                "freshness_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                freshness_result,
+            ],
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                volume_result,
+            ],
+        },
+    ]
+
+    observed = {
+        "call_count": 0,
+    }
+
+    class FailAllModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+            del contents
+
+            observed["call_count"] += 1
+
+            raise RuntimeError(
+                "provider failed"
+            )
+
+    fake_client = SimpleNamespace(
+        models=FailAllModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "Compare freshness over time "
+            "and tell me the latest volume."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            freshness_result,
+            volume_result,
+        ],
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert observed["call_count"] == 2
+
+    assert result["used_llm"] is False
+    assert result["provider"] == "gemini"
+    assert (
+        result["fallback_reason"]
+        == "provider_error"
+    )
+    assert (
+        result["error_type"]
+        == "RuntimeError"
+    )
+
+    assert (
+        result["answer"].count(
+            "A grounded response could not be "
+            "generated for this claim."
+        )
+        == 2
+    )
+
+    assert (
+        _explanation()["explanation"]
+        not in result["answer"]
+    )
+
+
 def test_copilot_answer_empty_claim_scope_does_not_fallback_to_global_evidence():
     controlled_tool_results = [
         {
