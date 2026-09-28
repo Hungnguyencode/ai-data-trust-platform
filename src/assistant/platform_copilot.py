@@ -394,6 +394,47 @@ def _build_historical_comparison_limitation(
     )
 
 
+def _build_claim_local_fallback(
+    claim_text: str,
+) -> str:
+    normalized_claim = str(
+        claim_text or ""
+    ).strip().lower()
+
+    vietnamese_markers = (
+        "cho mình",
+        "cho minh",
+        "cho tôi",
+        "cho toi",
+        "mới nhất",
+        "moi nhat",
+        "hiện tại",
+        "hien tai",
+        "so sánh",
+        "so sanh",
+        "xu hướng",
+        "xu huong",
+        "theo thời gian",
+        "theo thoi gian",
+        "lịch sử",
+        "lich su",
+    )
+
+    if any(
+        marker in normalized_claim
+        for marker in vietnamese_markers
+    ):
+        return (
+            "Không thể tạo câu trả lời "
+            "có căn cứ cho yêu cầu này."
+        )
+
+    return (
+        "A grounded response could not be "
+        "generated for this claim."
+    )
+
+
 def _filter_controlled_tool_results_for_answerability(
     controlled_tool_results: list[
         Mapping[str, Any]
@@ -667,9 +708,8 @@ def answer_copilot_question(
             ):
                 return claim_result.text
 
-            return (
-                "A grounded response could not be "
-                "generated for this claim."
+            return _build_claim_local_fallback(
+                claim_text
             )
 
         claim_results = (

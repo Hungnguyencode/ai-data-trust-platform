@@ -2377,6 +2377,94 @@ def test_copilot_reports_provider_failure_when_all_supported_claims_fail():
     )
 
 
+def test_copilot_uses_vietnamese_claim_local_fallback_on_provider_failure():
+    volume_result = {
+        "name": "get_volume_history",
+        "result": [
+            {
+                "marker": (
+                    "volume-claim-only"
+                ),
+            },
+        ],
+    }
+
+    claim_scoped_results = [
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                volume_result,
+            ],
+        },
+    ]
+
+    class FailModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+            del contents
+
+            raise RuntimeError(
+                "provider failed"
+            )
+
+    fake_client = SimpleNamespace(
+        models=FailModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        "Cho mình biết volume mới nhất.",
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            volume_result,
+        ],
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert result["used_llm"] is False
+
+    assert (
+        result["fallback_reason"]
+        == "provider_error"
+    )
+
+    assert (
+        result["error_type"]
+        == "RuntimeError"
+    )
+
+    assert (
+        result["answer"]
+        == (
+            "Không thể tạo câu trả lời "
+            "có căn cứ cho yêu cầu này."
+        )
+    )
+
+
 def test_copilot_answer_empty_claim_scope_does_not_fallback_to_global_evidence():
     controlled_tool_results = [
         {
