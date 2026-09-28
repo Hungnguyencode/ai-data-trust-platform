@@ -2813,6 +2813,167 @@ def test_copilot_isolates_supported_claim_before_provider_call():
     )
 
 
+def test_copilot_composes_unsupported_claim_with_supported_claim_provider_failure():
+    volume_result = {
+        "name": "get_volume_history",
+        "result": [
+            {
+                "marker": (
+                    "current-volume-only"
+                ),
+            },
+        ],
+    }
+
+    claim_scoped_results = [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+            "permitted_evidence": [],
+            "restricted_evidence": [
+                "volume_history",
+            ],
+            "controlled_tool_results": [],
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "permitted_evidence": [
+                "volume_history",
+            ],
+            "restricted_evidence": [],
+            "controlled_tool_results": [
+                volume_result,
+            ],
+        },
+    ]
+
+    legacy_answerability = {
+        "assessment_scope": (
+            "HISTORICAL_COMPARISON"
+        ),
+        "assessed_evidence": [
+            "volume_history",
+        ],
+        "answerable_evidence": [],
+        "insufficient_evidence": [
+            "volume_history",
+        ],
+        "unavailable_evidence": [],
+        "evidence_requirements": [],
+        "answerability_status": (
+            "NOT_ANSWERABLE"
+        ),
+    }
+
+    observed = {
+        "call_count": 0,
+        "contents": "",
+    }
+
+    class FailSupportedClaimModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+
+            observed["call_count"] += 1
+            observed["contents"] = contents
+
+            raise RuntimeError(
+                "provider failed"
+            )
+
+    fake_client = SimpleNamespace(
+        models=FailSupportedClaimModels()
+    )
+
+    config = LLMProviderConfig(
+        provider="gemini",
+        model="gemini-test-model",
+        api_key="fake-key",
+        timeout_seconds=30.0,
+    )
+
+    result = answer_copilot_question(
+        (
+            "Compare volume over time "
+            "and tell me the latest volume."
+        ),
+        _diagnosis(),
+        _explanation(),
+        controlled_tool_results=[
+            volume_result,
+        ],
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_results
+        ),
+        agent_evidence_answerability=(
+            legacy_answerability
+        ),
+        config=config,
+        client=fake_client,
+    )
+
+    assert observed["call_count"] == 1
+
+    assert (
+        "tell me the latest volume."
+        in observed["contents"]
+    )
+    assert (
+        "current-volume-only"
+        in observed["contents"]
+    )
+    assert (
+        "Compare volume over time"
+        not in observed["contents"]
+    )
+
+    assert result["used_llm"] is False
+    assert result["provider"] == "gemini"
+    assert (
+        result["fallback_reason"]
+        == "provider_error"
+    )
+    assert (
+        result["error_type"]
+        == "RuntimeError"
+    )
+
+    historical_limitation = (
+        "Platform evidence is insufficient "
+        "for the requested historical "
+        "comparison."
+    )
+
+    claim_fallback = (
+        "A grounded response could not be "
+        "generated for this claim."
+    )
+
+    assert historical_limitation in result["answer"]
+    assert claim_fallback in result["answer"]
+
+    assert (
+        result["answer"].index(
+            historical_limitation
+        )
+        < result["answer"].index(
+            claim_fallback
+        )
+    )
+
+
 def test_copilot_answer_skips_provider_when_all_claims_are_not_answerable():
     claim_scoped_results = [
         {
