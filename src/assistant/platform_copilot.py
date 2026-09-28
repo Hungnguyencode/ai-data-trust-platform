@@ -661,17 +661,15 @@ def answer_copilot_question(
                 claim_result
             )
 
-            deterministic_text = str(
-                explanation["explanation"]
-            ).strip()
+            if (
+                claim_result.used_llm
+                and claim_result.text
+            ):
+                return claim_result.text
 
             return (
-                claim_result.text
-                if (
-                    claim_result.used_llm
-                    and claim_result.text
-                )
-                else deterministic_text
+                "A grounded response could not be "
+                "generated for this claim."
             )
 
         claim_results = (
@@ -793,9 +791,13 @@ def answer_copilot_question(
                 )
             ),
             "error_type": (
-                first_generation.error_type
-                if first_generation is not None
-                else None
+                None
+                if used_llm
+                else (
+                    first_generation.error_type
+                    if first_generation is not None
+                    else None
+                )
             ),
         }
 
