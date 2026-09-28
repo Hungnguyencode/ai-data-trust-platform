@@ -1071,6 +1071,169 @@ def run_mixed_claim_scoped_answerability_evaluation(
     }
 
 
+def run_claim_level_response_isolation_evaluation(
+) -> dict[str, Any]:
+    question = (
+        "Compare volume over time "
+        "and tell me the latest volume."
+    )
+
+    volume_result = {
+        "name": "get_volume_history",
+        "read_only": True,
+        "ok": True,
+        "result": [
+            {
+                "marker": (
+                    "supported-volume-only"
+                ),
+            },
+        ],
+    }
+
+    unrelated_result = {
+        "name": "get_pipeline_run_history",
+        "read_only": True,
+        "ok": True,
+        "result": [
+            {
+                "marker": (
+                    "cross-claim-payload-"
+                    "must-not-leak"
+                ),
+            },
+        ],
+    }
+
+    controlled_tool_results = [
+        volume_result,
+        unrelated_result,
+    ]
+
+    (
+        evidence_sufficiency,
+        evidence_answerability,
+    ) = _build_evidence_assessment(
+        question=question,
+        requested_evidence=[
+            "volume_history",
+        ],
+        controlled_tool_results=(
+            controlled_tool_results
+        ),
+    )
+
+    claim_evidence_assessments = (
+        controlled_tools
+        .build_claim_scoped_evidence_assessments(
+            question,
+            trusted_version_id=7,
+            trusted_catalog_id=1,
+            evidence_sufficiency=(
+                evidence_sufficiency
+            ),
+        )
+    )
+
+    claim_scoped_controlled_tool_results = (
+        controlled_tools
+        .build_claim_scoped_controlled_tool_results(
+            controlled_tool_results=(
+                controlled_tool_results
+            ),
+            claim_evidence_assessments=(
+                claim_evidence_assessments
+            ),
+        )
+    )
+
+    provider_observation = {
+        "call_count": 0,
+        "contents": "",
+    }
+
+    class InspectPromptModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+
+            provider_observation[
+                "call_count"
+            ] += 1
+
+            provider_observation[
+                "contents"
+            ] = contents
+
+            return SimpleNamespace(
+                text=(
+                    "The latest volume is "
+                    "available."
+                )
+            )
+
+    result = _run_copilot_evaluation(
+        question=question,
+        controlled_tool_results=(
+            controlled_tool_results
+        ),
+        evidence_answerability=(
+            evidence_answerability
+        ),
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_controlled_tool_results
+        ),
+        models=InspectPromptModels(),
+    )
+
+    prompt = str(
+        provider_observation["contents"]
+    )
+
+    answer = str(
+        result["answer"]
+    )
+
+    return {
+        "provider_call_count": (
+            provider_observation[
+                "call_count"
+            ]
+        ),
+        "supported_claim_visible": (
+            "tell me the latest volume."
+            in prompt
+        ),
+        "unsupported_claim_visible": (
+            "Compare volume over time"
+            in prompt
+        ),
+        "supported_payload_visible": (
+            "supported-volume-only"
+            in prompt
+        ),
+        "cross_claim_payload_visible": (
+            "cross-claim-payload-"
+            "must-not-leak"
+            in prompt
+        ),
+        "deterministic_limitation_visible": (
+            "Platform evidence is insufficient "
+            "for the requested historical "
+            "comparison."
+            in answer
+        ),
+        "supported_answer_visible": (
+            "The latest volume is available."
+            in answer
+        ),
+    }
+
+
 def run_agent_evaluation_suite(
 ) -> dict[str, Any]:
     observed_results = {
@@ -1103,6 +1266,9 @@ def run_agent_evaluation_suite(
         ),
         "mixed_claim_scoped_answerability": (
             run_mixed_claim_scoped_answerability_evaluation()
+        ),
+        "claim_level_response_isolation": (
+            run_claim_level_response_isolation_evaluation()
         ),
     }
 
