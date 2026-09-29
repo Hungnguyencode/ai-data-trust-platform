@@ -37,11 +37,15 @@ def split_claim_segments(
         rf"|;\s*(?="
         rf"{_ANY_CLAIM_STARTER_PATTERN}"
         rf")"
-        r"|\bthen\b"
+        rf"|\bthen\s+(?="
+        rf"{_ANY_CLAIM_STARTER_PATTERN}"
+        rf")"
         rf"|\bvà\s+(?="
         rf"{_VIETNAMESE_CLAIM_STARTER_PATTERN}"
         rf")"
-        r"|\brồi\b"
+        rf"|\brồi\s+(?="
+        rf"{_ANY_CLAIM_STARTER_PATTERN}"
+        rf")"
     )
 
     segments = re.split(
