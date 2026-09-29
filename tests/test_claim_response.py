@@ -98,6 +98,59 @@ def test_build_claim_response_plan_preserves_mixed_claim_identity():
     ]
 
 
+def test_build_claim_response_plan_splits_three_semicolon_claims():
+    plan = build_claim_response_plan(
+        question=(
+            "Compare volume over time; "
+            "tell me the latest volume; "
+            "show me the latest freshness."
+        ),
+        claim_scoped_controlled_tool_results=[
+            {
+                "claim_type": (
+                    "HISTORICAL_COMPARISON"
+                ),
+                "answerability_status": (
+                    "NOT_ANSWERABLE"
+                ),
+                "controlled_tool_results": [],
+            },
+            {
+                "claim_type": "CURRENT_STATE",
+                "answerability_status": (
+                    "ANSWERABLE"
+                ),
+                "controlled_tool_results": [],
+            },
+            {
+                "claim_type": "CURRENT_STATE",
+                "answerability_status": (
+                    "ANSWERABLE"
+                ),
+                "controlled_tool_results": [],
+            },
+        ],
+    )
+
+    assert [
+        item["claim_text"]
+        for item in plan
+    ] == [
+        "Compare volume over time",
+        "tell me the latest volume",
+        "show me the latest freshness.",
+    ]
+
+    assert [
+        item["claim_index"]
+        for item in plan
+    ] == [
+        0,
+        1,
+        2,
+    ]
+
+
 def test_build_claim_response_plan_rejects_non_mapping_claim_scope():
     with pytest.raises(
         ValueError,
@@ -392,4 +445,129 @@ def test_execute_claim_response_plan_preserves_generation_provenance():
                 "Latest volume is available."
             ),
         },
+    ]
+
+
+def test_build_claim_response_plan_removes_separator_punctuation():
+    plan = build_claim_response_plan(
+        question=(
+            "Compare volume over time, "
+            "then tell me the latest volume."
+        ),
+        claim_scoped_controlled_tool_results=[
+            {
+                "claim_type": (
+                    "HISTORICAL_COMPARISON"
+                ),
+                "answerability_status": (
+                    "NOT_ANSWERABLE"
+                ),
+                "controlled_tool_results": [],
+            },
+            {
+                "claim_type": "CURRENT_STATE",
+                "answerability_status": (
+                    "ANSWERABLE"
+                ),
+                "controlled_tool_results": [],
+            },
+        ],
+    )
+
+    assert [
+        item["claim_text"]
+        for item in plan
+    ] == [
+        "Compare volume over time",
+        "tell me the latest volume.",
+    ]
+
+
+def test_build_claim_response_plan_keeps_internal_semicolon_in_same_claim():
+    plan = build_claim_response_plan(
+        question=(
+            "Tell me the latest volume; "
+            "include its status."
+        ),
+        claim_scoped_controlled_tool_results=[
+            {
+                "claim_type": "CURRENT_STATE",
+                "answerability_status": (
+                    "ANSWERABLE"
+                ),
+                "controlled_tool_results": [],
+            },
+        ],
+    )
+
+    assert len(plan) == 1
+    assert plan[0]["claim_text"] == (
+        "Tell me the latest volume; "
+        "include its status."
+    )
+
+
+def test_build_claim_response_plan_splits_and_explain_claim():
+    plan = build_claim_response_plan(
+        question=(
+            "Tell me the latest volume "
+            "and explain whether it is healthy."
+        ),
+        claim_scoped_controlled_tool_results=[
+            {
+                "claim_type": "CURRENT_STATE",
+                "answerability_status": (
+                    "ANSWERABLE"
+                ),
+                "controlled_tool_results": [],
+            },
+            {
+                "claim_type": "CURRENT_STATE",
+                "answerability_status": (
+                    "ANSWERABLE"
+                ),
+                "controlled_tool_results": [],
+            },
+        ],
+    )
+
+    assert [
+        item["claim_text"]
+        for item in plan
+    ] == [
+        "Tell me the latest volume",
+        "explain whether it is healthy.",
+    ]
+
+
+def test_build_claim_response_plan_splits_semicolon_explain_claim():
+    plan = build_claim_response_plan(
+        question=(
+            "Tell me the latest volume; "
+            "explain whether it is healthy."
+        ),
+        claim_scoped_controlled_tool_results=[
+            {
+                "claim_type": "CURRENT_STATE",
+                "answerability_status": (
+                    "ANSWERABLE"
+                ),
+                "controlled_tool_results": [],
+            },
+            {
+                "claim_type": "CURRENT_STATE",
+                "answerability_status": (
+                    "ANSWERABLE"
+                ),
+                "controlled_tool_results": [],
+            },
+        ],
+    )
+
+    assert [
+        item["claim_text"]
+        for item in plan
+    ] == [
+        "Tell me the latest volume",
+        "explain whether it is healthy.",
     ]

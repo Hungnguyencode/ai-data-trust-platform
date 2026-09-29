@@ -4,32 +4,62 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+_ENGLISH_CLAIM_STARTER_PATTERN = (
+    r"(?:"
+    r"tell me\b|"
+    r"show me\b|"
+    r"explain\b|"
+    r"what(?:'s| is)\b"
+    r")"
+)
+
+_VIETNAMESE_CLAIM_STARTER_PATTERN = (
+    r"(?:"
+    r"cho tôi biết\b|"
+    r"cho mình biết\b"
+    r")"
+)
+
+_ANY_CLAIM_STARTER_PATTERN = (
+    rf"(?:"
+    rf"{_ENGLISH_CLAIM_STARTER_PATTERN}|"
+    rf"{_VIETNAMESE_CLAIM_STARTER_PATTERN}"
+    rf")"
+)
+
 
 def _split_claim_response_segments(
     question: str,
 ) -> list[str]:
+    separator_pattern = (
+        rf"\band\s+(?="
+        rf"{_ENGLISH_CLAIM_STARTER_PATTERN}"
+        rf")"
+        rf"|;\s*(?="
+        rf"{_ANY_CLAIM_STARTER_PATTERN}"
+        rf")"
+        r"|\bthen\b"
+        rf"|\bvà\s+(?="
+        rf"{_VIETNAMESE_CLAIM_STARTER_PATTERN}"
+        rf")"
+        r"|\brồi\b"
+    )
+
     segments = re.split(
-        (
-            r"\band\s+(?="
-            r"tell me\b|"
-            r"show me\b|"
-            r"what(?:'s| is)\b"
-            r")"
-            r"|\bthen\b"
-            r"|\bvà\s+(?="
-            r"cho tôi biết\b|"
-            r"cho mình biết\b"
-            r")"
-            r"|\brồi\b"
-        ),
+        separator_pattern,
         question,
         flags=re.IGNORECASE,
     )
 
-    return [
-        segment.strip()
+    normalized_segments = [
+        segment.strip().rstrip(",").strip()
         for segment in segments
-        if segment.strip()
+    ]
+
+    return [
+        segment
+        for segment in normalized_segments
+        if segment
     ]
 
 
