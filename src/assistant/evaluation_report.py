@@ -231,6 +231,14 @@ def get_canonical_agent_evaluation_scenarios(
                 "cross_claim_payload_visible": False,
                 "deterministic_limitation_visible": True,
                 "supported_answer_visible": True,
+                "provenance_claim_count": 2,
+                "unsupported_provenance_tool_count": 0,
+                "supported_provenance_tool_names": [
+                    "get_volume_history",
+                ],
+                "supported_provenance_provider": "gemini",
+                "supported_provenance_used_llm": True,
+                "raw_evidence_payload_exposed": False,
             },
         },
     ]

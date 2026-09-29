@@ -1198,6 +1198,35 @@ def run_claim_level_response_isolation_evaluation(
         result["answer"]
     )
 
+    provenance = list(
+        result.get(
+            "claim_response_provenance",
+            [],
+        )
+        or []
+    )
+
+    unsupported_provenance = (
+        provenance[0]
+        if len(provenance) > 0
+        else {}
+    )
+
+    supported_provenance = (
+        provenance[1]
+        if len(provenance) > 1
+        else {}
+    )
+
+    raw_evidence_payload_exposed = any(
+        (
+            "controlled_tool_results" in item
+            or "result" in item
+        )
+        for item in provenance
+        if isinstance(item, dict)
+    )
+
     return {
         "provider_call_count": (
             provider_observation[
@@ -1230,6 +1259,39 @@ def run_claim_level_response_isolation_evaluation(
         "supported_answer_visible": (
             "The latest volume is available."
             in answer
+        ),
+        "provenance_claim_count": len(
+            provenance
+        ),
+        "unsupported_provenance_tool_count": len(
+            list(
+                unsupported_provenance.get(
+                    "evidence_tool_names",
+                    [],
+                )
+                or []
+            )
+        ),
+        "supported_provenance_tool_names": list(
+            supported_provenance.get(
+                "evidence_tool_names",
+                [],
+            )
+            or []
+        ),
+        "supported_provenance_provider": (
+            supported_provenance.get(
+                "provider"
+            )
+        ),
+        "supported_provenance_used_llm": bool(
+            supported_provenance.get(
+                "used_llm",
+                False,
+            )
+        ),
+        "raw_evidence_payload_exposed": (
+            raw_evidence_payload_exposed
         ),
     }
 
