@@ -2246,6 +2246,56 @@ def test_copilot_continues_after_earlier_claim_provider_failure():
     assert result["fallback_reason"] is None
     assert result["error_type"] is None
 
+    assert result[
+        "claim_response_provenance"
+    ] == [
+        {
+            "claim_index": 0,
+            "claim_text": (
+                "Compare freshness over time"
+            ),
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": "PARTIAL",
+            "response_mode": "LLM",
+            "evidence_tool_names": [
+                "get_freshness_history",
+            ],
+            "provider": "gemini",
+            "model": "gemini-test-model",
+            "used_llm": False,
+            "fallback_reason": "provider_error",
+            "error_type": "RuntimeError",
+            "answer": (
+                "A grounded response could not be "
+                "generated for this claim."
+            ),
+        },
+        {
+            "claim_index": 1,
+            "claim_text": (
+                "tell me the latest volume."
+            ),
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "response_mode": "LLM",
+            "evidence_tool_names": [
+                "get_volume_history",
+            ],
+            "provider": "gemini",
+            "model": "gemini-test-model",
+            "used_llm": True,
+            "fallback_reason": None,
+            "error_type": None,
+            "answer": (
+                "The latest volume is available."
+            ),
+        },
+    ]
+
 
 def test_copilot_reports_provider_failure_when_all_supported_claims_fail():
     freshness_result = {
@@ -2811,6 +2861,51 @@ def test_copilot_isolates_supported_claim_before_provider_call():
         "The latest volume is available."
         in result["answer"]
     )
+
+    assert result[
+        "claim_response_provenance"
+    ] == [
+        {
+            "claim_index": 0,
+            "claim_text": (
+                "Compare volume over time"
+            ),
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+            "response_mode": (
+                "DETERMINISTIC_LIMITATION"
+            ),
+            "evidence_tool_names": [],
+            "used_llm": False,
+            "answer": None,
+        },
+        {
+            "claim_index": 1,
+            "claim_text": (
+                "tell me the latest volume."
+            ),
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "response_mode": "LLM",
+            "evidence_tool_names": [
+                "get_volume_history",
+            ],
+            "provider": "gemini",
+            "model": "gemini-test-model",
+            "used_llm": True,
+            "fallback_reason": None,
+            "error_type": None,
+            "answer": (
+                "The latest volume is available."
+            ),
+        },
+    ]
 
 
 def test_copilot_composes_unsupported_claim_with_supported_claim_provider_failure():

@@ -313,3 +313,83 @@ def test_execute_claim_response_plan_rejects_evidence_for_unsupported_claim():
             ],
             answer_claim=fail_if_called,
         )
+
+
+def test_execute_claim_response_plan_preserves_generation_provenance():
+    volume_result = {
+        "name": "get_volume_history",
+        "read_only": True,
+        "ok": True,
+        "result": [
+            {
+                "marker": "latest-volume-row",
+            },
+        ],
+    }
+
+    def fake_answer_claim(
+        *,
+        claim_text,
+        controlled_tool_results,
+    ):
+        assert claim_text == (
+            "tell me the latest volume."
+        )
+
+        assert controlled_tool_results == [
+            volume_result,
+        ]
+
+        return {
+            "answer": "Latest volume is available.",
+            "provider": "gemini",
+            "model": "gemini-test-model",
+            "used_llm": True,
+            "fallback_reason": None,
+            "error_type": None,
+        }
+
+    results = execute_claim_response_plan(
+        plan=[
+            {
+                "claim_index": 0,
+                "claim_text": (
+                    "tell me the latest volume."
+                ),
+                "claim_type": "CURRENT_STATE",
+                "answerability_status": (
+                    "ANSWERABLE"
+                ),
+                "response_mode": "LLM",
+                "controlled_tool_results": [
+                    volume_result,
+                ],
+            },
+        ],
+        answer_claim=fake_answer_claim,
+    )
+
+    assert results == [
+        {
+            "claim_index": 0,
+            "claim_text": (
+                "tell me the latest volume."
+            ),
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "response_mode": "LLM",
+            "evidence_tool_names": [
+                "get_volume_history",
+            ],
+            "provider": "gemini",
+            "model": "gemini-test-model",
+            "used_llm": True,
+            "fallback_reason": None,
+            "error_type": None,
+            "answer": (
+                "Latest volume is available."
+            ),
+        },
+    ]

@@ -702,15 +702,27 @@ def answer_copilot_question(
                 claim_result
             )
 
-            if (
-                claim_result.used_llm
-                and claim_result.text
-            ):
-                return claim_result.text
-
-            return _build_claim_local_fallback(
-                claim_text
+            claim_answer = (
+                claim_result.text
+                if (
+                    claim_result.used_llm
+                    and claim_result.text
+                )
+                else _build_claim_local_fallback(
+                    claim_text
+                )
             )
+
+            return {
+                "answer": claim_answer,
+                "provider": claim_result.provider,
+                "model": claim_result.model,
+                "used_llm": claim_result.used_llm,
+                "fallback_reason": (
+                    claim_result.fallback_reason
+                ),
+                "error_type": claim_result.error_type,
+            }
 
         claim_results = (
             execute_claim_response_plan(
@@ -795,6 +807,9 @@ def answer_copilot_question(
                 "overall_state"
             ),
             "answer": answer,
+            "claim_response_provenance": (
+                claim_results
+            ),
             "source_finding_codes": list(
                 explanation.get(
                     "source_finding_codes",

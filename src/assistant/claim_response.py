@@ -249,12 +249,52 @@ def execute_claim_response_plan(
                 f"{response_mode!r}."
             )
 
-        answer = answer_claim(
+        claim_output = answer_claim(
             claim_text=claim_text,
             controlled_tool_results=(
                 controlled_tool_results
             ),
         )
+
+        if isinstance(claim_output, Mapping):
+            results.append(
+                {
+                    "claim_index": claim_index,
+                    "claim_text": claim_text,
+                    "claim_type": claim_type,
+                    "answerability_status": (
+                        answerability_status
+                    ),
+                    "response_mode": response_mode,
+                    "evidence_tool_names": (
+                        evidence_tool_names
+                    ),
+                    "provider": claim_output.get(
+                        "provider"
+                    ),
+                    "model": claim_output.get(
+                        "model"
+                    ),
+                    "used_llm": bool(
+                        claim_output.get(
+                            "used_llm",
+                            False,
+                        )
+                    ),
+                    "fallback_reason": (
+                        claim_output.get(
+                            "fallback_reason"
+                        )
+                    ),
+                    "error_type": claim_output.get(
+                        "error_type"
+                    ),
+                    "answer": claim_output.get(
+                        "answer"
+                    ),
+                }
+            )
+            continue
 
         results.append(
             {
@@ -269,7 +309,7 @@ def execute_claim_response_plan(
                     evidence_tool_names
                 ),
                 "used_llm": True,
-                "answer": answer,
+                "answer": claim_output,
             }
         )
 
