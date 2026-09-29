@@ -1,7 +1,6 @@
 ﻿from __future__ import annotations
 
 import json
-import re
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -20,6 +19,9 @@ from database.repositories.pipeline_run_repository import (
 )
 from database.repositories.volume_repository import (
     get_volume_history,
+)
+from src.assistant.claim_decomposition import (
+    split_claim_segments,
 )
 from src.assistant.claim_evidence import (
     build_claim_evidence_assessment_from_sufficiency,
@@ -767,34 +769,6 @@ def plan_controlled_evidence_requirements(
     return evidence
 
 
-def _split_claim_scoped_segments(
-    question: str,
-) -> list[str]:
-    segments = re.split(
-        (
-            r"\band\s+(?="
-            r"tell me\b|"
-            r"show me\b|"
-            r"what(?:'s| is)\b"
-            r")"
-            r"|\bthen\b"
-            r"|\bvà\s+(?="
-            r"cho tôi biết\b|"
-            r"cho mình biết\b"
-            r")"
-            r"|\brồi\b"
-        ),
-        question,
-        flags=re.IGNORECASE,
-    )
-
-    return [
-        segment.strip()
-        for segment in segments
-        if segment.strip()
-    ]
-
-
 def plan_claim_scoped_evidence_requirements(
     question: str,
     *,
@@ -817,7 +791,7 @@ def plan_claim_scoped_evidence_requirements(
         tuple[str, str]
     ] = set()
 
-    for segment in _split_claim_scoped_segments(
+    for segment in split_claim_segments(
         question
     ):
         requested_evidence = (

@@ -1,36 +1,11 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
 from typing import Any
 
-
-def _split_claim_response_segments(
-    question: str,
-) -> list[str]:
-    segments = re.split(
-        (
-            r"\band\s+(?="
-            r"tell me\b|"
-            r"show me\b|"
-            r"what(?:'s| is)\b"
-            r")"
-            r"|\bthen\b"
-            r"|\bvà\s+(?="
-            r"cho tôi biết\b|"
-            r"cho mình biết\b"
-            r")"
-            r"|\brồi\b"
-        ),
-        question,
-        flags=re.IGNORECASE,
-    )
-
-    return [
-        segment.strip()
-        for segment in segments
-        if segment.strip()
-    ]
+from src.assistant.claim_decomposition import (
+    split_claim_segments,
+)
 
 
 def build_claim_response_plan(
@@ -48,7 +23,7 @@ def build_claim_response_plan(
     if not question.strip():
         return []
 
-    segments = _split_claim_response_segments(
+    segments = split_claim_segments(
         question
     )
 

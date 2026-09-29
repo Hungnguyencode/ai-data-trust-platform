@@ -3700,6 +3700,37 @@ def test_claim_scoped_evidence_requirements_associate_claims_to_domains():
     ]
 
 
+def test_claim_scoped_evidence_requirements_support_semicolon_claim_boundaries():
+    requirements = (
+        controlled_tools
+        .plan_claim_scoped_evidence_requirements(
+            (
+                "Compare freshness over time; "
+                "tell me the latest volume."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert requirements == [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "evidence_type": (
+                "freshness_history"
+            ),
+            "minimum_item_count": 2,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "volume_history",
+            "minimum_item_count": 1,
+        },
+    ]
+
+
 def test_claim_scoped_evidence_requirements_keep_multi_domain_historical_claim():
     requirements = (
         controlled_tools
