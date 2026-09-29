@@ -1,6 +1,6 @@
 from typing import Any, Dict, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AssistantAskRequest(BaseModel):
@@ -374,6 +374,43 @@ class AssistantAgentEvidenceAnswerabilityResponse(
     ]
 
 
+class AssistantClaimResponseProvenanceResponse(
+    BaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid"
+    )
+
+    claim_index: int
+    claim_text: str
+    claim_type: str
+
+    answerability_status: Literal[
+        "ANSWERABLE",
+        "PARTIAL",
+        "NOT_ANSWERABLE",
+        "NOT_APPLICABLE",
+    ]
+
+    response_mode: Literal[
+        "LLM",
+        "DETERMINISTIC_LIMITATION",
+    ]
+
+    evidence_tool_names: list[str] = Field(
+        default_factory=list
+    )
+
+    provider: str | None = None
+    model: str | None = None
+    used_llm: bool
+
+    fallback_reason: str | None = None
+    error_type: str | None = None
+
+    answer: str | None = None
+
+
 class AssistantCopilotResponse(BaseModel):
     catalog_id: int
     grounded: bool = True
@@ -383,6 +420,12 @@ class AssistantCopilotResponse(BaseModel):
     overall_state: str
 
     answer: str
+
+    claim_response_provenance: list[
+        AssistantClaimResponseProvenanceResponse
+    ] = Field(
+        default_factory=list
+    )
 
     source_finding_codes: list[str] = Field(
         default_factory=list

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from api.main import app
 from api.schemas.assistant_schema import (
@@ -97,6 +99,31 @@ def _copilot_result() -> dict:
             "Remediate the validation "
             "failure first."
         ),
+        "claim_response_provenance": [
+            {
+                "claim_index": 0,
+                "claim_text": (
+                    "What should I fix first?"
+                ),
+                "claim_type": "CURRENT_STATE",
+                "answerability_status": (
+                    "ANSWERABLE"
+                ),
+                "response_mode": "LLM",
+                "evidence_tool_names": [
+                    "get_validation_history",
+                ],
+                "provider": "gemini",
+                "model": "gemini-test-model",
+                "used_llm": True,
+                "fallback_reason": None,
+                "error_type": None,
+                "answer": (
+                    "Remediate the validation "
+                    "failure first."
+                ),
+            },
+        ],
         "source_finding_codes": [
             "VALIDATION_REJECTED",
         ],
@@ -242,6 +269,12 @@ def test_copilot_endpoint_returns_grounded_answer(
     )
 
     assert body["used_llm"] is True
+
+    assert body[
+        "claim_response_provenance"
+    ] == copilot_result[
+        "claim_response_provenance"
+    ]
 
     assert body[
         "source_finding_codes"
@@ -2855,6 +2888,55 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
     ] == captured[
         "agent_evidence_sufficiency"
     ]
+
+
+def test_claim_response_provenance_rejects_raw_evidence_payload():
+    with pytest.raises(ValidationError):
+        AssistantCopilotResponse(
+            catalog_id=4,
+            latest_version_id=6,
+            overall_state="HEALTHY",
+            answer="Grounded answer.",
+            provider="gemini",
+            model="gemini-test-model",
+            used_llm=True,
+            claim_response_provenance=[
+                {
+                    "claim_index": 0,
+                    "claim_text": (
+                        "Tell me the latest volume."
+                    ),
+                    "claim_type": "CURRENT_STATE",
+                    "answerability_status": (
+                        "ANSWERABLE"
+                    ),
+                    "response_mode": "LLM",
+                    "evidence_tool_names": [
+                        "get_volume_history",
+                    ],
+                    "provider": "gemini",
+                    "model": "gemini-test-model",
+                    "used_llm": True,
+                    "fallback_reason": None,
+                    "error_type": None,
+                    "answer": (
+                        "The latest volume is available."
+                    ),
+                    "controlled_tool_results": [
+                        {
+                            "name": "get_volume_history",
+                            "result": [
+                                {
+                                    "secret_marker": (
+                                        "must-not-leak"
+                                    ),
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        )
 
 
 def test_copilot_response_exposes_agent_evidence_answerability():
