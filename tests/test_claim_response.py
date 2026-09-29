@@ -232,6 +232,7 @@ def test_execute_claim_response_plan_calls_llm_only_for_supported_claim():
             "response_mode": (
                 "DETERMINISTIC_LIMITATION"
             ),
+            "evidence_tool_names": [],
             "used_llm": False,
             "answer": None,
         },
@@ -245,6 +246,9 @@ def test_execute_claim_response_plan_calls_llm_only_for_supported_claim():
                 "ANSWERABLE"
             ),
             "response_mode": "LLM",
+            "evidence_tool_names": [
+                "get_volume_history",
+            ],
             "used_llm": True,
             "answer": (
                 "Latest volume is available."

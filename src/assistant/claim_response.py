@@ -204,6 +204,15 @@ def execute_claim_response_plan(
             or []
         )
 
+        evidence_tool_names = [
+            str(result.get("name")).strip()
+            for result in controlled_tool_results
+            if (
+                isinstance(result, Mapping)
+                and result.get("name")
+            )
+        ]
+
         if response_mode == (
             "DETERMINISTIC_LIMITATION"
         ):
@@ -223,6 +232,9 @@ def execute_claim_response_plan(
                     ),
                     "response_mode": (
                         response_mode
+                    ),
+                    "evidence_tool_names": (
+                        evidence_tool_names
                     ),
                     "used_llm": False,
                     "answer": None,
@@ -253,6 +265,9 @@ def execute_claim_response_plan(
                     answerability_status
                 ),
                 "response_mode": response_mode,
+                "evidence_tool_names": (
+                    evidence_tool_names
+                ),
                 "used_llm": True,
                 "answer": answer,
             }
