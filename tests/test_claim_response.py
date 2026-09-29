@@ -571,3 +571,56 @@ def test_build_claim_response_plan_splits_semicolon_explain_claim():
         "Tell me the latest volume",
         "explain whether it is healthy.",
     ]
+
+
+def test_build_claim_response_plan_splits_three_mixed_connector_claims():
+    plan = build_claim_response_plan(
+        question=(
+            "Tell me the latest volume; "
+            "show me the latest freshness "
+            "and compare recent pipeline runs."
+        ),
+        claim_scoped_controlled_tool_results=[
+            {
+                "claim_type": "CURRENT_STATE",
+                "answerability_status": (
+                    "ANSWERABLE"
+                ),
+                "controlled_tool_results": [],
+            },
+            {
+                "claim_type": "CURRENT_STATE",
+                "answerability_status": (
+                    "ANSWERABLE"
+                ),
+                "controlled_tool_results": [],
+            },
+            {
+                "claim_type": (
+                    "HISTORICAL_COMPARISON"
+                ),
+                "answerability_status": (
+                    "NOT_ANSWERABLE"
+                ),
+                "controlled_tool_results": [],
+            },
+        ],
+    )
+
+    assert [
+        item["claim_text"]
+        for item in plan
+    ] == [
+        "Tell me the latest volume",
+        "show me the latest freshness",
+        "compare recent pipeline runs.",
+    ]
+
+    assert [
+        item["claim_index"]
+        for item in plan
+    ] == [
+        0,
+        1,
+        2,
+    ]
