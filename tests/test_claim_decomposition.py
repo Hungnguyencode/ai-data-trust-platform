@@ -51,3 +51,28 @@ def test_split_claim_segments_splits_roi_before_known_claim_starter():
         "So sánh volume theo thời gian",
         "cho mình biết volume mới nhất.",
     ]
+
+
+def test_split_claim_segments_splits_period_before_known_claim_starter():
+    assert split_claim_segments(
+        (
+            "Compare volume over time. "
+            "Tell me the latest volume."
+        )
+    ) == [
+        "Compare volume over time",
+        "Tell me the latest volume.",
+    ]
+
+
+def test_split_claim_segments_keeps_period_without_known_starter():
+    question = (
+        "Explain whether volume is healthy. "
+        "Use the current threshold."
+    )
+
+    assert split_claim_segments(
+        question
+    ) == [
+        question,
+    ]
