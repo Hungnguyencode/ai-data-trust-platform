@@ -207,6 +207,75 @@ def build_agent_evidence_answerability_items(
     ]
 
 
+def build_claim_response_provenance_items(
+    claim_response_provenance: Any,
+) -> list[Dict[str, Any]]:
+    if not isinstance(
+        claim_response_provenance,
+        list,
+    ):
+        return []
+
+    items: list[Dict[str, Any]] = []
+
+    for provenance in claim_response_provenance:
+        if not isinstance(
+            provenance,
+            dict,
+        ):
+            continue
+
+        evidence_tool_names = provenance.get(
+            "evidence_tool_names",
+            [],
+        )
+
+        if not isinstance(
+            evidence_tool_names,
+            list,
+        ):
+            evidence_tool_names = []
+
+        items.append(
+            {
+                "claim_index": provenance.get(
+                    "claim_index"
+                ),
+                "claim_text": provenance.get(
+                    "claim_text"
+                ),
+                "claim_type": provenance.get(
+                    "claim_type"
+                ),
+                "answerability_status": (
+                    provenance.get(
+                        "answerability_status"
+                    )
+                ),
+                "response_mode": provenance.get(
+                    "response_mode"
+                ),
+                "evidence_tool_names": list(
+                    evidence_tool_names
+                ),
+                "provider": provenance.get(
+                    "provider"
+                ),
+                "model": provenance.get(
+                    "model"
+                ),
+                "used_llm": bool(
+                    provenance.get(
+                        "used_llm",
+                        False,
+                    )
+                ),
+            }
+        )
+
+    return items
+
+
 def build_copilot_backend_result(
     data: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -270,6 +339,13 @@ def build_copilot_backend_result(
         "tool_execution_trace": list(
             data.get(
                 "tool_execution_trace",
+                [],
+            )
+            or []
+        ),
+        "claim_response_provenance": list(
+            data.get(
+                "claim_response_provenance",
                 [],
             )
             or []
@@ -351,6 +427,14 @@ def build_copilot_chat_message(
                     [],
                 )
                 or []
+            ),
+            "claim_response_provenance": (
+                build_claim_response_provenance_items(
+                    backend_result.get(
+                        "claim_response_provenance",
+                        [],
+                    )
+                )
             ),
             "agent_run_summary": (
                 backend_result.get(

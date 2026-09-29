@@ -654,6 +654,126 @@ def render_chat_message(
             f"{grounding_label}"
         )
 
+        claim_response_provenance = (
+            copilot_meta.get(
+                "claim_response_provenance",
+                [],
+            )
+            or []
+        )
+
+        if claim_response_provenance:
+            with st.expander(
+                "Claim evidence & provenance",
+                expanded=False,
+            ):
+                st.caption(
+                    "Claim-level answerability, evidence "
+                    "sources, and generation metadata."
+                )
+
+                for position, provenance in enumerate(
+                    claim_response_provenance,
+                    start=1,
+                ):
+                    if not isinstance(
+                        provenance,
+                        dict,
+                    ):
+                        continue
+
+                    claim_text = str(
+                        provenance.get(
+                            "claim_text"
+                        )
+                        or "Unknown claim"
+                    )
+
+                    answerability_status = str(
+                        provenance.get(
+                            "answerability_status"
+                        )
+                        or "UNKNOWN"
+                    )
+
+                    response_mode = str(
+                        provenance.get(
+                            "response_mode"
+                        )
+                        or "UNKNOWN"
+                    )
+
+                    evidence_tool_names = (
+                        provenance.get(
+                            "evidence_tool_names",
+                            [],
+                        )
+                        or []
+                    )
+
+                    evidence_label = (
+                        ", ".join(
+                            str(tool_name)
+                            for tool_name in evidence_tool_names
+                        )
+                        if evidence_tool_names
+                        else "None"
+                    )
+
+                    st.markdown(
+                        f"**Claim {position}:** "
+                        f"{claim_text}"
+                    )
+
+                    st.write(
+                        "**Answerability:**",
+                        answerability_status,
+                    )
+
+                    st.write(
+                        "**Response mode:**",
+                        response_mode,
+                    )
+
+                    st.write(
+                        "**Evidence tools:**",
+                        evidence_label,
+                    )
+
+                    used_claim_llm = bool(
+                        provenance.get(
+                            "used_llm",
+                            False,
+                        )
+                    )
+
+                    if used_claim_llm:
+                        st.write(
+                            "**Provider:**",
+                            provenance.get(
+                                "provider"
+                            )
+                            or "unknown",
+                        )
+
+                        st.write(
+                            "**Model:**",
+                            provenance.get(
+                                "model"
+                            )
+                            or "N/A",
+                        )
+                    else:
+                        st.write(
+                            "**Generation:**",
+                            "Deterministic",
+                        )
+
+                    if position < len(
+                        claim_response_provenance
+                    ):
+                        st.divider()
+
         with st.expander(
             "Evidence & provider details",
             expanded=False,

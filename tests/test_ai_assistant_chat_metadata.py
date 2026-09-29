@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.services import assistant_chat
 from app.services.assistant_chat import (
     build_agent_evidence_answerability_items,
     build_agent_evidence_coverage_items,
@@ -622,3 +623,296 @@ def test_build_agent_evidence_answerability_items_ignores_missing_answerability(
     assert build_agent_evidence_answerability_items(
         None
     ) == []
+
+
+def test_build_copilot_backend_result_preserves_claim_response_provenance():
+    claim_response_provenance = [
+        {
+            "claim_index": 0,
+            "claim_text": (
+                "Tell me the latest volume."
+            ),
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "response_mode": "LLM",
+            "evidence_tool_names": [
+                "get_volume_history"
+            ],
+            "provider": "gemini",
+            "model": "gemini-test-model",
+            "used_llm": True,
+            "fallback_reason": None,
+            "error_type": None,
+            "answer": (
+                "The latest volume is available."
+            ),
+        },
+    ]
+
+    result = build_copilot_backend_result(
+        {
+            "catalog_id": 4,
+            "latest_version_id": 6,
+            "overall_state": "HEALTHY",
+            "answer": (
+                "The latest volume is available."
+            ),
+            "grounded": True,
+            "provider": "gemini",
+            "model": "gemini-test-model",
+            "used_llm": True,
+            "fallback_reason": None,
+            "error_type": None,
+            "source_finding_codes": [],
+            "source_action_codes": [],
+            "tool_execution_trace": [],
+            "claim_response_provenance": (
+                claim_response_provenance
+            ),
+        }
+    )
+
+    assert result[
+        "claim_response_provenance"
+    ] == claim_response_provenance
+
+
+def test_build_copilot_chat_message_preserves_safe_claim_response_provenance():
+    claim_response_provenance = [
+        {
+            "claim_index": 0,
+            "claim_text": (
+                "Tell me the latest volume."
+            ),
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "response_mode": "LLM",
+            "evidence_tool_names": [
+                "get_volume_history"
+            ],
+            "provider": "gemini",
+            "model": "gemini-test-model",
+            "used_llm": True,
+            "fallback_reason": None,
+            "error_type": None,
+            "answer": (
+                "The latest volume is available."
+            ),
+        },
+    ]
+
+    message = build_copilot_chat_message(
+        "The latest volume is available.",
+        {
+            "ok": True,
+            "source": "FastAPI Copilot",
+            "catalog_id": 4,
+            "latest_version_id": 6,
+            "overall_state": "HEALTHY",
+            "grounded": True,
+            "provider": "gemini",
+            "model": "gemini-test-model",
+            "used_llm": True,
+            "fallback_reason": None,
+            "error_type": None,
+            "source_finding_codes": [],
+            "source_action_codes": [],
+            "tool_execution_trace": [],
+            "claim_response_provenance": (
+                claim_response_provenance
+            ),
+        },
+    )
+
+    assert message[
+        "copilot_meta"
+    ][
+        "claim_response_provenance"
+    ] == [
+        {
+            "claim_index": 0,
+            "claim_text": (
+                "Tell me the latest volume."
+            ),
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "response_mode": "LLM",
+            "evidence_tool_names": [
+                "get_volume_history"
+            ],
+            "provider": "gemini",
+            "model": "gemini-test-model",
+            "used_llm": True,
+        },
+    ]
+
+
+def test_build_claim_response_provenance_items_exposes_safe_fields_only():
+    items = (
+        assistant_chat
+        .build_claim_response_provenance_items(
+            [
+                {
+                    "claim_index": 0,
+                    "claim_text": (
+                        "Tell me the latest volume."
+                    ),
+                    "claim_type": "CURRENT_STATE",
+                    "answerability_status": (
+                        "ANSWERABLE"
+                    ),
+                    "response_mode": "LLM",
+                    "evidence_tool_names": [
+                        "get_volume_history"
+                    ],
+                    "provider": "gemini",
+                    "model": "gemini-test-model",
+                    "used_llm": True,
+                    "fallback_reason": None,
+                    "error_type": None,
+                    "answer": (
+                        "The latest volume is available."
+                    ),
+                    "controlled_tool_results": [
+                        {
+                            "raw": "must not reach UI"
+                        }
+                    ],
+                },
+            ]
+        )
+    )
+
+    assert items == [
+        {
+            "claim_index": 0,
+            "claim_text": (
+                "Tell me the latest volume."
+            ),
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "response_mode": "LLM",
+            "evidence_tool_names": [
+                "get_volume_history"
+            ],
+            "provider": "gemini",
+            "model": "gemini-test-model",
+            "used_llm": True,
+        },
+    ]
+
+
+def test_build_claim_response_provenance_items_rejects_invalid_tool_names_shape():
+    items = (
+        assistant_chat
+        .build_claim_response_provenance_items(
+            [
+                {
+                    "claim_index": 0,
+                    "claim_text": (
+                        "Tell me the latest volume."
+                    ),
+                    "claim_type": "CURRENT_STATE",
+                    "answerability_status": (
+                        "ANSWERABLE"
+                    ),
+                    "response_mode": "LLM",
+                    "evidence_tool_names": (
+                        "get_volume_history"
+                    ),
+                    "provider": "gemini",
+                    "model": "gemini-test-model",
+                    "used_llm": True,
+                },
+            ]
+        )
+    )
+
+    assert items[0][
+        "evidence_tool_names"
+    ] == []
+
+
+def test_build_copilot_chat_message_sanitizes_claim_response_provenance():
+    message = build_copilot_chat_message(
+        "Grounded answer.",
+        {
+            "ok": True,
+            "source": "FastAPI Copilot",
+            "catalog_id": 4,
+            "latest_version_id": 6,
+            "overall_state": "HEALTHY",
+            "grounded": True,
+            "provider": "gemini",
+            "model": "gemini-test-model",
+            "used_llm": True,
+            "fallback_reason": None,
+            "error_type": None,
+            "source_finding_codes": [],
+            "source_action_codes": [],
+            "tool_execution_trace": [],
+            "claim_response_provenance": [
+                {
+                    "claim_index": 0,
+                    "claim_text": (
+                        "Tell me the latest volume."
+                    ),
+                    "claim_type": "CURRENT_STATE",
+                    "answerability_status": (
+                        "ANSWERABLE"
+                    ),
+                    "response_mode": "LLM",
+                    "evidence_tool_names": [
+                        "get_volume_history"
+                    ],
+                    "provider": "gemini",
+                    "model": "gemini-test-model",
+                    "used_llm": True,
+                    "controlled_tool_results": [
+                        {
+                            "raw": "must not reach UI"
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    provenance = message[
+        "copilot_meta"
+    ][
+        "claim_response_provenance"
+    ]
+
+    assert provenance == [
+        {
+            "claim_index": 0,
+            "claim_text": (
+                "Tell me the latest volume."
+            ),
+            "claim_type": "CURRENT_STATE",
+            "answerability_status": (
+                "ANSWERABLE"
+            ),
+            "response_mode": "LLM",
+            "evidence_tool_names": [
+                "get_volume_history"
+            ],
+            "provider": "gemini",
+            "model": "gemini-test-model",
+            "used_llm": True,
+        }
+    ]
+
+    assert (
+        "controlled_tool_results"
+        not in provenance[0]
+    )
