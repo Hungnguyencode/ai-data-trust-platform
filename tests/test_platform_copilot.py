@@ -3163,3 +3163,26 @@ def test_copilot_answer_skips_provider_when_all_claims_are_not_answerable():
         result["fallback_reason"]
         == "historical_comparison_not_answerable"
     )
+
+    assert result[
+        "claim_response_provenance"
+    ] == [
+        {
+            "claim_index": 0,
+            "claim_text": (
+                "Compare volume over time."
+            ),
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+            "response_mode": (
+                "DETERMINISTIC_LIMITATION"
+            ),
+            "evidence_tool_names": [],
+            "used_llm": False,
+            "answer": None,
+        },
+    ]
