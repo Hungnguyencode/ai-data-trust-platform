@@ -198,5 +198,29 @@ def test_claim_level_response_isolation_uses_real_copilot_path():
         ],
         "supported_provenance_provider": "gemini",
         "supported_provenance_used_llm": True,
+        "unsupported_provenance_evidence_requirements": [
+            {
+                "evidence_type": (
+                    "volume_history"
+                ),
+                "minimum_item_count": 2,
+                "observed_item_count": 1,
+                "requirement_status": (
+                    "INSUFFICIENT_ITEMS"
+                ),
+            },
+        ],
+        "supported_provenance_evidence_requirements": [
+            {
+                "evidence_type": (
+                    "volume_history"
+                ),
+                "minimum_item_count": 1,
+                "observed_item_count": 1,
+                "requirement_status": (
+                    "SATISFIED"
+                ),
+            },
+        ],
         "raw_evidence_payload_exposed": False,
     }

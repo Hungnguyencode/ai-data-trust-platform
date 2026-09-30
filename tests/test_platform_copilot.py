@@ -2262,6 +2262,7 @@ def test_copilot_continues_after_earlier_claim_provider_failure():
             "evidence_tool_names": [
                 "get_freshness_history",
             ],
+            "evidence_requirements": [],
             "provider": "gemini",
             "model": "gemini-test-model",
             "used_llm": False,
@@ -2285,6 +2286,7 @@ def test_copilot_continues_after_earlier_claim_provider_failure():
             "evidence_tool_names": [
                 "get_volume_history",
             ],
+            "evidence_requirements": [],
             "provider": "gemini",
             "model": "gemini-test-model",
             "used_llm": True,
@@ -2880,6 +2882,7 @@ def test_copilot_isolates_supported_claim_before_provider_call():
                 "DETERMINISTIC_LIMITATION"
             ),
             "evidence_tool_names": [],
+            "evidence_requirements": [],
             "used_llm": False,
             "answer": None,
         },
@@ -2896,6 +2899,7 @@ def test_copilot_isolates_supported_claim_before_provider_call():
             "evidence_tool_names": [
                 "get_volume_history",
             ],
+            "evidence_requirements": [],
             "provider": "gemini",
             "model": "gemini-test-model",
             "used_llm": True,
@@ -3182,6 +3186,7 @@ def test_copilot_answer_skips_provider_when_all_claims_are_not_answerable():
                 "DETERMINISTIC_LIMITATION"
             ),
             "evidence_tool_names": [],
+            "evidence_requirements": [],
             "used_llm": False,
             "answer": None,
         },

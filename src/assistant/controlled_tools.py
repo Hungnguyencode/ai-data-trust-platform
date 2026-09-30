@@ -2205,6 +2205,56 @@ def build_claim_scoped_controlled_tool_results(
                 tool_result
             )
 
+        evidence_requirements: list[
+            dict[str, Any]
+        ] = []
+
+        raw_evidence_requirements = (
+            assessment.get(
+                "evidence_requirements",
+                [],
+            )
+            or []
+        )
+
+        if isinstance(
+            raw_evidence_requirements,
+            list,
+        ):
+            for requirement in (
+                raw_evidence_requirements
+            ):
+                if not isinstance(
+                    requirement,
+                    Mapping,
+                ):
+                    continue
+
+                evidence_requirements.append(
+                    {
+                        "evidence_type": (
+                            requirement.get(
+                                "evidence_type"
+                            )
+                        ),
+                        "minimum_item_count": (
+                            requirement.get(
+                                "minimum_item_count"
+                            )
+                        ),
+                        "observed_item_count": (
+                            requirement.get(
+                                "observed_item_count"
+                            )
+                        ),
+                        "requirement_status": (
+                            requirement.get(
+                                "requirement_status"
+                            )
+                        ),
+                    }
+                )
+
         scoped_results.append(
             {
                 "claim_type": claim_type,
@@ -2219,6 +2269,9 @@ def build_claim_scoped_controlled_tool_results(
                 ),
                 "controlled_tool_results": (
                     permitted_tool_results
+                ),
+                "evidence_requirements": (
+                    evidence_requirements
                 ),
             }
         )

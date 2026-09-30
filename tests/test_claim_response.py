@@ -68,6 +68,7 @@ def test_build_claim_response_plan_preserves_mixed_claim_identity():
             "response_mode": (
                 "DETERMINISTIC_LIMITATION"
             ),
+            "evidence_requirements": [],
             "controlled_tool_results": [],
         },
         {
@@ -80,6 +81,7 @@ def test_build_claim_response_plan_preserves_mixed_claim_identity():
                 "ANSWERABLE"
             ),
             "response_mode": "LLM",
+            "evidence_requirements": [],
             "controlled_tool_results": [
                 {
                     "name": "get_volume_history",
@@ -94,6 +96,50 @@ def test_build_claim_response_plan_preserves_mixed_claim_identity():
                     ],
                 },
             ],
+        },
+    ]
+
+
+def test_build_claim_response_plan_preserves_safe_evidence_requirements():
+    plan = build_claim_response_plan(
+        question=(
+            "Compare volume over time."
+        ),
+        claim_scoped_controlled_tool_results=[
+            {
+                "claim_type": (
+                    "HISTORICAL_COMPARISON"
+                ),
+                "answerability_status": (
+                    "NOT_ANSWERABLE"
+                ),
+                "evidence_requirements": [
+                    {
+                        "evidence_type": (
+                            "volume_history"
+                        ),
+                        "minimum_item_count": 2,
+                        "observed_item_count": 1,
+                        "requirement_status": (
+                            "INSUFFICIENT_ITEMS"
+                        ),
+                    },
+                ],
+                "controlled_tool_results": [],
+            },
+        ],
+    )
+
+    assert plan[0][
+        "evidence_requirements"
+    ] == [
+        {
+            "evidence_type": "volume_history",
+            "minimum_item_count": 2,
+            "observed_item_count": 1,
+            "requirement_status": (
+                "INSUFFICIENT_ITEMS"
+            ),
         },
     ]
 
@@ -286,6 +332,7 @@ def test_execute_claim_response_plan_calls_llm_only_for_supported_claim():
                 "DETERMINISTIC_LIMITATION"
             ),
             "evidence_tool_names": [],
+            "evidence_requirements": [],
             "used_llm": False,
             "answer": None,
         },
@@ -302,9 +349,71 @@ def test_execute_claim_response_plan_calls_llm_only_for_supported_claim():
             "evidence_tool_names": [
                 "get_volume_history",
             ],
+            "evidence_requirements": [],
             "used_llm": True,
             "answer": (
                 "Latest volume is available."
+            ),
+        },
+    ]
+
+
+def test_execute_claim_response_plan_preserves_safe_evidence_requirements_for_blocked_claim():
+    def fail_if_called(
+        *,
+        claim_text,
+        controlled_tool_results,
+    ):
+        del claim_text
+        del controlled_tool_results
+
+        raise AssertionError(
+            "LLM must not be called."
+        )
+
+    results = execute_claim_response_plan(
+        plan=[
+            {
+                "claim_index": 0,
+                "claim_text": (
+                    "Compare volume over time"
+                ),
+                "claim_type": (
+                    "HISTORICAL_COMPARISON"
+                ),
+                "answerability_status": (
+                    "NOT_ANSWERABLE"
+                ),
+                "response_mode": (
+                    "DETERMINISTIC_LIMITATION"
+                ),
+                "evidence_requirements": [
+                    {
+                        "evidence_type": (
+                            "volume_history"
+                        ),
+                        "minimum_item_count": 2,
+                        "observed_item_count": 1,
+                        "requirement_status": (
+                            "INSUFFICIENT_ITEMS"
+                        ),
+                    },
+                ],
+                "controlled_tool_results": [],
+            },
+        ],
+        answer_claim=fail_if_called,
+    )
+
+    assert results[0][
+        "evidence_requirements"
+    ] == [
+        {
+            "evidence_type": "volume_history",
+            "minimum_item_count": 2,
+            "observed_item_count": 1,
+            "requirement_status": (
+                "INSUFFICIENT_ITEMS"
             ),
         },
     ]
@@ -436,6 +545,7 @@ def test_execute_claim_response_plan_preserves_generation_provenance():
             "evidence_tool_names": [
                 "get_volume_history",
             ],
+            "evidence_requirements": [],
             "provider": "gemini",
             "model": "gemini-test-model",
             "used_llm": True,

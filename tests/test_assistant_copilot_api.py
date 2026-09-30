@@ -113,6 +113,7 @@ def _copilot_result() -> dict:
                 "evidence_tool_names": [
                     "get_validation_history",
                 ],
+                "evidence_requirements": [],
                 "provider": "gemini",
                 "model": "gemini-test-model",
                 "used_llm": True,
@@ -2890,6 +2891,63 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
     ]
 
 
+def test_claim_response_provenance_accepts_safe_evidence_requirements():
+    response = AssistantCopilotResponse(
+        catalog_id=4,
+        latest_version_id=6,
+        overall_state="HEALTHY",
+        answer="Historical comparison is limited.",
+        provider="deterministic",
+        model=None,
+        used_llm=False,
+        claim_response_provenance=[
+            {
+                "claim_index": 0,
+                "claim_text": (
+                    "Compare volume over time."
+                ),
+                "claim_type": (
+                    "HISTORICAL_COMPARISON"
+                ),
+                "answerability_status": (
+                    "NOT_ANSWERABLE"
+                ),
+                "response_mode": (
+                    "DETERMINISTIC_LIMITATION"
+                ),
+                "evidence_tool_names": [],
+                "evidence_requirements": [
+                    {
+                        "evidence_type": (
+                            "volume_history"
+                        ),
+                        "minimum_item_count": 2,
+                        "observed_item_count": 1,
+                        "requirement_status": (
+                            "INSUFFICIENT_ITEMS"
+                        ),
+                    },
+                ],
+                "used_llm": False,
+                "answer": None,
+            },
+        ],
+    )
+
+    assert response.model_dump()[
+        "claim_response_provenance"
+    ][0]["evidence_requirements"] == [
+        {
+            "evidence_type": "volume_history",
+            "minimum_item_count": 2,
+            "observed_item_count": 1,
+            "requirement_status": (
+                "INSUFFICIENT_ITEMS"
+            ),
+        },
+    ]
+
+
 def test_claim_response_provenance_rejects_raw_evidence_payload():
     with pytest.raises(ValidationError):
         AssistantCopilotResponse(
@@ -2914,6 +2972,7 @@ def test_claim_response_provenance_rejects_raw_evidence_payload():
                     "evidence_tool_names": [
                         "get_volume_history",
                     ],
+                    "evidence_requirements": [],
                     "provider": "gemini",
                     "model": "gemini-test-model",
                     "used_llm": True,
@@ -3282,6 +3341,18 @@ def test_copilot_endpoint_forwards_claim_scoped_controlled_evidence(
             "restricted_evidence": [
                 "volume_history",
             ],
+            "evidence_requirements": [
+                {
+                    "evidence_type": (
+                        "volume_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 1,
+                    "requirement_status": (
+                        "INSUFFICIENT_ITEMS"
+                    ),
+                },
+            ],
             "controlled_tool_results": [],
         },
         {
@@ -3293,6 +3364,18 @@ def test_copilot_endpoint_forwards_claim_scoped_controlled_evidence(
                 "volume_history",
             ],
             "restricted_evidence": [],
+            "evidence_requirements": [
+                {
+                    "evidence_type": (
+                        "volume_history"
+                    ),
+                    "minimum_item_count": 1,
+                    "observed_item_count": 1,
+                    "requirement_status": (
+                        "SATISFIED"
+                    ),
+                },
+            ],
             "controlled_tool_results": [
                 volume_result,
             ],

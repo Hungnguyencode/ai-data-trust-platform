@@ -27,6 +27,7 @@ from app.services.assistant_chat import (
     build_agent_evidence_coverage_items,
     build_agent_evidence_sufficiency_items,
     build_agent_run_summary_items,
+    build_claim_evidence_requirement_labels,
     build_copilot_backend_result,
     build_copilot_chat_message,
 )
@@ -739,6 +740,27 @@ def render_chat_message(
                         "**Evidence tools:**",
                         evidence_label,
                     )
+
+                    evidence_requirement_labels = (
+                        build_claim_evidence_requirement_labels(
+                            provenance.get(
+                                "evidence_requirements",
+                                [],
+                            )
+                        )
+                    )
+
+                    if evidence_requirement_labels:
+                        st.markdown(
+                            "**Evidence requirements:**"
+                        )
+
+                        for requirement_label in (
+                            evidence_requirement_labels
+                        ):
+                            st.write(
+                                requirement_label
+                            )
 
                     used_claim_llm = bool(
                         provenance.get(
