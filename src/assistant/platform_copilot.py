@@ -623,6 +623,26 @@ def answer_copilot_question(
             and claim_scoped_has_supported_claim
         )
     ):
+        deterministic_claim_provenance = []
+
+        if claim_scoped_controlled_tool_results:
+            deterministic_claim_plan = (
+                build_claim_response_plan(
+                    question=question,
+                    claim_scoped_controlled_tool_results=(
+                        claim_scoped_controlled_tool_results
+                        or []
+                    ),
+                )
+            )
+
+            deterministic_claim_provenance = (
+                execute_claim_response_plan(
+                    plan=deterministic_claim_plan,
+                    answer_claim=lambda **_: None,
+                )
+            )
+
         return {
             "catalog_id": explanation.get(
                 "catalog_id"
@@ -637,6 +657,9 @@ def answer_copilot_question(
                 _build_historical_comparison_limitation(
                     question
                 )
+            ),
+            "claim_response_provenance": (
+                deterministic_claim_provenance
             ),
             "source_finding_codes": list(
                 explanation.get(
