@@ -1290,6 +1290,20 @@ def run_claim_level_response_isolation_evaluation(
                 False,
             )
         ),
+        "unsupported_provenance_evidence_requirements": list(
+            unsupported_provenance.get(
+                "evidence_requirements",
+                [],
+            )
+            or []
+        ),
+        "supported_provenance_evidence_requirements": list(
+            supported_provenance.get(
+                "evidence_requirements",
+                [],
+            )
+            or []
+        ),
         "raw_evidence_payload_exposed": (
             raw_evidence_payload_exposed
         ),

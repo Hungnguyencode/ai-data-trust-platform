@@ -3924,6 +3924,7 @@ def test_claim_scoped_controlled_tool_results_scope_evidence_per_claim():
             "restricted_evidence": [
                 "volume_history",
             ],
+            "evidence_requirements": [],
             "controlled_tool_results": [
                 controlled_tool_results[0],
             ],
@@ -3935,6 +3936,7 @@ def test_claim_scoped_controlled_tool_results_scope_evidence_per_claim():
                 "volume_history",
             ],
             "restricted_evidence": [],
+            "evidence_requirements": [],
             "controlled_tool_results": [
                 controlled_tool_results[1],
             ],
@@ -3992,6 +3994,84 @@ def test_claim_scoped_controlled_tool_results_hide_not_answerable_payload():
             "restricted_evidence": [
                 "volume_history",
             ],
+            "evidence_requirements": [],
             "controlled_tool_results": [],
+        },
+    ]
+
+
+def test_claim_scoped_controlled_tool_results_preserve_safe_evidence_requirements_for_blocked_claim():
+    controlled_tool_results = [
+        {
+            "name": "get_volume_history",
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "marker": (
+                        "raw-volume-must-stay-hidden"
+                    ),
+                },
+            ],
+        },
+    ]
+
+    claim_evidence_assessments = [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "satisfied_evidence": [],
+            "insufficient_evidence": [
+                "volume_history",
+            ],
+            "unavailable_evidence": [],
+            "evidence_requirements": [
+                {
+                    "claim_type": (
+                        "HISTORICAL_COMPARISON"
+                    ),
+                    "evidence_type": (
+                        "volume_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 1,
+                    "requirement_status": (
+                        "INSUFFICIENT_ITEMS"
+                    ),
+                },
+            ],
+            "answerability_status": (
+                "NOT_ANSWERABLE"
+            ),
+        },
+    ]
+
+    scoped_results = (
+        controlled_tools
+        .build_claim_scoped_controlled_tool_results(
+            controlled_tool_results=(
+                controlled_tool_results
+            ),
+            claim_evidence_assessments=(
+                claim_evidence_assessments
+            ),
+        )
+    )
+
+    assert scoped_results[0][
+        "controlled_tool_results"
+    ] == []
+
+    assert scoped_results[0][
+        "evidence_requirements"
+    ] == [
+        {
+            "evidence_type": "volume_history",
+            "minimum_item_count": 2,
+            "observed_item_count": 1,
+            "requirement_status": (
+                "INSUFFICIENT_ITEMS"
+            ),
         },
     ]

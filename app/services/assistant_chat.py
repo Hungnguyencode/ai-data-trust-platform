@@ -207,6 +207,68 @@ def build_agent_evidence_answerability_items(
     ]
 
 
+def build_claim_evidence_requirement_labels(
+    evidence_requirements: Any,
+) -> list[str]:
+    if not isinstance(
+        evidence_requirements,
+        list,
+    ):
+        return []
+
+    labels: list[str] = []
+
+    for requirement in evidence_requirements:
+        if not isinstance(
+            requirement,
+            dict,
+        ):
+            continue
+
+        evidence_type = str(
+            requirement.get(
+                "evidence_type"
+            )
+            or "UNKNOWN"
+        )
+
+        minimum_item_count = (
+            requirement.get(
+                "minimum_item_count"
+            )
+        )
+
+        observed_item_count = (
+            requirement.get(
+                "observed_item_count"
+            )
+        )
+
+        requirement_status = str(
+            requirement.get(
+                "requirement_status"
+            )
+            or "UNKNOWN"
+        )
+
+        observed_label = (
+            "Unavailable"
+            if observed_item_count is None
+            else str(observed_item_count)
+        )
+
+        labels.append(
+            (
+                f"{evidence_type} · "
+                f"Required: {minimum_item_count} · "
+                f"Observed: {observed_label} · "
+                f"Status: {requirement_status}"
+            )
+        )
+
+    return labels
+
+
 def build_claim_response_provenance_items(
     claim_response_provenance: Any,
 ) -> list[Dict[str, Any]]:
@@ -236,6 +298,53 @@ def build_claim_response_provenance_items(
         ):
             evidence_tool_names = []
 
+        evidence_requirements: list[
+            Dict[str, Any]
+        ] = []
+
+        raw_evidence_requirements = provenance.get(
+            "evidence_requirements",
+            [],
+        )
+
+        if isinstance(
+            raw_evidence_requirements,
+            list,
+        ):
+            for requirement in (
+                raw_evidence_requirements
+            ):
+                if not isinstance(
+                    requirement,
+                    dict,
+                ):
+                    continue
+
+                evidence_requirements.append(
+                    {
+                        "evidence_type": (
+                            requirement.get(
+                                "evidence_type"
+                            )
+                        ),
+                        "minimum_item_count": (
+                            requirement.get(
+                                "minimum_item_count"
+                            )
+                        ),
+                        "observed_item_count": (
+                            requirement.get(
+                                "observed_item_count"
+                            )
+                        ),
+                        "requirement_status": (
+                            requirement.get(
+                                "requirement_status"
+                            )
+                        ),
+                    }
+                )
+
         items.append(
             {
                 "claim_index": provenance.get(
@@ -257,6 +366,9 @@ def build_claim_response_provenance_items(
                 ),
                 "evidence_tool_names": list(
                     evidence_tool_names
+                ),
+                "evidence_requirements": (
+                    evidence_requirements
                 ),
                 "provider": provenance.get(
                     "provider"

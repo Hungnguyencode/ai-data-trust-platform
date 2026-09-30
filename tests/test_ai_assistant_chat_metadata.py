@@ -694,6 +694,7 @@ def test_build_copilot_chat_message_preserves_safe_claim_response_provenance():
             "evidence_tool_names": [
                 "get_volume_history"
             ],
+            "evidence_requirements": [],
             "provider": "gemini",
             "model": "gemini-test-model",
             "used_llm": True,
@@ -746,6 +747,7 @@ def test_build_copilot_chat_message_preserves_safe_claim_response_provenance():
             "evidence_tool_names": [
                 "get_volume_history"
             ],
+            "evidence_requirements": [],
             "provider": "gemini",
             "model": "gemini-test-model",
             "used_llm": True,
@@ -771,6 +773,7 @@ def test_build_claim_response_provenance_items_exposes_safe_fields_only():
                     "evidence_tool_names": [
                         "get_volume_history"
                     ],
+                    "evidence_requirements": [],
                     "provider": "gemini",
                     "model": "gemini-test-model",
                     "used_llm": True,
@@ -803,10 +806,114 @@ def test_build_claim_response_provenance_items_exposes_safe_fields_only():
             "evidence_tool_names": [
                 "get_volume_history"
             ],
+            "evidence_requirements": [],
             "provider": "gemini",
             "model": "gemini-test-model",
             "used_llm": True,
         },
+    ]
+
+
+def test_build_claim_response_provenance_items_preserves_safe_evidence_requirements():
+    items = (
+        assistant_chat
+        .build_claim_response_provenance_items(
+            [
+                {
+                    "claim_index": 0,
+                    "claim_text": (
+                        "Compare volume over time."
+                    ),
+                    "claim_type": (
+                        "HISTORICAL_COMPARISON"
+                    ),
+                    "answerability_status": (
+                        "NOT_ANSWERABLE"
+                    ),
+                    "response_mode": (
+                        "DETERMINISTIC_LIMITATION"
+                    ),
+                    "evidence_tool_names": [],
+                    "evidence_requirements": [
+                        {
+                            "evidence_type": (
+                                "volume_history"
+                            ),
+                            "minimum_item_count": 2,
+                            "observed_item_count": 1,
+                            "requirement_status": (
+                                "INSUFFICIENT_ITEMS"
+                            ),
+                            "raw_payload": (
+                                "must-not-reach-ui"
+                            ),
+                        },
+                    ],
+                    "used_llm": False,
+                    "controlled_tool_results": [
+                        {
+                            "raw": (
+                                "must-not-reach-ui"
+                            ),
+                        },
+                    ],
+                },
+            ]
+        )
+    )
+
+    assert items[0][
+        "evidence_requirements"
+    ] == [
+        {
+            "evidence_type": "volume_history",
+            "minimum_item_count": 2,
+            "observed_item_count": 1,
+            "requirement_status": (
+                "INSUFFICIENT_ITEMS"
+            ),
+        },
+    ]
+
+    assert (
+        "controlled_tool_results"
+        not in items[0]
+    )
+
+    assert (
+        "raw_payload"
+        not in items[0][
+            "evidence_requirements"
+        ][0]
+    )
+
+
+def test_build_claim_evidence_requirement_labels_formats_evidence_details():
+    labels = (
+        assistant_chat
+        .build_claim_evidence_requirement_labels(
+            [
+                {
+                    "evidence_type": (
+                        "volume_history"
+                    ),
+                    "minimum_item_count": 2,
+                    "observed_item_count": 1,
+                    "requirement_status": (
+                        "INSUFFICIENT_ITEMS"
+                    ),
+                },
+            ]
+        )
+    )
+
+    assert labels == [
+        (
+            "volume_history · "
+            "Required: 2 · "
+            "Observed: 1 · "
+            "Status: INSUFFICIENT_ITEMS"
+        ),
     ]
 
 
@@ -873,6 +980,7 @@ def test_build_copilot_chat_message_sanitizes_claim_response_provenance():
                     "evidence_tool_names": [
                         "get_volume_history"
                     ],
+                    "evidence_requirements": [],
                     "provider": "gemini",
                     "model": "gemini-test-model",
                     "used_llm": True,
@@ -906,6 +1014,7 @@ def test_build_copilot_chat_message_sanitizes_claim_response_provenance():
             "evidence_tool_names": [
                 "get_volume_history"
             ],
+            "evidence_requirements": [],
             "provider": "gemini",
             "model": "gemini-test-model",
             "used_llm": True,

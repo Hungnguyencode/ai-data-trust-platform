@@ -401,6 +401,12 @@ class AssistantClaimResponseProvenanceResponse(
         default_factory=list
     )
 
+    evidence_requirements: list[
+        AssistantAgentEvidenceRequirementResponse
+    ] = Field(
+        default_factory=list
+    )
+
     provider: str | None = None
     model: str | None = None
     used_llm: bool

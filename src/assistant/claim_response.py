@@ -100,6 +100,14 @@ def build_claim_response_plan(
             or []
         )
 
+        evidence_requirements = list(
+            claim_scope.get(
+                "evidence_requirements",
+                [],
+            )
+            or []
+        )
+
         plan.append(
             {
                 "claim_index": claim_index,
@@ -109,6 +117,9 @@ def build_claim_response_plan(
                     answerability_status
                 ),
                 "response_mode": response_mode,
+                "evidence_requirements": (
+                    evidence_requirements
+                ),
                 "controlled_tool_results": (
                     controlled_tool_results
                 ),
@@ -179,6 +190,14 @@ def execute_claim_response_plan(
             or []
         )
 
+        evidence_requirements = list(
+            item.get(
+                "evidence_requirements",
+                [],
+            )
+            or []
+        )
+
         evidence_tool_names = [
             str(result.get("name")).strip()
             for result in controlled_tool_results
@@ -210,6 +229,9 @@ def execute_claim_response_plan(
                     ),
                     "evidence_tool_names": (
                         evidence_tool_names
+                    ),
+                    "evidence_requirements": (
+                        evidence_requirements
                     ),
                     "used_llm": False,
                     "answer": None,
@@ -243,6 +265,9 @@ def execute_claim_response_plan(
                     "response_mode": response_mode,
                     "evidence_tool_names": (
                         evidence_tool_names
+                    ),
+                    "evidence_requirements": (
+                        evidence_requirements
                     ),
                     "provider": claim_output.get(
                         "provider"
@@ -282,6 +307,9 @@ def execute_claim_response_plan(
                 "response_mode": response_mode,
                 "evidence_tool_names": (
                     evidence_tool_names
+                ),
+                "evidence_requirements": (
+                    evidence_requirements
                 ),
                 "used_llm": True,
                 "answer": claim_output,
