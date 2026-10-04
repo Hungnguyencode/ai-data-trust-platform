@@ -580,15 +580,148 @@ def _build_controlled_tool_candidates(
         "thay đổi",
     )
 
-    if any(
-        term in normalized_question
-        for term in mutating_terms
+    read_only_promotion_diagnosis = (
+        normalized_question.rstrip(" ?.!") ==
+        "why should this version not be promoted"
+    )
+
+    if (
+        any(
+            term in normalized_question
+            for term in mutating_terms
+        )
+        and not read_only_promotion_diagnosis
     ):
         return []
 
     plan: list[
         dict[str, Any]
     ] = []
+
+    historical_cross_domain_terms = (
+        "changed since the previous ingestion",
+    )
+
+    if any(
+        term in normalized_question
+        for term in historical_cross_domain_terms
+    ):
+        if trusted_catalog_id is None:
+            return []
+
+        trusted_catalog = (
+            _require_positive_int(
+                trusted_catalog_id,
+                field_name="trusted_catalog_id",
+            )
+        )
+
+        return [
+            {
+                "name": "get_freshness_history",
+                "arguments": {
+                    "catalog_id": trusted_catalog,
+                },
+            },
+            {
+                "name": "get_volume_history",
+                "arguments": {
+                    "catalog_id": trusted_catalog,
+                },
+            },
+            {
+                "name": "get_pipeline_run_history",
+                "arguments": {
+                    "catalog_id": trusted_catalog,
+                },
+            },
+            {
+                "name": (
+                    "get_operational_event_history"
+                ),
+                "arguments": {
+                    "catalog_id": trusted_catalog,
+                },
+            },
+        ]
+
+    cross_domain_investigation_terms = (
+        "unhealthy",
+        "investigated first",
+        "evidence supports this recommendation",
+    )
+
+    is_cross_domain_investigation = (
+        any(
+            term in normalized_question
+            for term
+            in cross_domain_investigation_terms
+        )
+        or read_only_promotion_diagnosis
+    )
+
+    if is_cross_domain_investigation:
+        plan.append(
+            {
+                "name": "get_version_lineage",
+                "arguments": {
+                    "version_id": trusted_version,
+                },
+            }
+        )
+
+        if trusted_catalog_id is not None:
+            trusted_catalog = (
+                _require_positive_int(
+                    trusted_catalog_id,
+                    field_name="trusted_catalog_id",
+                )
+            )
+
+            plan.extend(
+                [
+                    {
+                        "name": (
+                            "get_freshness_history"
+                        ),
+                        "arguments": {
+                            "catalog_id": (
+                                trusted_catalog
+                            ),
+                        },
+                    },
+                    {
+                        "name": "get_volume_history",
+                        "arguments": {
+                            "catalog_id": (
+                                trusted_catalog
+                            ),
+                        },
+                    },
+                    {
+                        "name": (
+                            "get_pipeline_run_history"
+                        ),
+                        "arguments": {
+                            "catalog_id": (
+                                trusted_catalog
+                            ),
+                        },
+                    },
+                    {
+                        "name": (
+                            "get_operational_event_history"
+                        ),
+                        "arguments": {
+                            "catalog_id": (
+                                trusted_catalog
+                            ),
+                        },
+                    },
+                ]
+            )
+
+        return plan
 
     lineage_terms = (
         "lineage",
@@ -1177,6 +1310,7 @@ def build_controlled_evidence_answerability(
         "comparison",
         "trend",
         "over time",
+        "changed since the previous ingestion",
         "so sánh",
         "xu hướng",
         "theo thời gian",

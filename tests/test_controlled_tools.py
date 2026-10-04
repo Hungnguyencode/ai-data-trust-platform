@@ -1452,6 +1452,834 @@ def test_controlled_evidence_requirements_keep_all_requested_domains():
     ]
 
 
+def test_cross_domain_investigation_requests_all_read_only_evidence():
+    evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            (
+                "Why is this dataset "
+                "currently unhealthy?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert evidence == [
+        "version_lineage",
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+
+def test_cross_domain_investigation_allows_read_only_promotion_diagnosis():
+    evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            (
+                "Why should this version "
+                "not be promoted?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert evidence == [
+        "version_lineage",
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+
+def test_cross_domain_promotion_diagnosis_builds_claim_scoped_requirements():
+    requirements = (
+        controlled_tools
+        .plan_claim_scoped_evidence_requirements(
+            (
+                "Why should this version "
+                "not be promoted?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert requirements == [
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "version_lineage",
+            "minimum_item_count": 1,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "freshness_history",
+            "minimum_item_count": 1,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "volume_history",
+            "minimum_item_count": 1,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "pipeline_run_history",
+            "minimum_item_count": 1,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "operational_event_history",
+            "minimum_item_count": 1,
+        },
+    ]
+
+
+def test_cross_domain_promotion_diagnosis_does_not_bypass_mutation_rejection():
+    evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            (
+                "Why should this version "
+                "not be promoted? "
+                "Promote it now."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert evidence == []
+
+
+def test_cross_domain_investigation_executes_all_evidence_across_bounded_rounds(
+    monkeypatch,
+):
+    executed_tools: list[str] = []
+
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        executed_tools.append(name)
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    agent_run_summary: dict = {}
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            (
+                "Why is this dataset "
+                "currently unhealthy?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            agent_run_summary=(
+                agent_run_summary
+            ),
+        )
+    )
+
+    assert executed_tools == [
+        "get_version_lineage",
+        "get_freshness_history",
+        "get_volume_history",
+        "get_pipeline_run_history",
+        "get_operational_event_history",
+    ]
+
+    assert [
+        result["name"]
+        for result in results
+    ] == executed_tools
+
+    assert agent_run_summary == {
+        "round_count": 2,
+        "stop_reason": "MAX_ROUNDS_REACHED",
+        "attempted_tool_count": 5,
+        "accepted_evidence_count": 5,
+        "failed_tool_count": 0,
+    }
+
+
+def test_cross_domain_investigation_prioritization_requests_all_read_only_evidence():
+    evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            (
+                "Which problem should "
+                "be investigated first?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert evidence == [
+        "version_lineage",
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+
+def test_cross_domain_investigation_prioritization_builds_claim_scoped_requirements():
+    requirements = (
+        controlled_tools
+        .plan_claim_scoped_evidence_requirements(
+            (
+                "Which problem should "
+                "be investigated first?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert requirements == [
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "version_lineage",
+            "minimum_item_count": 1,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "freshness_history",
+            "minimum_item_count": 1,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "volume_history",
+            "minimum_item_count": 1,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "pipeline_run_history",
+            "minimum_item_count": 1,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "operational_event_history",
+            "minimum_item_count": 1,
+        },
+    ]
+
+
+def test_cross_domain_previous_ingestion_comparison_requests_history_evidence():
+    evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            (
+                "What changed since "
+                "the previous ingestion?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert evidence == [
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+
+def test_cross_domain_previous_ingestion_comparison_builds_claim_scoped_requirements():
+    requirements = (
+        controlled_tools
+        .plan_claim_scoped_evidence_requirements(
+            (
+                "What changed since "
+                "the previous ingestion?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert requirements == [
+        {
+            "claim_type": "HISTORICAL_COMPARISON",
+            "evidence_type": "freshness_history",
+            "minimum_item_count": 2,
+        },
+        {
+            "claim_type": "HISTORICAL_COMPARISON",
+            "evidence_type": "volume_history",
+            "minimum_item_count": 2,
+        },
+        {
+            "claim_type": "HISTORICAL_COMPARISON",
+            "evidence_type": "pipeline_run_history",
+            "minimum_item_count": 2,
+        },
+        {
+            "claim_type": "HISTORICAL_COMPARISON",
+            "evidence_type": "operational_event_history",
+            "minimum_item_count": 2,
+        },
+    ]
+
+
+def test_cross_domain_previous_ingestion_with_one_item_per_domain_is_not_answerable(
+    monkeypatch,
+):
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "observed_from": name,
+                },
+            ],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    agent_evidence_answerability: dict = {}
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            (
+                "What changed since "
+                "the previous ingestion?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            agent_evidence_answerability=(
+                agent_evidence_answerability
+            ),
+        )
+    )
+
+    assert [
+        result["name"]
+        for result in results
+    ] == [
+        "get_freshness_history",
+        "get_volume_history",
+        "get_pipeline_run_history",
+        "get_operational_event_history",
+    ]
+
+    assert agent_evidence_answerability[
+        "assessment_scope"
+    ] == "HISTORICAL_COMPARISON"
+
+    assert agent_evidence_answerability[
+        "answerability_status"
+    ] == "NOT_ANSWERABLE"
+
+    assert agent_evidence_answerability[
+        "answerable_evidence"
+    ] == []
+
+    assert agent_evidence_answerability[
+        "insufficient_evidence"
+    ] == [
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+    assert [
+        requirement["minimum_item_count"]
+        for requirement
+        in agent_evidence_answerability[
+            "evidence_requirements"
+        ]
+    ] == [2, 2, 2, 2]
+
+    assert [
+        requirement["observed_item_count"]
+        for requirement
+        in agent_evidence_answerability[
+            "evidence_requirements"
+        ]
+    ] == [1, 1, 1, 1]
+
+    assert [
+        requirement["requirement_status"]
+        for requirement
+        in agent_evidence_answerability[
+            "evidence_requirements"
+        ]
+    ] == [
+        "INSUFFICIENT_ITEMS",
+        "INSUFFICIENT_ITEMS",
+        "INSUFFICIENT_ITEMS",
+        "INSUFFICIENT_ITEMS",
+    ]
+
+
+def test_cross_domain_previous_ingestion_with_two_items_per_domain_is_answerable(
+    monkeypatch,
+):
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "observed_from": name,
+                    "sequence": 1,
+                },
+                {
+                    "observed_from": name,
+                    "sequence": 2,
+                },
+            ],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    agent_evidence_answerability: dict = {}
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            (
+                "What changed since "
+                "the previous ingestion?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            agent_evidence_answerability=(
+                agent_evidence_answerability
+            ),
+        )
+    )
+
+    assert [
+        result["name"]
+        for result in results
+    ] == [
+        "get_freshness_history",
+        "get_volume_history",
+        "get_pipeline_run_history",
+        "get_operational_event_history",
+    ]
+
+    assert agent_evidence_answerability[
+        "assessment_scope"
+    ] == "HISTORICAL_COMPARISON"
+
+    assert agent_evidence_answerability[
+        "answerability_status"
+    ] == "ANSWERABLE"
+
+    assert agent_evidence_answerability[
+        "answerable_evidence"
+    ] == [
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+    assert agent_evidence_answerability[
+        "insufficient_evidence"
+    ] == []
+
+    assert agent_evidence_answerability[
+        "unavailable_evidence"
+    ] == []
+
+    assert [
+        requirement["observed_item_count"]
+        for requirement
+        in agent_evidence_answerability[
+            "evidence_requirements"
+        ]
+    ] == [2, 2, 2, 2]
+
+    assert [
+        requirement["requirement_status"]
+        for requirement
+        in agent_evidence_answerability[
+            "evidence_requirements"
+        ]
+    ] == [
+        "SATISFIED",
+        "SATISFIED",
+        "SATISFIED",
+        "SATISFIED",
+    ]
+
+
+def test_previous_ingestion_domain_specific_request_does_not_expand_cross_domain():
+    evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            (
+                "What was the row count "
+                "for the previous ingestion?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert evidence == [
+        "volume_history",
+    ]
+
+
+def test_previous_ingestion_domain_specific_request_is_not_historical_comparison_claim():
+    requirements = (
+        controlled_tools
+        .plan_claim_scoped_evidence_requirements(
+            (
+                "What was the row count "
+                "for the previous ingestion?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert requirements == []
+
+
+def test_previous_ingestion_domain_specific_request_is_not_subject_to_comparison_gate():
+    answerability = (
+        controlled_tools
+        .build_controlled_evidence_answerability(
+            question=(
+                "What was the row count "
+                "for the previous ingestion?"
+            ),
+            evidence_sufficiency={
+                "requested_evidence": [
+                    "volume_history",
+                ],
+                "available_evidence": [
+                    "volume_history",
+                ],
+                "empty_evidence": [],
+                "unavailable_evidence": [],
+                "evidence_details": [
+                    {
+                        "evidence_type": (
+                            "volume_history"
+                        ),
+                        "availability_status": (
+                            "AVAILABLE"
+                        ),
+                        "item_count": 1,
+                    },
+                ],
+                "sufficiency_status": (
+                    "SUFFICIENT"
+                ),
+            },
+        )
+    )
+
+    assert answerability[
+        "assessment_scope"
+    ] == "NOT_APPLICABLE"
+
+    assert answerability[
+        "answerability_status"
+    ] == "NOT_APPLICABLE"
+
+    assert answerability[
+        "evidence_requirements"
+    ] == []
+
+
+def test_cross_domain_recommendation_evidence_requests_all_read_only_evidence():
+    evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            (
+                "What evidence supports "
+                "this recommendation?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert evidence == [
+        "version_lineage",
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+
+def test_cross_domain_recommendation_evidence_builds_claim_scoped_requirements():
+    requirements = (
+        controlled_tools
+        .plan_claim_scoped_evidence_requirements(
+            (
+                "What evidence supports "
+                "this recommendation?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert requirements == [
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "version_lineage",
+            "minimum_item_count": 1,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "freshness_history",
+            "minimum_item_count": 1,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "volume_history",
+            "minimum_item_count": 1,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "pipeline_run_history",
+            "minimum_item_count": 1,
+        },
+        {
+            "claim_type": "CURRENT_STATE",
+            "evidence_type": "operational_event_history",
+            "minimum_item_count": 1,
+        },
+    ]
+
+
+def test_cross_domain_recommendation_evidence_executes_all_evidence_across_bounded_rounds(
+    monkeypatch,
+):
+    executed_tools: list[str] = []
+
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        executed_tools.append(name)
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "observed_from": name,
+                },
+            ],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    agent_run_summary: dict = {}
+
+    results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            (
+                "What evidence supports "
+                "this recommendation?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            agent_run_summary=(
+                agent_run_summary
+            ),
+        )
+    )
+
+    assert executed_tools == [
+        "get_version_lineage",
+        "get_freshness_history",
+        "get_volume_history",
+        "get_pipeline_run_history",
+        "get_operational_event_history",
+    ]
+
+    assert [
+        result["name"]
+        for result in results
+    ] == executed_tools
+
+    assert agent_run_summary == {
+        "round_count": 2,
+        "stop_reason": "MAX_ROUNDS_REACHED",
+        "attempted_tool_count": 5,
+        "accepted_evidence_count": 5,
+        "failed_tool_count": 0,
+    }
+
+
+def test_cross_domain_recommendation_evidence_with_one_item_per_domain_is_claim_answerable(
+    monkeypatch,
+):
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "observed_from": name,
+                },
+            ],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    agent_evidence_sufficiency: dict = {}
+
+    controlled_tool_results = (
+        controlled_tools
+        .execute_bounded_controlled_tool_rounds(
+            (
+                "What evidence supports "
+                "this recommendation?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            agent_evidence_sufficiency=(
+                agent_evidence_sufficiency
+            ),
+        )
+    )
+
+    assessments = (
+        controlled_tools
+        .build_claim_scoped_evidence_assessments(
+            (
+                "What evidence supports "
+                "this recommendation?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+            evidence_sufficiency=(
+                agent_evidence_sufficiency
+            ),
+        )
+    )
+
+    assert len(controlled_tool_results) == 5
+    assert len(assessments) == 1
+
+    assessment = assessments[0]
+
+    assert assessment["claim_type"] == (
+        "CURRENT_STATE"
+    )
+
+    assert assessment[
+        "answerability_status"
+    ] == "ANSWERABLE"
+
+    assert assessment[
+        "satisfied_evidence"
+    ] == [
+        "version_lineage",
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+    assert assessment[
+        "insufficient_evidence"
+    ] == []
+
+    assert assessment[
+        "unavailable_evidence"
+    ] == []
+
+    assert [
+        requirement["minimum_item_count"]
+        for requirement
+        in assessment["evidence_requirements"]
+    ] == [1, 1, 1, 1, 1]
+
+    assert [
+        requirement["observed_item_count"]
+        for requirement
+        in assessment["evidence_requirements"]
+    ] == [1, 1, 1, 1, 1]
+
+    assert [
+        requirement["requirement_status"]
+        for requirement
+        in assessment["evidence_requirements"]
+    ] == [
+        "SATISFIED",
+        "SATISFIED",
+        "SATISFIED",
+        "SATISFIED",
+        "SATISFIED",
+    ]
+
+
 def test_controlled_evidence_coverage_marks_failed_requested_evidence_missing():
     coverage = (
         controlled_tools
