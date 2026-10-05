@@ -10,6 +10,7 @@ from api.schemas.assistant_schema import (
 )
 from src.assistant.llm_provider import (
     LLMConfigurationError,
+    LLMGenerationResult,
 )
 
 client = TestClient(app)
@@ -3094,6 +3095,206 @@ def test_copilot_endpoint_runs_cross_domain_unhealthy_investigation(
             "controlled_tool_results"
         ]
     ] == executed_tools
+
+
+def test_copilot_endpoint_returns_cross_domain_response_provenance(
+    monkeypatch,
+):
+    diagnosis = _diagnosis()
+    explanation = _explanation()
+
+    executed_tools: list[str] = []
+    generated_prompts: list[str] = []
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: _context(),
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "reason_about_platform_context"
+        ),
+        lambda value: diagnosis,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "explain_platform_diagnosis"
+        ),
+        lambda value: explanation,
+    )
+
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        executed_tools.append(name)
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "observed_from": name,
+                },
+            ],
+        }
+
+    monkeypatch.setattr(
+        (
+            "src.assistant.controlled_tools."
+            "execute_controlled_tool"
+        ),
+        fake_execute_tool,
+    )
+
+    def fake_generate_llm_text(
+        prompt,
+        *,
+        config=None,
+        client=None,
+    ):
+        del config
+        del client
+
+        generated_prompts.append(prompt)
+
+        return LLMGenerationResult(
+            provider="gemini",
+            model="gemini-test-model",
+            used_llm=True,
+            text=(
+                "Cross-domain evidence supports "
+                "the current diagnosis."
+            ),
+            fallback_reason=None,
+            error_type=None,
+        )
+
+    monkeypatch.setattr(
+        (
+            "src.assistant.platform_copilot."
+            "generate_llm_text"
+        ),
+        fake_generate_llm_text,
+    )
+
+    response = client.post(
+        "/api/assistant/catalog/4/copilot",
+        json={
+            "question": (
+                "Why is this dataset "
+                "currently unhealthy?"
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert executed_tools == [
+        "get_version_lineage",
+        "get_freshness_history",
+        "get_volume_history",
+        "get_pipeline_run_history",
+        "get_operational_event_history",
+    ]
+
+    assert len(generated_prompts) == 1
+
+    payload = response.json()
+
+    assert payload["answer"] == (
+        "Cross-domain evidence supports "
+        "the current diagnosis."
+    )
+
+    assert payload["provider"] == "gemini"
+    assert payload["model"] == "gemini-test-model"
+    assert payload["used_llm"] is True
+
+    provenance = payload[
+        "claim_response_provenance"
+    ]
+
+    assert len(provenance) == 1
+
+    claim = provenance[0]
+
+    assert claim[
+        "claim_text"
+    ] == (
+        "Why is this dataset "
+        "currently unhealthy?"
+    )
+
+    assert claim[
+        "claim_type"
+    ] == "CURRENT_STATE"
+
+    assert claim[
+        "answerability_status"
+    ] == "ANSWERABLE"
+
+    assert claim[
+        "response_mode"
+    ] == "LLM"
+
+    assert claim[
+        "evidence_tool_names"
+    ] == executed_tools
+
+    assert [
+        requirement["evidence_type"]
+        for requirement
+        in claim["evidence_requirements"]
+    ] == [
+        "version_lineage",
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+    assert all(
+        requirement["minimum_item_count"] == 1
+        for requirement
+        in claim["evidence_requirements"]
+    )
+
+    assert all(
+        requirement["observed_item_count"] == 1
+        for requirement
+        in claim["evidence_requirements"]
+    )
+
+    assert all(
+        requirement["requirement_status"]
+        == "SATISFIED"
+        for requirement
+        in claim["evidence_requirements"]
+    )
+
+    assert claim["provider"] == "gemini"
+    assert claim["model"] == "gemini-test-model"
+    assert claim["used_llm"] is True
+    assert claim["fallback_reason"] is None
+    assert claim["error_type"] is None
+
+    assert claim["answer"] == (
+        "Cross-domain evidence supports "
+        "the current diagnosis."
+    )
+
+    assert "controlled_tool_results" not in claim
 
 
 def test_claim_response_provenance_accepts_safe_evidence_requirements():
