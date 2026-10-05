@@ -344,6 +344,7 @@ def test_canonical_evaluation_scenarios_cover_harness_v1():
         "mutation_request_boundary",
         "cross_layer_answerable",
         "cross_domain_investigation",
+        "cross_domain_response_provenance",
         "mixed_claim_scoped_answerability",
         "claim_level_response_isolation",
     ]
@@ -484,6 +485,31 @@ def test_cross_domain_investigation_contract():
             "ANSWERABLE"
         ),
         "permitted_evidence_count": 5,
+    }
+
+
+def test_cross_domain_response_provenance_contract():
+    scenarios = (
+        get_canonical_agent_evaluation_scenarios()
+    )
+
+    scenario = next(
+        scenario
+        for scenario in scenarios
+        if scenario["scenario_id"]
+        == "cross_domain_response_provenance"
+    )
+
+    assert scenario["expected"] == {
+        "claim_count": 1,
+        "claim_type": "CURRENT_STATE",
+        "answerability_status": "ANSWERABLE",
+        "response_mode": "LLM",
+        "evidence_tool_count": 5,
+        "evidence_requirement_count": 5,
+        "all_requirements_satisfied": True,
+        "used_llm": True,
+        "raw_evidence_payload_exposed": False,
     }
 
 

@@ -218,6 +218,28 @@ def get_canonical_agent_evaluation_scenarios(
         },
         {
             "scenario_id": (
+                "cross_domain_response_provenance"
+            ),
+            "description": (
+                "Cross-domain current-state response "
+                "must preserve safe claim-level "
+                "provenance without exposing raw "
+                "controlled evidence payloads."
+            ),
+            "expected": {
+                "claim_count": 1,
+                "claim_type": "CURRENT_STATE",
+                "answerability_status": "ANSWERABLE",
+                "response_mode": "LLM",
+                "evidence_tool_count": 5,
+                "evidence_requirement_count": 5,
+                "all_requirements_satisfied": True,
+                "used_llm": True,
+                "raw_evidence_payload_exposed": False,
+            },
+        },
+        {
+            "scenario_id": (
                 "mixed_claim_scoped_answerability"
             ),
             "description": (

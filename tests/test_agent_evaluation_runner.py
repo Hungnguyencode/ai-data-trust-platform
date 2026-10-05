@@ -150,13 +150,32 @@ def test_cross_domain_investigation_uses_real_bounded_pipeline():
     }
 
 
+def test_cross_domain_response_provenance_uses_real_copilot_path():
+    observed = (
+        evaluation_runner
+        .run_cross_domain_response_provenance_evaluation()
+    )
+
+    assert observed == {
+        "claim_count": 1,
+        "claim_type": "CURRENT_STATE",
+        "answerability_status": "ANSWERABLE",
+        "response_mode": "LLM",
+        "evidence_tool_count": 5,
+        "evidence_requirement_count": 5,
+        "all_requirements_satisfied": True,
+        "used_llm": True,
+        "raw_evidence_payload_exposed": False,
+    }
+
+
 def test_agent_evaluation_suite_builds_complete_passing_report():
     report = run_agent_evaluation_suite()
 
     assert report["evaluation_version"] == "v1"
     assert report["overall_status"] == "PASS"
-    assert report["scenario_count"] == 12
-    assert report["passed_count"] == 12
+    assert report["scenario_count"] == 13
+    assert report["passed_count"] == 13
     assert report["failed_count"] == 0
 
     assert [
@@ -173,6 +192,7 @@ def test_agent_evaluation_suite_builds_complete_passing_report():
         "mutation_request_boundary",
         "cross_layer_answerable",
         "cross_domain_investigation",
+        "cross_domain_response_provenance",
         "mixed_claim_scoped_answerability",
         "claim_level_response_isolation",
     ]
