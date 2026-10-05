@@ -193,6 +193,31 @@ def get_canonical_agent_evaluation_scenarios(
         },
         {
             "scenario_id": (
+                "cross_domain_investigation"
+            ),
+            "description": (
+                "Cross-domain investigation must "
+                "collect all required evidence "
+                "within bounded execution and "
+                "produce an ANSWERABLE current-state "
+                "claim when evidence is sufficient."
+            ),
+            "expected": {
+                "requested_evidence_count": 5,
+                "attempted_tool_count": 5,
+                "accepted_evidence_count": 5,
+                "round_count": 2,
+                "coverage_status": "COMPLETE",
+                "sufficiency_status": "SUFFICIENT",
+                "claim_type": "CURRENT_STATE",
+                "claim_answerability_status": (
+                    "ANSWERABLE"
+                ),
+                "permitted_evidence_count": 5,
+            },
+        },
+        {
+            "scenario_id": (
                 "mixed_claim_scoped_answerability"
             ),
             "description": (

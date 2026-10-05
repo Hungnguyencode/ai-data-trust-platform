@@ -343,6 +343,7 @@ def test_canonical_evaluation_scenarios_cover_harness_v1():
         "non_comparison_not_applicable",
         "mutation_request_boundary",
         "cross_layer_answerable",
+        "cross_domain_investigation",
         "mixed_claim_scoped_answerability",
         "claim_level_response_isolation",
     ]
@@ -456,6 +457,33 @@ def test_cross_layer_answerable_contract_requires_visible_payloads():
         "answerability_status": "ANSWERABLE",
         "used_llm": True,
         "all_requested_payload_visible": True,
+    }
+
+
+def test_cross_domain_investigation_contract():
+    scenarios = (
+        get_canonical_agent_evaluation_scenarios()
+    )
+
+    scenario = next(
+        scenario
+        for scenario in scenarios
+        if scenario["scenario_id"]
+        == "cross_domain_investigation"
+    )
+
+    assert scenario["expected"] == {
+        "requested_evidence_count": 5,
+        "attempted_tool_count": 5,
+        "accepted_evidence_count": 5,
+        "round_count": 2,
+        "coverage_status": "COMPLETE",
+        "sufficiency_status": "SUFFICIENT",
+        "claim_type": "CURRENT_STATE",
+        "claim_answerability_status": (
+            "ANSWERABLE"
+        ),
+        "permitted_evidence_count": 5,
     }
 
 
