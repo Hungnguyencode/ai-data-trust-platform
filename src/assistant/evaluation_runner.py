@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 from src.assistant import controlled_tools
 from src.assistant.evaluation_report import (
@@ -931,6 +932,152 @@ def run_cross_layer_answerable_evaluation(
     }
 
 
+def run_cross_domain_investigation_evaluation(
+) -> dict[str, Any]:
+    question = (
+        "Why is this dataset currently unhealthy?"
+    )
+
+    initial_tool_requests = (
+        controlled_tools
+        .plan_controlled_tool_requests(
+            question,
+            trusted_version_id=7,
+            trusted_catalog_id=1,
+        )
+    )
+
+    agent_run_summary: dict[str, Any] = {}
+    agent_evidence_coverage: dict[str, Any] = {}
+    agent_evidence_sufficiency: dict[
+        str,
+        Any,
+    ] = {}
+
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "marker": (
+                        f"{name}-evaluation-evidence"
+                    ),
+                },
+            ],
+        }
+
+    with patch.object(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    ):
+        controlled_tool_results = (
+            controlled_tools
+            .execute_bounded_controlled_tool_rounds(
+                question,
+                trusted_version_id=7,
+                trusted_catalog_id=1,
+                initial_tool_requests=(
+                    initial_tool_requests
+                ),
+                agent_run_summary=(
+                    agent_run_summary
+                ),
+                agent_evidence_coverage=(
+                    agent_evidence_coverage
+                ),
+                agent_evidence_sufficiency=(
+                    agent_evidence_sufficiency
+                ),
+            )
+        )
+
+    claim_evidence_assessments = (
+        controlled_tools
+        .build_claim_scoped_evidence_assessments(
+            question,
+            trusted_version_id=7,
+            trusted_catalog_id=1,
+            evidence_sufficiency=(
+                agent_evidence_sufficiency
+            ),
+        )
+    )
+
+    claim_scoped_results = (
+        controlled_tools
+        .build_claim_scoped_controlled_tool_results(
+            controlled_tool_results=(
+                controlled_tool_results
+            ),
+            claim_evidence_assessments=(
+                claim_evidence_assessments
+            ),
+        )
+    )
+
+    current_scope = next(
+        scope
+        for scope in claim_scoped_results
+        if scope["claim_type"] == "CURRENT_STATE"
+    )
+
+    return {
+        "requested_evidence_count": len(
+            agent_evidence_coverage[
+                "requested_evidence"
+            ]
+        ),
+        "attempted_tool_count": int(
+            agent_run_summary[
+                "attempted_tool_count"
+            ]
+        ),
+        "accepted_evidence_count": int(
+            agent_run_summary[
+                "accepted_evidence_count"
+            ]
+        ),
+        "round_count": int(
+            agent_run_summary[
+                "round_count"
+            ]
+        ),
+        "coverage_status": str(
+            agent_evidence_coverage[
+                "coverage_status"
+            ]
+        ),
+        "sufficiency_status": str(
+            agent_evidence_sufficiency[
+                "sufficiency_status"
+            ]
+        ),
+        "claim_type": str(
+            current_scope[
+                "claim_type"
+            ]
+        ),
+        "claim_answerability_status": str(
+            current_scope[
+                "answerability_status"
+            ]
+        ),
+        "permitted_evidence_count": len(
+            current_scope[
+                "permitted_evidence"
+            ]
+        ),
+    }
+
+
 def run_mixed_claim_scoped_answerability_evaluation(
 ) -> dict[str, Any]:
     question = (
@@ -1339,6 +1486,9 @@ def run_agent_evaluation_suite(
         ),
         "cross_layer_answerable": (
             run_cross_layer_answerable_evaluation()
+        ),
+        "cross_domain_investigation": (
+            run_cross_domain_investigation_evaluation()
         ),
         "mixed_claim_scoped_answerability": (
             run_mixed_claim_scoped_answerability_evaluation()

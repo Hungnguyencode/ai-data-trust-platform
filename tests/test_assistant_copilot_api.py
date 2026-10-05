@@ -2891,6 +2891,211 @@ def test_copilot_endpoint_delegates_multi_tool_execution_to_bounded_rounds(
     ]
 
 
+def test_copilot_endpoint_runs_cross_domain_unhealthy_investigation(
+    monkeypatch,
+):
+    diagnosis = _diagnosis()
+    explanation = _explanation()
+
+    executed_tools: list[str] = []
+    captured: dict = {}
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "build_platform_context"
+        ),
+        lambda catalog_id: _context(),
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "reason_about_platform_context"
+        ),
+        lambda value: diagnosis,
+    )
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "explain_platform_diagnosis"
+        ),
+        lambda value: explanation,
+    )
+
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        executed_tools.append(name)
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "observed_from": name,
+                },
+            ],
+        }
+
+    monkeypatch.setattr(
+        (
+            "src.assistant.controlled_tools."
+            "execute_controlled_tool"
+        ),
+        fake_execute_tool,
+    )
+
+    def fake_answer_copilot_question(
+        question,
+        diagnosis_value,
+        explanation_value,
+        *,
+        history=None,
+        controlled_tool_results=None,
+        claim_scoped_controlled_tool_results=None,
+        agent_evidence_answerability=None,
+    ):
+        del question
+        del diagnosis_value
+        del explanation_value
+        del history
+        del agent_evidence_answerability
+
+        captured[
+            "controlled_tool_results"
+        ] = controlled_tool_results
+
+        captured[
+            "claim_scoped_controlled_tool_results"
+        ] = claim_scoped_controlled_tool_results
+
+        return _copilot_result()
+
+    monkeypatch.setattr(
+        (
+            "api.routes.assistant."
+            "answer_copilot_question"
+        ),
+        fake_answer_copilot_question,
+    )
+
+    response = client.post(
+        "/api/assistant/catalog/4/copilot",
+        json={
+            "question": (
+                "Why is this dataset "
+                "currently unhealthy?"
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert executed_tools == [
+        "get_version_lineage",
+        "get_freshness_history",
+        "get_volume_history",
+        "get_pipeline_run_history",
+        "get_operational_event_history",
+    ]
+
+    payload = response.json()
+
+    assert [
+        item["tool_name"]
+        for item in payload[
+            "tool_execution_trace"
+        ]
+    ] == executed_tools
+
+    assert payload[
+        "agent_run_summary"
+    ] == {
+        "round_count": 2,
+        "stop_reason": "MAX_ROUNDS_REACHED",
+        "attempted_tool_count": 5,
+        "accepted_evidence_count": 5,
+        "failed_tool_count": 0,
+    }
+
+    assert payload[
+        "agent_evidence_coverage"
+    ] == {
+        "requested_evidence": [
+            "version_lineage",
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+            "operational_event_history",
+        ],
+        "attempted_evidence": [
+            "version_lineage",
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+            "operational_event_history",
+        ],
+        "accepted_evidence": [
+            "version_lineage",
+            "freshness_history",
+            "volume_history",
+            "pipeline_run_history",
+            "operational_event_history",
+        ],
+        "missing_evidence": [],
+        "coverage_status": "COMPLETE",
+    }
+
+    assert payload[
+        "agent_evidence_sufficiency"
+    ]["sufficiency_status"] == (
+        "SUFFICIENT"
+    )
+
+    claim_scopes = captured[
+        "claim_scoped_controlled_tool_results"
+    ]
+
+    assert len(claim_scopes) == 1
+
+    claim_scope = claim_scopes[0]
+
+    assert claim_scope[
+        "claim_type"
+    ] == "CURRENT_STATE"
+
+    assert claim_scope[
+        "answerability_status"
+    ] == "ANSWERABLE"
+
+    assert claim_scope[
+        "permitted_evidence"
+    ] == [
+        "version_lineage",
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+    assert claim_scope[
+        "restricted_evidence"
+    ] == []
+
+    assert [
+        result["name"]
+        for result in claim_scope[
+            "controlled_tool_results"
+        ]
+    ] == executed_tools
+
+
 def test_claim_response_provenance_accepts_safe_evidence_requirements():
     response = AssistantCopilotResponse(
         catalog_id=4,
