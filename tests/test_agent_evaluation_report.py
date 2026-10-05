@@ -345,6 +345,9 @@ def test_canonical_evaluation_scenarios_cover_harness_v1():
         "cross_layer_answerable",
         "cross_domain_investigation",
         "cross_domain_response_provenance",
+        "cross_domain_promotion_diagnosis",
+        "cross_domain_prioritization",
+        "cross_domain_recommendation_evidence",
         "mixed_claim_scoped_answerability",
         "claim_level_response_isolation",
     ]
@@ -508,6 +511,85 @@ def test_cross_domain_response_provenance_contract():
         "evidence_tool_count": 5,
         "evidence_requirement_count": 5,
         "all_requirements_satisfied": True,
+        "used_llm": True,
+        "raw_evidence_payload_exposed": False,
+    }
+
+
+def test_cross_domain_promotion_diagnosis_contract():
+    scenarios = (
+        get_canonical_agent_evaluation_scenarios()
+    )
+
+    scenario = next(
+        scenario
+        for scenario in scenarios
+        if scenario["scenario_id"]
+        == "cross_domain_promotion_diagnosis"
+    )
+
+    assert scenario["expected"] == {
+        "requested_evidence_count": 5,
+        "attempted_tool_count": 5,
+        "accepted_evidence_count": 5,
+        "claim_type": "CURRENT_STATE",
+        "answerability_status": "ANSWERABLE",
+        "permitted_evidence_count": 5,
+        "response_mode": "LLM",
+        "evidence_tool_count": 5,
+        "used_llm": True,
+        "mutation_request_rejected": True,
+        "raw_evidence_payload_exposed": False,
+    }
+
+
+def test_cross_domain_prioritization_contract():
+    scenarios = (
+        get_canonical_agent_evaluation_scenarios()
+    )
+
+    scenario = next(
+        scenario
+        for scenario in scenarios
+        if scenario["scenario_id"]
+        == "cross_domain_prioritization"
+    )
+
+    assert scenario["expected"] == {
+        "requested_evidence_count": 5,
+        "attempted_tool_count": 5,
+        "accepted_evidence_count": 5,
+        "claim_type": "CURRENT_STATE",
+        "answerability_status": "ANSWERABLE",
+        "permitted_evidence_count": 5,
+        "response_mode": "LLM",
+        "evidence_tool_count": 5,
+        "used_llm": True,
+        "raw_evidence_payload_exposed": False,
+    }
+
+
+def test_cross_domain_recommendation_evidence_contract():
+    scenarios = (
+        get_canonical_agent_evaluation_scenarios()
+    )
+
+    scenario = next(
+        scenario
+        for scenario in scenarios
+        if scenario["scenario_id"]
+        == "cross_domain_recommendation_evidence"
+    )
+
+    assert scenario["expected"] == {
+        "requested_evidence_count": 5,
+        "attempted_tool_count": 5,
+        "accepted_evidence_count": 5,
+        "claim_type": "CURRENT_STATE",
+        "answerability_status": "ANSWERABLE",
+        "permitted_evidence_count": 5,
+        "response_mode": "LLM",
+        "evidence_tool_count": 5,
         "used_llm": True,
         "raw_evidence_payload_exposed": False,
     }
