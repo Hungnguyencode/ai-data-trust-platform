@@ -169,13 +169,74 @@ def test_cross_domain_response_provenance_uses_real_copilot_path():
     }
 
 
+def test_cross_domain_promotion_diagnosis_uses_real_copilot_path():
+    observed = (
+        evaluation_runner
+        .run_cross_domain_promotion_diagnosis_evaluation()
+    )
+
+    assert observed == {
+        "requested_evidence_count": 5,
+        "attempted_tool_count": 5,
+        "accepted_evidence_count": 5,
+        "claim_type": "CURRENT_STATE",
+        "answerability_status": "ANSWERABLE",
+        "permitted_evidence_count": 5,
+        "response_mode": "LLM",
+        "evidence_tool_count": 5,
+        "used_llm": True,
+        "mutation_request_rejected": True,
+        "raw_evidence_payload_exposed": False,
+    }
+
+
+def test_cross_domain_prioritization_uses_real_copilot_path():
+    observed = (
+        evaluation_runner
+        .run_cross_domain_prioritization_evaluation()
+    )
+
+    assert observed == {
+        "requested_evidence_count": 5,
+        "attempted_tool_count": 5,
+        "accepted_evidence_count": 5,
+        "claim_type": "CURRENT_STATE",
+        "answerability_status": "ANSWERABLE",
+        "permitted_evidence_count": 5,
+        "response_mode": "LLM",
+        "evidence_tool_count": 5,
+        "used_llm": True,
+        "raw_evidence_payload_exposed": False,
+    }
+
+
+def test_cross_domain_recommendation_evidence_uses_real_copilot_path():
+    observed = (
+        evaluation_runner
+        .run_cross_domain_recommendation_evidence_evaluation()
+    )
+
+    assert observed == {
+        "requested_evidence_count": 5,
+        "attempted_tool_count": 5,
+        "accepted_evidence_count": 5,
+        "claim_type": "CURRENT_STATE",
+        "answerability_status": "ANSWERABLE",
+        "permitted_evidence_count": 5,
+        "response_mode": "LLM",
+        "evidence_tool_count": 5,
+        "used_llm": True,
+        "raw_evidence_payload_exposed": False,
+    }
+
+
 def test_agent_evaluation_suite_builds_complete_passing_report():
     report = run_agent_evaluation_suite()
 
     assert report["evaluation_version"] == "v1"
     assert report["overall_status"] == "PASS"
-    assert report["scenario_count"] == 13
-    assert report["passed_count"] == 13
+    assert report["scenario_count"] == 16
+    assert report["passed_count"] == 16
     assert report["failed_count"] == 0
 
     assert [
@@ -193,6 +254,9 @@ def test_agent_evaluation_suite_builds_complete_passing_report():
         "cross_layer_answerable",
         "cross_domain_investigation",
         "cross_domain_response_provenance",
+        "cross_domain_promotion_diagnosis",
+        "cross_domain_prioritization",
+        "cross_domain_recommendation_evidence",
         "mixed_claim_scoped_answerability",
         "claim_level_response_isolation",
     ]
