@@ -230,13 +230,37 @@ def test_cross_domain_recommendation_evidence_uses_real_copilot_path():
     }
 
 
+def test_cross_domain_historical_comparison_uses_real_copilot_path():
+    observed = (
+        evaluation_runner
+        .run_cross_domain_historical_comparison_evaluation()
+    )
+
+    assert observed == {
+        "requested_evidence_count": 4,
+        "attempted_tool_count": 4,
+        "accepted_evidence_count": 4,
+        "claim_type": "HISTORICAL_COMPARISON",
+        "answerability_status": "ANSWERABLE",
+        "permitted_evidence_count": 4,
+        "evidence_requirement_count": 4,
+        "minimum_item_count": 2,
+        "all_requirements_satisfied": True,
+        "response_mode": "LLM",
+        "evidence_tool_count": 4,
+        "used_llm": True,
+        "version_lineage_requested": False,
+        "raw_evidence_payload_exposed": False,
+    }
+
+
 def test_agent_evaluation_suite_builds_complete_passing_report():
     report = run_agent_evaluation_suite()
 
     assert report["evaluation_version"] == "v1"
     assert report["overall_status"] == "PASS"
-    assert report["scenario_count"] == 16
-    assert report["passed_count"] == 16
+    assert report["scenario_count"] == 17
+    assert report["passed_count"] == 17
     assert report["failed_count"] == 0
 
     assert [
@@ -257,6 +281,7 @@ def test_agent_evaluation_suite_builds_complete_passing_report():
         "cross_domain_promotion_diagnosis",
         "cross_domain_prioritization",
         "cross_domain_recommendation_evidence",
+        "cross_domain_historical_comparison",
         "mixed_claim_scoped_answerability",
         "claim_level_response_isolation",
     ]

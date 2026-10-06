@@ -2029,6 +2029,303 @@ def run_cross_domain_recommendation_evidence_evaluation(
     }
 
 
+def run_cross_domain_historical_comparison_evaluation(
+) -> dict[str, Any]:
+    question = (
+        "What changed since the previous ingestion?"
+    )
+
+    initial_tool_requests = (
+        controlled_tools
+        .plan_controlled_tool_requests(
+            question,
+            trusted_version_id=7,
+            trusted_catalog_id=1,
+        )
+    )
+
+    agent_run_summary: dict[str, Any] = {}
+    agent_evidence_coverage: dict[str, Any] = {}
+    agent_evidence_sufficiency: dict[
+        str,
+        Any,
+    ] = {}
+
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "marker": (
+                        f"{name}-historical-before"
+                    ),
+                },
+                {
+                    "marker": (
+                        f"{name}-historical-after"
+                    ),
+                },
+            ],
+        }
+
+    with patch.object(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    ):
+        controlled_tool_results = (
+            controlled_tools
+            .execute_bounded_controlled_tool_rounds(
+                question,
+                trusted_version_id=7,
+                trusted_catalog_id=1,
+                initial_tool_requests=(
+                    initial_tool_requests
+                ),
+                agent_run_summary=(
+                    agent_run_summary
+                ),
+                agent_evidence_coverage=(
+                    agent_evidence_coverage
+                ),
+                agent_evidence_sufficiency=(
+                    agent_evidence_sufficiency
+                ),
+            )
+        )
+
+    evidence_answerability = (
+        controlled_tools
+        .build_controlled_evidence_answerability(
+            question=question,
+            evidence_sufficiency=(
+                agent_evidence_sufficiency
+            ),
+        )
+    )
+
+    claim_evidence_assessments = (
+        controlled_tools
+        .build_claim_scoped_evidence_assessments(
+            question,
+            trusted_version_id=7,
+            trusted_catalog_id=1,
+            evidence_sufficiency=(
+                agent_evidence_sufficiency
+            ),
+        )
+    )
+
+    claim_scoped_controlled_tool_results = (
+        controlled_tools
+        .build_claim_scoped_controlled_tool_results(
+            controlled_tool_results=(
+                controlled_tool_results
+            ),
+            claim_evidence_assessments=(
+                claim_evidence_assessments
+            ),
+        )
+    )
+
+    historical_scope = next(
+        scope
+        for scope
+        in claim_scoped_controlled_tool_results
+        if scope["claim_type"]
+        == "HISTORICAL_COMPARISON"
+    )
+
+    provider_observation = {
+        "call_count": 0,
+    }
+
+    class InspectPromptModels:
+        def generate_content(
+            self,
+            *,
+            model,
+            contents,
+        ):
+            del model
+            del contents
+
+            provider_observation[
+                "call_count"
+            ] += 1
+
+            return SimpleNamespace(
+                text=(
+                    "Cross-domain historical evidence "
+                    "explains what changed since the "
+                    "previous ingestion."
+                )
+            )
+
+    result = _run_copilot_evaluation(
+        question=question,
+        controlled_tool_results=(
+            controlled_tool_results
+        ),
+        evidence_answerability=(
+            evidence_answerability
+        ),
+        claim_scoped_controlled_tool_results=(
+            claim_scoped_controlled_tool_results
+        ),
+        models=InspectPromptModels(),
+    )
+
+    provenance = list(
+        result.get(
+            "claim_response_provenance",
+            [],
+        )
+        or []
+    )
+
+    claim = (
+        provenance[0]
+        if len(provenance) == 1
+        else {}
+    )
+
+    evidence_requirements = list(
+        claim.get(
+            "evidence_requirements",
+            [],
+        )
+        or []
+    )
+
+    evidence_tool_names = list(
+        claim.get(
+            "evidence_tool_names",
+            [],
+        )
+        or []
+    )
+
+    requested_evidence = list(
+        agent_evidence_coverage.get(
+            "requested_evidence",
+            [],
+        )
+        or []
+    )
+
+    minimum_item_counts = {
+        int(
+            requirement.get(
+                "minimum_item_count",
+                0,
+            )
+        )
+        for requirement in evidence_requirements
+        if isinstance(requirement, dict)
+    }
+
+    minimum_item_count = (
+        next(iter(minimum_item_counts))
+        if len(minimum_item_counts) == 1
+        else 0
+    )
+
+    all_requirements_satisfied = (
+        bool(evidence_requirements)
+        and all(
+            requirement.get(
+                "requirement_status"
+            )
+            == "SATISFIED"
+            for requirement
+            in evidence_requirements
+        )
+    )
+
+    raw_evidence_payload_exposed = any(
+        (
+            "controlled_tool_results" in item
+            or "result" in item
+        )
+        for item in provenance
+        if isinstance(item, dict)
+    )
+
+    return {
+        "requested_evidence_count": len(
+            requested_evidence
+        ),
+        "attempted_tool_count": int(
+            agent_run_summary[
+                "attempted_tool_count"
+            ]
+        ),
+        "accepted_evidence_count": int(
+            agent_run_summary[
+                "accepted_evidence_count"
+            ]
+        ),
+        "claim_type": str(
+            historical_scope[
+                "claim_type"
+            ]
+        ),
+        "answerability_status": str(
+            historical_scope[
+                "answerability_status"
+            ]
+        ),
+        "permitted_evidence_count": len(
+            historical_scope[
+                "permitted_evidence"
+            ]
+        ),
+        "evidence_requirement_count": len(
+            evidence_requirements
+        ),
+        "minimum_item_count": (
+            minimum_item_count
+        ),
+        "all_requirements_satisfied": (
+            all_requirements_satisfied
+        ),
+        "response_mode": str(
+            claim.get(
+                "response_mode",
+                "",
+            )
+        ),
+        "evidence_tool_count": len(
+            evidence_tool_names
+        ),
+        "used_llm": bool(
+            claim.get(
+                "used_llm",
+                False,
+            )
+            and provider_observation[
+                "call_count"
+            ]
+            == 1
+        ),
+        "version_lineage_requested": (
+            "version_lineage"
+            in requested_evidence
+        ),
+        "raw_evidence_payload_exposed": (
+            raw_evidence_payload_exposed
+        ),
+    }
+
+
 def run_mixed_claim_scoped_answerability_evaluation(
 ) -> dict[str, Any]:
     question = (
@@ -2452,6 +2749,9 @@ def run_agent_evaluation_suite(
         ),
         "cross_domain_recommendation_evidence": (
             run_cross_domain_recommendation_evidence_evaluation()
+        ),
+        "cross_domain_historical_comparison": (
+            run_cross_domain_historical_comparison_evaluation()
         ),
         "mixed_claim_scoped_answerability": (
             run_mixed_claim_scoped_answerability_evaluation()
