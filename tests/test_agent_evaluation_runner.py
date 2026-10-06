@@ -254,13 +254,29 @@ def test_cross_domain_historical_comparison_uses_real_copilot_path():
     }
 
 
+def test_paraphrase_robustness_evaluation_uses_real_classification_path():
+    observed = (
+        evaluation_runner
+        .run_paraphrase_robustness_evaluation()
+    )
+
+    assert observed == {
+        "paraphrase_pair_count": 5,
+        "intent_match_count": 5,
+        "claim_type_match_count": 5,
+        "evidence_plan_match_count": 5,
+        "historical_not_answerable_parity": True,
+        "historical_answerable_parity": True,
+    }
+
+
 def test_agent_evaluation_suite_builds_complete_passing_report():
     report = run_agent_evaluation_suite()
 
     assert report["evaluation_version"] == "v1"
     assert report["overall_status"] == "PASS"
-    assert report["scenario_count"] == 17
-    assert report["passed_count"] == 17
+    assert report["scenario_count"] == 18
+    assert report["passed_count"] == 18
     assert report["failed_count"] == 0
 
     assert [
@@ -282,6 +298,7 @@ def test_agent_evaluation_suite_builds_complete_passing_report():
         "cross_domain_prioritization",
         "cross_domain_recommendation_evidence",
         "cross_domain_historical_comparison",
+        "paraphrase_robustness",
         "mixed_claim_scoped_answerability",
         "claim_level_response_isolation",
     ]
