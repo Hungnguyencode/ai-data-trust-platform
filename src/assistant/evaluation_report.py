@@ -339,6 +339,25 @@ def get_canonical_agent_evaluation_scenarios(
         },
         {
             "scenario_id": (
+                "paraphrase_robustness"
+            ),
+            "description": (
+                "Semantically equivalent paraphrases "
+                "must preserve investigation intent, "
+                "claim type, evidence planning, and "
+                "historical answerability behavior."
+            ),
+            "expected": {
+                "paraphrase_pair_count": 5,
+                "intent_match_count": 5,
+                "claim_type_match_count": 5,
+                "evidence_plan_match_count": 5,
+                "historical_not_answerable_parity": True,
+                "historical_answerable_parity": True,
+            },
+        },
+        {
+            "scenario_id": (
                 "mixed_claim_scoped_answerability"
             ),
             "description": (

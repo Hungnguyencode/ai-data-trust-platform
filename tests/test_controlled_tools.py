@@ -1555,6 +1555,23 @@ def test_cross_domain_promotion_diagnosis_does_not_bypass_mutation_rejection():
     assert evidence == []
 
 
+def test_promotion_diagnosis_paraphrase_does_not_bypass_mutation_rejection():
+    evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            (
+                "What is blocking this version "
+                "from promotion? "
+                "Promote it now."
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert evidence == []
+
+
 def test_cross_domain_investigation_executes_all_evidence_across_bounded_rounds(
     monkeypatch,
 ):
@@ -1642,6 +1659,75 @@ def test_cross_domain_investigation_prioritization_requests_all_read_only_eviden
     ]
 
 
+@pytest.mark.parametrize(
+    (
+        "canonical_question",
+        "paraphrase_question",
+    ),
+    [
+        (
+            "Why is this dataset currently unhealthy?",
+            (
+                "Why is the dataset in a bad state "
+                "right now?"
+            ),
+        ),
+        (
+            "Why should this version not be promoted?",
+            (
+                "What is blocking this version "
+                "from promotion?"
+            ),
+        ),
+        (
+            "Which problem should be investigated first?",
+            (
+                "Which issue should I "
+                "investigate first?"
+            ),
+        ),
+        (
+            "What evidence supports this recommendation?",
+            (
+                "What evidence backs "
+                "this recommendation?"
+            ),
+        ),
+    ],
+)
+def test_current_state_paraphrases_preserve_cross_domain_evidence_plan(
+    canonical_question,
+    paraphrase_question,
+):
+    canonical_evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            canonical_question,
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    paraphrase_evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            paraphrase_question,
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert paraphrase_evidence == canonical_evidence
+
+    assert paraphrase_evidence == [
+        "version_lineage",
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+
 def test_cross_domain_investigation_prioritization_builds_claim_scoped_requirements():
     requirements = (
         controlled_tools
@@ -1698,6 +1784,41 @@ def test_cross_domain_previous_ingestion_comparison_requests_history_evidence():
     )
 
     assert evidence == [
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+
+def test_historical_paraphrase_preserves_cross_domain_evidence_plan():
+    canonical_evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            (
+                "What changed since "
+                "the previous ingestion?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    paraphrase_evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            (
+                "How is this ingestion different "
+                "from the last one?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert paraphrase_evidence == canonical_evidence
+
+    assert paraphrase_evidence == [
         "freshness_history",
         "volume_history",
         "pipeline_run_history",
@@ -1793,6 +1914,53 @@ def test_cross_domain_previous_ingestion_comparison_builds_claim_scoped_requirem
             "minimum_item_count": 2,
         },
     ]
+
+
+def test_historical_paraphrase_preserves_claim_scoped_requirements():
+    canonical_requirements = (
+        controlled_tools
+        .plan_claim_scoped_evidence_requirements(
+            (
+                "What changed since "
+                "the previous ingestion?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    paraphrase_requirements = (
+        controlled_tools
+        .plan_claim_scoped_evidence_requirements(
+            (
+                "How is this ingestion different "
+                "from the last one?"
+            ),
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert (
+        paraphrase_requirements
+        == canonical_requirements
+    )
+
+    assert {
+        requirement["claim_type"]
+        for requirement
+        in paraphrase_requirements
+    } == {
+        "HISTORICAL_COMPARISON",
+    }
+
+    assert {
+        requirement["minimum_item_count"]
+        for requirement
+        in paraphrase_requirements
+    } == {
+        2,
+    }
 
 
 def test_cross_domain_previous_ingestion_with_one_item_per_domain_is_not_answerable(
@@ -1899,6 +2067,89 @@ def test_cross_domain_previous_ingestion_with_one_item_per_domain_is_not_answera
     ]
 
 
+def test_historical_paraphrase_preserves_not_answerable_gate(
+    monkeypatch,
+):
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "observed_from": name,
+                },
+            ],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    canonical_answerability: dict = {}
+    paraphrase_answerability: dict = {}
+
+    controlled_tools.execute_bounded_controlled_tool_rounds(
+        (
+            "What changed since "
+            "the previous ingestion?"
+        ),
+        trusted_version_id=6,
+        trusted_catalog_id=4,
+        agent_evidence_answerability=(
+            canonical_answerability
+        ),
+    )
+
+    controlled_tools.execute_bounded_controlled_tool_rounds(
+        (
+            "How is this ingestion different "
+            "from the last one?"
+        ),
+        trusted_version_id=6,
+        trusted_catalog_id=4,
+        agent_evidence_answerability=(
+            paraphrase_answerability
+        ),
+    )
+
+    assert (
+        paraphrase_answerability
+        == canonical_answerability
+    )
+
+    assert paraphrase_answerability[
+        "assessment_scope"
+    ] == "HISTORICAL_COMPARISON"
+
+    assert paraphrase_answerability[
+        "answerability_status"
+    ] == "NOT_ANSWERABLE"
+
+    assert [
+        requirement["minimum_item_count"]
+        for requirement
+        in paraphrase_answerability[
+            "evidence_requirements"
+        ]
+    ] == [2, 2, 2, 2]
+
+    assert [
+        requirement["observed_item_count"]
+        for requirement
+        in paraphrase_answerability[
+            "evidence_requirements"
+        ]
+    ] == [1, 1, 1, 1]
+
+
 def test_cross_domain_previous_ingestion_with_two_items_per_domain_is_answerable(
     monkeypatch,
 ):
@@ -2002,6 +2253,98 @@ def test_cross_domain_previous_ingestion_with_two_items_per_domain_is_answerable
         "SATISFIED",
         "SATISFIED",
     ]
+
+
+def test_historical_paraphrase_preserves_answerable_gate(
+    monkeypatch,
+):
+    def fake_execute_tool(
+        name,
+        arguments,
+    ):
+        del arguments
+
+        return {
+            "name": name,
+            "read_only": True,
+            "ok": True,
+            "result": [
+                {
+                    "observed_from": name,
+                    "sequence": 1,
+                },
+                {
+                    "observed_from": name,
+                    "sequence": 2,
+                },
+            ],
+        }
+
+    monkeypatch.setattr(
+        controlled_tools,
+        "execute_controlled_tool",
+        fake_execute_tool,
+    )
+
+    canonical_answerability: dict = {}
+    paraphrase_answerability: dict = {}
+
+    controlled_tools.execute_bounded_controlled_tool_rounds(
+        (
+            "What changed since "
+            "the previous ingestion?"
+        ),
+        trusted_version_id=6,
+        trusted_catalog_id=4,
+        agent_evidence_answerability=(
+            canonical_answerability
+        ),
+    )
+
+    controlled_tools.execute_bounded_controlled_tool_rounds(
+        (
+            "How is this ingestion different "
+            "from the last one?"
+        ),
+        trusted_version_id=6,
+        trusted_catalog_id=4,
+        agent_evidence_answerability=(
+            paraphrase_answerability
+        ),
+    )
+
+    assert (
+        paraphrase_answerability
+        == canonical_answerability
+    )
+
+    assert paraphrase_answerability[
+        "assessment_scope"
+    ] == "HISTORICAL_COMPARISON"
+
+    assert paraphrase_answerability[
+        "answerability_status"
+    ] == "ANSWERABLE"
+
+    assert paraphrase_answerability[
+        "insufficient_evidence"
+    ] == []
+
+    assert [
+        requirement["minimum_item_count"]
+        for requirement
+        in paraphrase_answerability[
+            "evidence_requirements"
+        ]
+    ] == [2, 2, 2, 2]
+
+    assert [
+        requirement["observed_item_count"]
+        for requirement
+        in paraphrase_answerability[
+            "evidence_requirements"
+        ]
+    ] == [2, 2, 2, 2]
 
 
 def test_previous_ingestion_domain_specific_request_does_not_expand_cross_domain():

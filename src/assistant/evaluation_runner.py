@@ -8,6 +8,10 @@ from src.assistant import controlled_tools
 from src.assistant.evaluation_report import (
     build_agent_evaluation_report_from_observed,
 )
+from src.assistant.investigation_intent import (
+    classify_claim_types,
+    classify_investigation_intent,
+)
 from src.assistant.llm_provider import (
     LLMProviderConfig,
 )
@@ -2705,6 +2709,216 @@ def run_claim_level_response_isolation_evaluation(
     }
 
 
+def run_paraphrase_robustness_evaluation(
+) -> dict[str, Any]:
+    question_pairs = [
+        (
+            "Why is this dataset currently unhealthy?",
+            (
+                "Why is the dataset in a bad state "
+                "right now?"
+            ),
+        ),
+        (
+            "Why should this version not be promoted?",
+            (
+                "What is blocking this version "
+                "from promotion?"
+            ),
+        ),
+        (
+            "Which problem should be investigated first?",
+            (
+                "Which issue should I "
+                "investigate first?"
+            ),
+        ),
+        (
+            "What evidence supports this recommendation?",
+            (
+                "What evidence backs "
+                "this recommendation?"
+            ),
+        ),
+        (
+            (
+                "What changed since "
+                "the previous ingestion?"
+            ),
+            (
+                "How is this ingestion different "
+                "from the last one?"
+            ),
+        ),
+    ]
+
+    intent_match_count = 0
+    claim_type_match_count = 0
+    evidence_plan_match_count = 0
+
+    for canonical_question, paraphrase_question in question_pairs:
+        canonical_intent = (
+            classify_investigation_intent(
+                canonical_question
+            )
+        )
+
+        paraphrase_intent = (
+            classify_investigation_intent(
+                paraphrase_question
+            )
+        )
+
+        if canonical_intent == paraphrase_intent:
+            intent_match_count += 1
+
+        canonical_claim_types = (
+            classify_claim_types(
+                canonical_question
+            )
+        )
+
+        paraphrase_claim_types = (
+            classify_claim_types(
+                paraphrase_question
+            )
+        )
+
+        if (
+            canonical_claim_types
+            == paraphrase_claim_types
+        ):
+            claim_type_match_count += 1
+
+        canonical_evidence = (
+            controlled_tools
+            .plan_controlled_evidence_requirements(
+                canonical_question,
+                trusted_version_id=7,
+                trusted_catalog_id=1,
+            )
+        )
+
+        paraphrase_evidence = (
+            controlled_tools
+            .plan_controlled_evidence_requirements(
+                paraphrase_question,
+                trusted_version_id=7,
+                trusted_catalog_id=1,
+            )
+        )
+
+        if canonical_evidence == paraphrase_evidence:
+            evidence_plan_match_count += 1
+
+    historical_canonical = (
+        "What changed since the previous ingestion?"
+    )
+
+    historical_paraphrase = (
+        "How is this ingestion different "
+        "from the last one?"
+    )
+
+    def historical_answerability(
+        question: str,
+        item_count: int,
+    ) -> str:
+        def fake_execute_tool(
+            name,
+            arguments,
+        ):
+            del arguments
+
+            return {
+                "name": name,
+                "read_only": True,
+                "ok": True,
+                "result": [
+                    {
+                        "sequence": index,
+                    }
+                    for index
+                    in range(item_count)
+                ],
+            }
+
+        answerability: dict[str, Any] = {}
+
+        with patch.object(
+            controlled_tools,
+            "execute_controlled_tool",
+            fake_execute_tool,
+        ):
+            controlled_tools.execute_bounded_controlled_tool_rounds(
+                question,
+                trusted_version_id=7,
+                trusted_catalog_id=1,
+                agent_evidence_answerability=(
+                    answerability
+                ),
+            )
+
+        return str(
+            answerability[
+                "answerability_status"
+            ]
+        )
+
+    canonical_not_answerable = (
+        historical_answerability(
+            historical_canonical,
+            1,
+        )
+    )
+
+    paraphrase_not_answerable = (
+        historical_answerability(
+            historical_paraphrase,
+            1,
+        )
+    )
+
+    canonical_answerable = (
+        historical_answerability(
+            historical_canonical,
+            2,
+        )
+    )
+
+    paraphrase_answerable = (
+        historical_answerability(
+            historical_paraphrase,
+            2,
+        )
+    )
+
+    return {
+        "paraphrase_pair_count": len(
+            question_pairs
+        ),
+        "intent_match_count": (
+            intent_match_count
+        ),
+        "claim_type_match_count": (
+            claim_type_match_count
+        ),
+        "evidence_plan_match_count": (
+            evidence_plan_match_count
+        ),
+        "historical_not_answerable_parity": (
+            canonical_not_answerable
+            == paraphrase_not_answerable
+            == "NOT_ANSWERABLE"
+        ),
+        "historical_answerable_parity": (
+            canonical_answerable
+            == paraphrase_answerable
+            == "ANSWERABLE"
+        ),
+    }
+
+
 def run_agent_evaluation_suite(
 ) -> dict[str, Any]:
     observed_results = {
@@ -2752,6 +2966,9 @@ def run_agent_evaluation_suite(
         ),
         "cross_domain_historical_comparison": (
             run_cross_domain_historical_comparison_evaluation()
+        ),
+        "paraphrase_robustness": (
+            run_paraphrase_robustness_evaluation()
         ),
         "mixed_claim_scoped_answerability": (
             run_mixed_claim_scoped_answerability_evaluation()

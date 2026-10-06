@@ -82,3 +82,109 @@ def test_classifies_claim_types(
         classify_claim_types(question)
         == expected_claim_types
     )
+
+
+def test_historical_paraphrase_maps_to_same_classification():
+    question = (
+        "How is this ingestion different "
+        "from the last one?"
+    )
+
+    assert (
+        classify_investigation_intent(question)
+        == "HISTORICAL_COMPARISON"
+    )
+
+    assert classify_claim_types(
+        question
+    ) == [
+        "HISTORICAL_COMPARISON",
+    ]
+
+
+def test_promotion_diagnosis_paraphrase_maps_to_same_classification():
+    question = (
+        "What is blocking this version "
+        "from promotion?"
+    )
+
+    assert (
+        classify_investigation_intent(question)
+        == "PROMOTION_DIAGNOSIS"
+    )
+
+    assert classify_claim_types(
+        question
+    ) == [
+        "CURRENT_STATE",
+    ]
+
+
+def test_prioritization_paraphrase_maps_to_same_classification():
+    question = (
+        "Which issue should I "
+        "investigate first?"
+    )
+
+    assert (
+        classify_investigation_intent(question)
+        == "PRIORITIZATION"
+    )
+
+    assert classify_claim_types(
+        question
+    ) == [
+        "CURRENT_STATE",
+    ]
+
+
+def test_recommendation_evidence_paraphrase_maps_to_same_classification():
+    question = (
+        "What evidence backs "
+        "this recommendation?"
+    )
+
+    assert (
+        classify_investigation_intent(question)
+        == "RECOMMENDATION_EVIDENCE"
+    )
+
+    assert classify_claim_types(
+        question
+    ) == [
+        "CURRENT_STATE",
+    ]
+
+
+def test_current_state_investigation_paraphrase_maps_to_same_classification():
+    question = (
+        "Why is the dataset in a bad state "
+        "right now?"
+    )
+
+    assert (
+        classify_investigation_intent(question)
+        == "CURRENT_STATE_INVESTIGATION"
+    )
+
+    assert classify_claim_types(
+        question
+    ) == [
+        "CURRENT_STATE",
+    ]
+
+
+def test_rollback_reference_does_not_match_recommendation_support():
+    question = (
+        "What evidence is available "
+        "for this rollback recommendation?"
+    )
+
+    assert (
+        classify_investigation_intent(question)
+        == "UNCLASSIFIED"
+    )
+
+    assert classify_claim_types(
+        question
+    ) == []

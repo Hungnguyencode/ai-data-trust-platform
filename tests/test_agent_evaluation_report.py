@@ -349,6 +349,7 @@ def test_canonical_evaluation_scenarios_cover_harness_v1():
         "cross_domain_prioritization",
         "cross_domain_recommendation_evidence",
         "cross_domain_historical_comparison",
+        "paraphrase_robustness",
         "mixed_claim_scoped_answerability",
         "claim_level_response_isolation",
     ]
@@ -623,6 +624,28 @@ def test_cross_domain_historical_comparison_contract():
         "used_llm": True,
         "version_lineage_requested": False,
         "raw_evidence_payload_exposed": False,
+    }
+
+
+def test_paraphrase_robustness_contract():
+    scenarios = (
+        get_canonical_agent_evaluation_scenarios()
+    )
+
+    scenario = next(
+        scenario
+        for scenario in scenarios
+        if scenario["scenario_id"]
+        == "paraphrase_robustness"
+    )
+
+    assert scenario["expected"] == {
+        "paraphrase_pair_count": 5,
+        "intent_match_count": 5,
+        "claim_type_match_count": 5,
+        "evidence_plan_match_count": 5,
+        "historical_not_answerable_parity": True,
+        "historical_answerable_parity": True,
     }
 
 
