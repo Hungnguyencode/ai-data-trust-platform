@@ -1,5 +1,6 @@
 import pytest
 
+from src.assistant import claim_evidence
 from src.assistant.claim_evidence import (
     assess_claim_evidence,
     build_claim_evidence_assessment,
@@ -579,5 +580,41 @@ def test_plan_claim_evidence_requirements_detects_mixed_claims():
             "claim_type": "CURRENT_STATE",
             "evidence_type": "volume_history",
             "minimum_item_count": 1,
+        },
+    ]
+
+
+def test_claim_evidence_planner_uses_shared_claim_classifier(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        claim_evidence,
+        "classify_claim_types",
+        lambda question: [
+            "HISTORICAL_COMPARISON",
+        ],
+    )
+
+    requirements = (
+        claim_evidence
+        .plan_claim_evidence_requirements(
+            question=(
+                "Opaque claim request."
+            ),
+            requested_evidence=[
+                "volume_history",
+            ],
+        )
+    )
+
+    assert requirements == [
+        {
+            "claim_type": (
+                "HISTORICAL_COMPARISON"
+            ),
+            "evidence_type": (
+                "volume_history"
+            ),
+            "minimum_item_count": 2,
         },
     ]

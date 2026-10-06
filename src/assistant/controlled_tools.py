@@ -29,6 +29,10 @@ from src.assistant.claim_evidence import (
     build_claim_evidence_requirement,
     plan_claim_evidence_requirements,
 )
+from src.assistant.investigation_intent import (
+    classify_claim_types,
+    classify_investigation_intent,
+)
 from src.assistant.platform_context import (
     _json_safe,
 )
@@ -568,6 +572,12 @@ def _build_controlled_tool_candidates(
     if not normalized_question:
         return []
 
+    investigation_intent = (
+        classify_investigation_intent(
+            question
+        )
+    )
+
     mutating_terms = (
         "promote",
         "activate",
@@ -598,13 +608,8 @@ def _build_controlled_tool_candidates(
         dict[str, Any]
     ] = []
 
-    historical_cross_domain_terms = (
-        "changed since the previous ingestion",
-    )
-
-    if any(
-        term in normalized_question
-        for term in historical_cross_domain_terms
+    if investigation_intent == (
+        "HISTORICAL_COMPARISON"
     ):
         if trusted_catalog_id is None:
             return []
@@ -645,22 +650,17 @@ def _build_controlled_tool_candidates(
             },
         ]
 
-    cross_domain_investigation_terms = (
-        "unhealthy",
-        "investigated first",
-        "evidence supports this recommendation",
-    )
+    cross_domain_investigation_intents = {
+        "CURRENT_STATE_INVESTIGATION",
+        "PROMOTION_DIAGNOSIS",
+        "PRIORITIZATION",
+        "RECOMMENDATION_EVIDENCE",
+    }
 
-    is_cross_domain_investigation = (
-        any(
-            term in normalized_question
-            for term
-            in cross_domain_investigation_terms
-        )
-        or read_only_promotion_diagnosis
-    )
-
-    if is_cross_domain_investigation:
+    if (
+        investigation_intent
+        in cross_domain_investigation_intents
+    ):
         plan.append(
             {
                 "name": "get_version_lineage",
@@ -1299,26 +1299,13 @@ def build_controlled_evidence_answerability(
     question: str,
     evidence_sufficiency: Mapping[str, Any],
 ) -> dict[str, Any]:
-    normalized_question = (
+    claim_types = classify_claim_types(
         question
-        .strip()
-        .lower()
     )
 
-    comparison_terms = (
-        "compare",
-        "comparison",
-        "trend",
-        "over time",
-        "changed since the previous ingestion",
-        "so sánh",
-        "xu hướng",
-        "theo thời gian",
-    )
-
-    is_historical_comparison = any(
-        term in normalized_question
-        for term in comparison_terms
+    is_historical_comparison = (
+        "HISTORICAL_COMPARISON"
+        in claim_types
     )
 
     if not is_historical_comparison:
