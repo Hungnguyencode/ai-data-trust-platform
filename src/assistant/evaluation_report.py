@@ -311,6 +311,34 @@ def get_canonical_agent_evaluation_scenarios(
         },
         {
             "scenario_id": (
+                "cross_domain_historical_comparison"
+            ),
+            "description": (
+                "Cross-domain historical comparison "
+                "must use history-capable evidence, "
+                "require enough observations to compare "
+                "states over time, and avoid treating "
+                "version lineage as comparison evidence."
+            ),
+            "expected": {
+                "requested_evidence_count": 4,
+                "attempted_tool_count": 4,
+                "accepted_evidence_count": 4,
+                "claim_type": "HISTORICAL_COMPARISON",
+                "answerability_status": "ANSWERABLE",
+                "permitted_evidence_count": 4,
+                "evidence_requirement_count": 4,
+                "minimum_item_count": 2,
+                "all_requirements_satisfied": True,
+                "response_mode": "LLM",
+                "evidence_tool_count": 4,
+                "used_llm": True,
+                "version_lineage_requested": False,
+                "raw_evidence_payload_exposed": False,
+            },
+        },
+        {
+            "scenario_id": (
                 "mixed_claim_scoped_answerability"
             ),
             "description": (

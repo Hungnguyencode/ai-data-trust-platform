@@ -348,6 +348,7 @@ def test_canonical_evaluation_scenarios_cover_harness_v1():
         "cross_domain_promotion_diagnosis",
         "cross_domain_prioritization",
         "cross_domain_recommendation_evidence",
+        "cross_domain_historical_comparison",
         "mixed_claim_scoped_answerability",
         "claim_level_response_isolation",
     ]
@@ -591,6 +592,36 @@ def test_cross_domain_recommendation_evidence_contract():
         "response_mode": "LLM",
         "evidence_tool_count": 5,
         "used_llm": True,
+        "raw_evidence_payload_exposed": False,
+    }
+
+
+def test_cross_domain_historical_comparison_contract():
+    scenarios = (
+        get_canonical_agent_evaluation_scenarios()
+    )
+
+    scenario = next(
+        scenario
+        for scenario in scenarios
+        if scenario["scenario_id"]
+        == "cross_domain_historical_comparison"
+    )
+
+    assert scenario["expected"] == {
+        "requested_evidence_count": 4,
+        "attempted_tool_count": 4,
+        "accepted_evidence_count": 4,
+        "claim_type": "HISTORICAL_COMPARISON",
+        "answerability_status": "ANSWERABLE",
+        "permitted_evidence_count": 4,
+        "evidence_requirement_count": 4,
+        "minimum_item_count": 2,
+        "all_requirements_satisfied": True,
+        "response_mode": "LLM",
+        "evidence_tool_count": 4,
+        "used_llm": True,
+        "version_lineage_requested": False,
         "raw_evidence_payload_exposed": False,
     }
 
