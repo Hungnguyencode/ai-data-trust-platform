@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from src.assistant.investigation_intent import (
+    classify_claim_types,
+)
+
 
 def build_claim_evidence_requirement(
     *,
@@ -343,47 +347,9 @@ def plan_claim_evidence_requirements(
     if not normalized_question:
         return []
 
-    comparison_terms = (
-        "compare",
-        "comparison",
-        "trend",
-        "over time",
-        "changed since the previous ingestion",
-        "so sánh",
-        "xu hướng",
-        "theo thời gian",
+    claim_types = classify_claim_types(
+        question
     )
-
-    current_state_terms = (
-        "latest",
-        "current",
-        "most recent",
-        "newest",
-        "not be promoted",
-        "investigated first",
-        "evidence supports this recommendation",
-        "mới nhất",
-        "hiện tại",
-        "gần nhất",
-    )
-
-    claim_types: list[str] = []
-
-    if any(
-        term in normalized_question
-        for term in comparison_terms
-    ):
-        claim_types.append(
-            "HISTORICAL_COMPARISON"
-        )
-
-    if any(
-        term in normalized_question
-        for term in current_state_terms
-    ):
-        claim_types.append(
-            "CURRENT_STATE"
-        )
 
     evidence_types = list(
         dict.fromkeys(

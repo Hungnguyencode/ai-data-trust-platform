@@ -1705,6 +1705,59 @@ def test_cross_domain_previous_ingestion_comparison_requests_history_evidence():
     ]
 
 
+def test_cross_domain_planner_uses_shared_intent_classifier(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        controlled_tools,
+        "classify_investigation_intent",
+        lambda question: "HISTORICAL_COMPARISON",
+    )
+
+    evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            "Opaque investigation request.",
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert evidence == [
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+
+def test_cross_domain_current_state_planner_uses_shared_intent_classifier(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        controlled_tools,
+        "classify_investigation_intent",
+        lambda question: "PRIORITIZATION",
+    )
+
+    evidence = (
+        controlled_tools
+        .plan_controlled_evidence_requirements(
+            "Opaque investigation request.",
+            trusted_version_id=6,
+            trusted_catalog_id=4,
+        )
+    )
+
+    assert evidence == [
+        "version_lineage",
+        "freshness_history",
+        "volume_history",
+        "pipeline_run_history",
+        "operational_event_history",
+    ]
+
+
 def test_cross_domain_previous_ingestion_comparison_builds_claim_scoped_requirements():
     requirements = (
         controlled_tools
@@ -2031,6 +2084,57 @@ def test_previous_ingestion_domain_specific_request_is_not_subject_to_comparison
     assert answerability[
         "evidence_requirements"
     ] == []
+
+
+def test_answerability_uses_shared_claim_classifier(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        controlled_tools,
+        "classify_claim_types",
+        lambda question: [
+            "HISTORICAL_COMPARISON",
+        ],
+    )
+
+    answerability = (
+        controlled_tools
+        .build_controlled_evidence_answerability(
+            question="Opaque claim request.",
+            evidence_sufficiency={
+                "requested_evidence": [
+                    "volume_history",
+                ],
+                "available_evidence": [
+                    "volume_history",
+                ],
+                "empty_evidence": [],
+                "unavailable_evidence": [],
+                "evidence_details": [
+                    {
+                        "evidence_type": (
+                            "volume_history"
+                        ),
+                        "availability_status": (
+                            "AVAILABLE"
+                        ),
+                        "item_count": 2,
+                    },
+                ],
+                "sufficiency_status": (
+                    "SUFFICIENT"
+                ),
+            },
+        )
+    )
+
+    assert answerability[
+        "assessment_scope"
+    ] == "HISTORICAL_COMPARISON"
+
+    assert answerability[
+        "answerability_status"
+    ] == "ANSWERABLE"
 
 
 def test_cross_domain_recommendation_evidence_requests_all_read_only_evidence():
