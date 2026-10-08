@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-import requests
 import streamlit as st
 
 PROJECT_ROOT = Path(
@@ -19,93 +17,19 @@ if str(PROJECT_ROOT) not in sys.path:
         str(PROJECT_ROOT),
     )
 
+from app.services.data_contracts_api import (
+    API_BASE_URL,
+    DataContractsApiError,
+    activate_contract,
+    create_contract,
+    load_active_contract,
+    load_contract_history,
+)
 from src.utils.ui import (
     inject_custom_css,
     render_metric_card,
     render_recommendation_box,
 )
-
-API_BASE_URL = os.getenv(
-    "API_BASE_URL",
-    "http://127.0.0.1:8000",
-)
-
-DATA_CONTRACTS_URL = (
-    f"{API_BASE_URL}/api/data-contracts"
-)
-
-
-def load_contract_history(
-    catalog_id: int,
-) -> dict[str, Any]:
-    response = requests.get(
-        (
-            f"{DATA_CONTRACTS_URL}/"
-            f"catalog/{catalog_id}"
-        ),
-        timeout=10,
-    )
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
-
-
-def load_active_contract(
-    catalog_id: int,
-) -> dict[str, Any] | None:
-    response = requests.get(
-        (
-            f"{DATA_CONTRACTS_URL}/"
-            f"catalog/{catalog_id}/active"
-        ),
-        timeout=10,
-    )
-
-    if response.status_code == 404:
-        return None
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
-
-
-def activate_contract(
-    contract_id: int,
-) -> dict[str, Any]:
-    response = requests.post(
-        (
-            f"{DATA_CONTRACTS_URL}/"
-            f"{contract_id}/activate"
-        ),
-        timeout=10,
-    )
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
-
-
-def create_contract(
-    payload: dict[str, Any],
-) -> dict[str, Any]:
-    response = requests.post(
-        DATA_CONTRACTS_URL,
-        json=payload,
-        timeout=10,
-    )
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
 
 
 def build_history_frame(
@@ -226,7 +150,7 @@ try:
         )
     )
 
-except requests.RequestException as exc:
+except DataContractsApiError as exc:
     st.error(
         "Không thể kết nối "
         "Data Contract Management API."
@@ -470,7 +394,7 @@ else:
                 )
             )
 
-        except requests.RequestException as exc:
+        except DataContractsApiError as exc:
             st.error(
                 "Không thể activate "
                 "Data Contract."
@@ -822,7 +746,7 @@ if create_submitted:
                 )
             )
 
-        except requests.RequestException as exc:
+        except DataContractsApiError as exc:
             st.error(
                 "Không thể tạo "
                 "Data Contract."

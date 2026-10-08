@@ -24,3 +24,35 @@ class DatasetPreviewResponse(BaseModel):
     file_name: str
     preview_rows: List[Dict[str, Any]]
     total_rows: int
+
+
+class DatasetParseResponse(BaseModel):
+    file_name: str
+    file_type: str
+    total_rows: int
+    total_columns: int
+    records: list[dict[str, Any]]
+
+
+class DatasetVersionHistoryResponse(BaseModel):
+    records: list[dict[str, Any]]
+
+
+class DatasetIngestionHistoryResponse(BaseModel):
+    records: list[dict[str, Any]]
+
+
+class DatasetValidationHistoryResponse(BaseModel):
+    records: list[dict[str, Any]]
+
+
+class DatasetGovernanceHistoryResponse(BaseModel):
+    records: list[dict[str, Any]]
+
+
+class DatasetCatalogLifecycleResponse(BaseModel):
+    records: list[dict[str, Any]]
+
+
+class DatasetLifecycleHistoryResponse(BaseModel):
+    records: list[dict[str, Any]]

@@ -285,3 +285,201 @@ def test_scan_api_hides_repository_error(
         "database password leaked"
         not in str(response.json())
     )
+
+
+def test_full_scan_recomputes_and_persists_server_side(
+    monkeypatch,
+):
+    captured = {}
+
+    profile = {
+        "basic_info": {
+            "total_rows": 2,
+        }
+    }
+    quality_report = {
+        "summary": {
+            "total_issues": 0,
+        }
+    }
+    trust_score_report = {
+        "overall_score": 95.0,
+    }
+
+    def fake_profile_dataset(df):
+        captured["profile_df"] = df.copy()
+        return profile
+
+    def fake_quality_checks(df):
+        captured["quality_df"] = df.copy()
+        return quality_report
+
+    def fake_trust_score(df, quality_report):
+        captured["score_df"] = df.copy()
+        captured["score_quality"] = quality_report
+        return trust_score_report
+
+    def fake_save_full_scan(
+        *,
+        file_name,
+        file_type,
+        df,
+        profile,
+        quality_report,
+        trust_score_report,
+    ):
+        captured["saved"] = {
+            "file_name": file_name,
+            "file_type": file_type,
+            "df": df.copy(),
+            "profile": profile,
+            "quality_report": quality_report,
+            "trust_score_report": trust_score_report,
+        }
+
+        return {
+            "dataset_id": 3,
+            "scan_id": 10,
+            "score_id": 7,
+            "saved_issues": 0,
+        }
+
+    monkeypatch.setattr(
+        scan_route,
+        "profile_dataset",
+        fake_profile_dataset,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        scan_route,
+        "run_quality_checks",
+        fake_quality_checks,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        scan_route,
+        "calculate_data_trust_score",
+        fake_trust_score,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        scan_route,
+        "persist_full_scan",
+        fake_save_full_scan,
+        raising=False,
+    )
+
+    response = client.post(
+        "/api/scans/full",
+        json={
+            "file_name": "customers.csv",
+            "file_type": "CSV",
+            "records": [
+                {"age": 25},
+                {"age": 30},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert response.json() == {
+        "dataset_id": 3,
+        "scan_id": 10,
+        "score_id": 7,
+        "saved_issues": 0,
+    }
+
+    expected_records = [
+        {"age": 25},
+        {"age": 30},
+    ]
+
+    assert (
+        captured["profile_df"].to_dict(
+            orient="records",
+        )
+        == expected_records
+    )
+    assert (
+        captured["quality_df"].to_dict(
+            orient="records",
+        )
+        == expected_records
+    )
+    assert (
+        captured["score_df"].to_dict(
+            orient="records",
+        )
+        == expected_records
+    )
+
+    assert (
+        captured["score_quality"]
+        is quality_report
+    )
+
+    assert captured["saved"]["file_name"] == "customers.csv"
+    assert captured["saved"]["file_type"] == "CSV"
+    assert captured["saved"]["profile"] is profile
+    assert (
+        captured["saved"]["quality_report"]
+        is quality_report
+    )
+    assert (
+        captured["saved"]["trust_score_report"]
+        is trust_score_report
+    )
+
+
+def test_full_scan_rejects_empty_records():
+    response = client.post(
+        "/api/scans/full",
+        json={
+            "file_name": "empty.csv",
+            "file_type": "CSV",
+            "records": [],
+        },
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]
+        == "records must not be empty"
+    )
+
+
+def test_full_scan_hides_internal_error(
+    monkeypatch,
+):
+    def fake_profile_dataset(df):
+        raise RuntimeError(
+            "database password leaked"
+        )
+
+    monkeypatch.setattr(
+        scan_route,
+        "profile_dataset",
+        fake_profile_dataset,
+    )
+
+    response = client.post(
+        "/api/scans/full",
+        json={
+            "file_name": "customers.csv",
+            "file_type": "CSV",
+            "records": [
+                {"age": 25},
+            ],
+        },
+    )
+
+    assert response.status_code == 500
+    assert (
+        response.json()["detail"]
+        == "Unable to save full scan."
+    )
+    assert (
+        "database password leaked"
+        not in str(response.json())
+    )

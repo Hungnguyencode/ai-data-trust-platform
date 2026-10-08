@@ -114,6 +114,10 @@ def test_api_score_matches_core_score():
     assert api_result["overall_score"] == core_result["overall_score"]
     assert api_result["risk_level"] == core_result["risk_level"]
     assert api_result["ai_readiness"] == core_result["ai_readiness"]
+    assert (
+        api_result["conclusion"]
+        == core_result["conclusion"]
+    )
 
 
 def test_api_rejects_empty_records():
@@ -186,3 +190,52 @@ def test_api_components_match_core_breakdown():
             float(core_item["raw_value (%)"])
         )
         assert api_item["detail"] == str(core_item["detail"])
+        assert (
+            api_item["interpretation"]
+            == str(core_item["interpretation"])
+        )
+
+
+def test_api_serializes_anomaly_report():
+    df = build_sample_dataframe()
+
+    quality_report = run_quality_checks(df)
+    core_result = calculate_data_trust_score(
+        df=df,
+        quality_report=quality_report,
+    )
+
+    response = client.post(
+        "/api/scores/calculate",
+        json={
+            "file_name": "test_dataset.csv",
+            "file_type": "CSV",
+            "records": df.to_dict(
+                orient="records",
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+    anomaly_report = core_result["anomaly_report"]
+
+    assert (
+        payload["anomaly_summary"]
+        == anomaly_report["summary"]
+    )
+    assert (
+        payload["anomaly_summary_records"]
+        == anomaly_report["summary_df"].to_dict(
+            orient="records",
+        )
+    )
+    assert (
+        payload["anomaly_outlier_records"]
+        == anomaly_report[
+            "combined_outlier_rows_df"
+        ].to_dict(
+            orient="records",
+        )
+    )

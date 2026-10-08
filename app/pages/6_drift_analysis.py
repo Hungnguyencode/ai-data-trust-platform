@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pandas as pd
 import plotly.express as px
 import streamlit as st
 
@@ -11,11 +12,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.drift.data_drift import (
-    build_categorical_distribution_df,
-    run_drift_detection,
+from app.services.dataset_parse_api import (
+    DatasetParseApiError,
+    parse_dataset,
 )
-from src.ingestion.file_loader import load_dataset
+from app.services.drift_api import (
+    DriftApiError,
+    analyze_drift,
+    get_categorical_distribution,
+)
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
 
 st.set_page_config(
@@ -67,25 +72,62 @@ if baseline_file is None:
     st.stop()
 
 try:
-    baseline_df, baseline_file_type = load_dataset(baseline_file)
+    baseline_result = parse_dataset(
+        baseline_file
+    )
+
+    baseline_df = pd.DataFrame(
+        baseline_result["records"]
+    )
+    baseline_file_type = (
+        baseline_result["file_type"]
+    )
+    baseline_file_name = (
+        baseline_result["file_name"]
+    )
 
     if use_session_current:
-        current_df = st.session_state["current_df"]
-        current_file_name = st.session_state.get("current_file_name", "current_session_dataset")
-        current_file_type = st.session_state.get("current_file_type", "Session")
+        current_df = st.session_state[
+            "current_df"
+        ]
+        current_file_name = (
+            st.session_state.get(
+                "current_file_name",
+                "current_session_dataset",
+            )
+        )
+        current_file_type = (
+            st.session_state.get(
+                "current_file_type",
+                "Session",
+            )
+        )
     else:
         if current_file is None:
-            st.info("Hãy upload current dataset hoặc tick chọn dùng dataset trong session.")
+            st.info(
+                "Hãy upload current dataset "
+                "hoặc tick chọn dùng dataset "
+                "trong session."
+            )
             st.stop()
 
-        current_df, current_file_type = load_dataset(current_file)
-        current_file_name = current_file.name
+        current_result = parse_dataset(
+            current_file
+        )
 
-except Exception as exc:
-    st.error(f"Không thể đọc dataset: {exc}")
+        current_df = pd.DataFrame(
+            current_result["records"]
+        )
+        current_file_type = (
+            current_result["file_type"]
+        )
+        current_file_name = (
+            current_result["file_name"]
+        )
+
+except DatasetParseApiError as exc:
+    st.error(str(exc))
     st.stop()
-
-baseline_file_name = baseline_file.name
 
 # Lưu tên file drift để report biết drift đang so sánh file nào với file nào
 st.session_state["drift_baseline_file_name"] = baseline_file_name
@@ -127,10 +169,14 @@ with col4:
         "Current columns - baseline columns",
     )
 
-drift_report = run_drift_detection(
-    baseline_df=baseline_df,
-    current_df=current_df,
-)
+try:
+    drift_report = analyze_drift(
+        baseline_df=baseline_df,
+        current_df=current_df,
+    )
+except DriftApiError as exc:
+    st.error(str(exc))
+    st.stop()
 
 # Gắn tên file baseline/current trực tiếp vào drift_report
 # để report HTML không bị hiểu nhầm là dùng sample_quality_issues.csv để drift.
@@ -310,11 +356,15 @@ else:
     )
 
     if selected_cat_col:
-        cat_dist_df = build_categorical_distribution_df(
-            baseline_df=baseline_df,
-            current_df=current_df,
-            column_name=selected_cat_col,
-        )
+        try:
+            cat_dist_df = get_categorical_distribution(
+                baseline_df=baseline_df,
+                current_df=current_df,
+                column_name=selected_cat_col,
+            )
+        except DriftApiError as exc:
+            st.error(str(exc))
+            st.stop()
 
         st.dataframe(cat_dist_df, use_container_width=True)
 

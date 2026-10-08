@@ -78,3 +78,16 @@ def ask_catalog_copilot(
     return _payload_dict(
         response
     )
+
+
+def check_api_health() -> bool:
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/health",
+            timeout=3,
+        )
+
+    except requests.RequestException:
+        return False
+
+    return response.status_code == 200

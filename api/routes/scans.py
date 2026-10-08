@@ -6,6 +6,8 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Path, Query
 
 from api.schemas.scan_schema import (
+    FullScanRequest,
+    FullScanResponse,
     ScanDetailResponse,
     ScanHistoryResponse,
 )
@@ -18,6 +20,12 @@ from database.repositories.scan_repository import (
 from database.repositories.scan_repository import (
     get_scan_history as load_scan_history,
 )
+from database.repositories.scan_repository import (
+    save_full_scan as persist_full_scan,
+)
+from src.profiling.profiler import profile_dataset
+from src.scoring.score_engine import calculate_data_trust_score
+from src.validation.rule_engine import run_quality_checks
 
 router = APIRouter()
 
@@ -160,6 +168,60 @@ def get_latest_scan():
     return _build_scan_detail(
         scan_record,
         issues_frame,
+    )
+
+
+@router.post(
+    "/full",
+    response_model=FullScanResponse,
+)
+def create_full_scan(
+    payload: FullScanRequest,
+):
+    if not payload.records:
+        raise HTTPException(
+            status_code=400,
+            detail="records must not be empty",
+        )
+
+    df = pd.DataFrame(
+        payload.records
+    )
+
+    try:
+        profile = profile_dataset(df)
+
+        quality_report = run_quality_checks(
+            df
+        )
+
+        trust_score_report = (
+            calculate_data_trust_score(
+                df,
+                quality_report,
+            )
+        )
+
+        result = persist_full_scan(
+            file_name=payload.file_name,
+            file_type=payload.file_type,
+            df=df,
+            profile=profile,
+            quality_report=quality_report,
+            trust_score_report=(
+                trust_score_report
+            ),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to save full scan."
+            ),
+        ) from exc
+
+    return FullScanResponse(
+        **result
     )
 
 

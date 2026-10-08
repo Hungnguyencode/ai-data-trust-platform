@@ -11,17 +11,19 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from database.db import test_connection
-from database.repositories.scan_repository import (
-    get_quality_issues_by_scan,
-    get_scan_history,
+from app.services.platform_status_api import (
+    check_database_connection,
 )
-from src.reports.html_report import (
-    build_data_quality_html_report,
-    generate_report_filename,
+from app.services.report_api import (
+    ReportApiError,
+    generate_html_report,
     save_html_report,
 )
-from src.utils.config import REPORTS_DIR
+from app.services.scan_api import (
+    ScanApiError,
+    load_scan_detail,
+    load_scan_history,
+)
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
 
 st.set_page_config(
@@ -137,18 +139,27 @@ else:
             level="success",
         )
 
-    html_content = build_data_quality_html_report(
-        file_name=file_name,
-        file_type=file_type,
-        df=df,
-        profile=profile,
-        quality_report=quality_report,
-        trust_score_report=trust_score_report,
-        privacy_report=privacy_report,
-        drift_report=drift_report,
-    )
+    try:
+        report_result = generate_html_report(
+            df,
+            file_name=file_name,
+            file_type=file_type,
+            profile=profile,
+            quality_report=quality_report,
+            trust_score_report=trust_score_report,
+            privacy_report=privacy_report,
+            drift_report=drift_report,
+        )
+    except ReportApiError as exc:
+        st.error(str(exc))
+        st.stop()
 
-    report_file_name = generate_report_filename()
+    html_content = report_result[
+        "html_content"
+    ]
+    report_file_name = report_result[
+        "report_file_name"
+    ]
 
     action_col1, action_col2 = st.columns([1, 1])
 
@@ -162,18 +173,23 @@ else:
         )
 
     with action_col2:
-        if st.button("Save report to data/reports", use_container_width=True):
+        if st.button(
+            "Save report to data/reports",
+            use_container_width=True,
+        ):
             try:
-                output_path = save_html_report(
+                save_result = save_html_report(
                     html_content=html_content,
-                    output_dir=REPORTS_DIR,
-                    file_name=report_file_name,
+                    report_file_name=report_file_name,
                 )
 
-                st.success(f"Đã lưu report tại: {output_path}")
+                st.success(
+                    "Đã lưu report tại: "
+                    f"{save_result['saved_path']}"
+                )
 
-            except Exception as exc:
-                st.error(f"Không thể lưu report: {exc}")
+            except ReportApiError as exc:
+                st.error(str(exc))
 
     with st.expander("Preview HTML source"):
         st.code(html_content[:5000], language="html")
@@ -186,7 +202,7 @@ else:
 
 st.markdown('<div class="section-title">2. Database connection</div>', unsafe_allow_html=True)
 
-ok, message = test_connection()
+ok, message = check_database_connection()
 
 if ok:
     render_recommendation_box(message, level="success")
@@ -200,10 +216,11 @@ st.markdown('<div class="section-title">3. Scan history</div>', unsafe_allow_htm
 limit = st.slider("Số scan gần nhất", min_value=5, max_value=100, value=50, step=5)
 
 try:
-    history_df = get_scan_history(limit=limit)
-
-except Exception as exc:
-    st.error(f"Không thể đọc lịch sử scan: {exc}")
+    history_df = load_scan_history(
+        limit=limit
+    )
+except ScanApiError as exc:
+    st.error(str(exc))
     st.stop()
 
 if history_df.empty:
@@ -255,11 +272,14 @@ selected_scan_id = st.selectbox(
 )
 
 try:
-    issues_df = get_quality_issues_by_scan(int(selected_scan_id))
-
-except Exception as exc:
-    st.error(f"Không thể đọc quality issues: {exc}")
+    scan_detail = load_scan_detail(
+        int(selected_scan_id)
+    )
+except ScanApiError as exc:
+    st.error(str(exc))
     st.stop()
+
+issues_df = scan_detail["issues_df"]
 
 if issues_df.empty:
     st.success("Scan này không có quality issues được lưu.")

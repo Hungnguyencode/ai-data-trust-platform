@@ -16,6 +16,7 @@ class ScoreComponent(BaseModel):
     weighted_score: float
     raw_value: float
     detail: str
+    interpretation: str
 
 
 class ScoreResponse(BaseModel):
@@ -25,4 +26,9 @@ class ScoreResponse(BaseModel):
     overall_score: float
     risk_level: str
     ai_readiness: str
+    conclusion: str
     components: List[ScoreComponent]
+
+    anomaly_summary: Dict[str, Any]
+    anomaly_summary_records: List[Dict[str, Any]]
+    anomaly_outlier_records: List[Dict[str, Any]]

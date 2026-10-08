@@ -273,3 +273,61 @@ def test_ask_catalog_copilot_forwards_history(
     }
 
     assert captured["timeout"] == 120
+
+
+def test_check_api_health_returns_true_for_200(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, Any] = {}
+
+    class HealthyResponse:
+        status_code = 200
+
+    def fake_get(
+        url: str,
+        *,
+        timeout: int,
+    ) -> HealthyResponse:
+        captured["url"] = url
+        captured["timeout"] = timeout
+
+        return HealthyResponse()
+
+    monkeypatch.setattr(
+        assistant_api.requests,
+        "get",
+        fake_get,
+    )
+
+    assert assistant_api.check_api_health() is True
+
+    assert captured == {
+        "url": (
+            f"{assistant_api.API_BASE_URL}/health"
+        ),
+        "timeout": 3,
+    }
+
+
+def test_check_api_health_returns_false_for_request_error(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def fail_get(
+        url: str,
+        *,
+        timeout: int,
+    ):
+        del url
+        del timeout
+
+        raise requests.ConnectionError(
+            "connection failed"
+        )
+
+    monkeypatch.setattr(
+        assistant_api.requests,
+        "get",
+        fail_get,
+    )
+
+    assert assistant_api.check_api_health() is False

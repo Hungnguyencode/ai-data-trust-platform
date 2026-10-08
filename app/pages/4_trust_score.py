@@ -12,10 +12,19 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from database.repositories.scan_repository import save_full_scan
-from src.scoring.score_engine import calculate_data_trust_score
+from app.services.dataset_quality_api import (
+    DatasetQualityApiError,
+    load_dataset_quality,
+)
+from app.services.scan_api import (
+    ScanApiError,
+    save_full_scan,
+)
+from app.services.trust_score_api import (
+    TrustScoreApiError,
+    load_trust_score,
+)
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
-from src.validation.rule_engine import run_quality_checks
 
 st.set_page_config(
     page_title="Trust Score",
@@ -51,13 +60,37 @@ if profile is None:
 
 
 if "current_quality_report" not in st.session_state:
-    quality_report = run_quality_checks(df)
-    st.session_state["current_quality_report"] = quality_report
-else:
-    quality_report = st.session_state["current_quality_report"]
+    try:
+        quality_report = load_dataset_quality(
+            df,
+            file_name=file_name,
+            file_type=file_type,
+        )
+    except DatasetQualityApiError as exc:
+        st.error(str(exc))
+        st.stop()
 
-trust_score_report = calculate_data_trust_score(df, quality_report)
-st.session_state["current_trust_score_report"] = trust_score_report
+    st.session_state["current_quality_report"] = (
+        quality_report
+    )
+else:
+    quality_report = st.session_state[
+        "current_quality_report"
+    ]
+
+try:
+    trust_score_report = load_trust_score(
+        df,
+        file_name=file_name,
+        file_type=file_type,
+    )
+except TrustScoreApiError as exc:
+    st.error(str(exc))
+    st.stop()
+
+st.session_state["current_trust_score_report"] = (
+    trust_score_report
+)
 
 overall_score = trust_score_report["overall_score"]
 risk_level = trust_score_report["risk_level"]
@@ -122,12 +155,9 @@ with save_col1:
     if st.button("Save full scan to SQL Server"):
         try:
             result = save_full_scan(
+                df,
                 file_name=file_name,
                 file_type=file_type,
-                df=df,
-                profile=profile,
-                quality_report=quality_report,
-                trust_score_report=trust_score_report,
             )
 
             st.session_state["last_saved_scan"] = result
@@ -139,8 +169,10 @@ with save_col1:
                 f"score_id={result['score_id']}, "
                 f"issues={result['saved_issues']}"
             )
+        except ScanApiError as exc:
+            st.error(str(exc))
 
-        except Exception as exc:
+        except ScanApiError as exc:
             st.error(f"Không thể lưu full scan vào SQL Server: {exc}")
 
 with save_col2:
