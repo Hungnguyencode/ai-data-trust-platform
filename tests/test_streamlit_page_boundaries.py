@@ -41,6 +41,14 @@ UPLOAD_DATASET_PAGE = (
     / "1_upload_dataset.py"
 )
 
+ANOMALY_DETECTION_PAGE = Path(
+    "app/pages/5_anomaly_detection.py"
+)
+
+PRIVACY_RISK_PAGE = Path(
+    "app/pages/7_privacy_risk.py"
+)
+
 
 def test_pipeline_operations_page_uses_service_boundary():
     source = PIPELINE_OPERATIONS_PAGE.read_text(
@@ -746,4 +754,114 @@ def test_upload_dataset_page_uses_platform_status_service_boundary():
         "ingest_dataset",
     }.issubset(
         imported_workflow_service_names
+    )
+
+
+def test_anomaly_detection_page_uses_service_boundary():
+    source = ANOMALY_DETECTION_PAGE.read_text(
+        encoding="utf-8",
+    )
+    tree = ast.parse(source)
+
+    imported_from_modules = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module is not None
+    }
+
+    imported_service_names = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module
+        == "app.services.anomaly_api"
+        for alias in node.names
+    }
+
+    caught_exception_names = {
+        node.type.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ExceptHandler)
+        and isinstance(node.type, ast.Name)
+    }
+
+    assert (
+        "src.anomaly.anomaly_engine"
+        not in imported_from_modules
+    )
+
+    assert (
+        "app.services.anomaly_api"
+        in imported_from_modules
+    )
+
+    assert (
+        "run_anomaly_detection"
+        in imported_service_names
+    )
+
+    assert (
+        "AnomalyApiError"
+        in imported_service_names
+    )
+
+    assert (
+        "AnomalyApiError"
+        in caught_exception_names
+    )
+
+
+def test_privacy_risk_page_uses_service_boundary():
+    source = PRIVACY_RISK_PAGE.read_text(
+        encoding="utf-8",
+    )
+    tree = ast.parse(source)
+
+    imported_from_modules = {
+        node.module
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module is not None
+    }
+
+    imported_service_names = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module
+        == "app.services.privacy_api"
+        for alias in node.names
+    }
+
+    caught_exception_names = {
+        node.type.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ExceptHandler)
+        and isinstance(node.type, ast.Name)
+    }
+
+    assert (
+        "src.privacy.pii_detector"
+        not in imported_from_modules
+    )
+
+    assert (
+        "app.services.privacy_api"
+        in imported_from_modules
+    )
+
+    assert (
+        "run_privacy_scan"
+        in imported_service_names
+    )
+
+    assert (
+        "PrivacyApiError"
+        in imported_service_names
+    )
+
+    assert (
+        "PrivacyApiError"
+        in caught_exception_names
     )

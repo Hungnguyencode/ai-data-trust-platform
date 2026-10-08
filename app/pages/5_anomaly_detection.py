@@ -11,7 +11,10 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
-from src.anomaly.anomaly_engine import run_anomaly_detection
+from app.services.anomaly_api import (
+    AnomalyApiError,
+    run_anomaly_detection,
+)
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
 
 st.set_page_config(
@@ -63,11 +66,18 @@ with col_config2:
     )
 
 
-anomaly_report = run_anomaly_detection(
-    df,
-    zscore_threshold=zscore_threshold,
-    isolation_contamination=contamination,
-)
+try:
+    anomaly_report = run_anomaly_detection(
+        df,
+        zscore_threshold=zscore_threshold,
+        isolation_contamination=contamination,
+    )
+except AnomalyApiError as exc:
+    st.error(
+        "Không thể chạy Anomaly Detection: "
+        f"{exc}"
+    )
+    st.stop()
 
 st.session_state["current_anomaly_report"] = anomaly_report
 

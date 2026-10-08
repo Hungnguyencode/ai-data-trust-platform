@@ -11,7 +11,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.privacy.pii_detector import run_privacy_scan
+from app.services.privacy_api import (
+    PrivacyApiError,
+    run_privacy_scan,
+)
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
 
 st.set_page_config(
@@ -38,8 +41,18 @@ if "current_df" not in st.session_state:
 
 df = st.session_state["current_df"]
 
-privacy_report = run_privacy_scan(df)
-st.session_state["current_privacy_report"] = privacy_report
+try:
+    privacy_report = run_privacy_scan(df)
+except PrivacyApiError as exc:
+    st.error(
+        "Không thể chạy Privacy Risk Scan: "
+        f"{exc}"
+    )
+    st.stop()
+
+st.session_state["current_privacy_report"] = (
+    privacy_report
+)
 
 summary = privacy_report["summary"]
 findings_df = privacy_report["findings_df"]
