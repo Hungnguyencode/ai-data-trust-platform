@@ -41,6 +41,21 @@ def calculate_score(payload: ScoreRequest):
 
     breakdown_df = trust_score_report["breakdown_df"]
 
+    anomaly_report = trust_score_report.get(
+        "anomaly_report",
+        {},
+    )
+
+    anomaly_summary_df = anomaly_report.get(
+        "summary_df",
+        pd.DataFrame(),
+    )
+
+    anomaly_outlier_rows_df = anomaly_report.get(
+        "combined_outlier_rows_df",
+        pd.DataFrame(),
+    )
+
     components = [
         ScoreComponent(
             score_name=str(row["score_name"]),
@@ -49,6 +64,9 @@ def calculate_score(payload: ScoreRequest):
             weighted_score=float(row["weighted_score"]),
             raw_value=float(row["raw_value (%)"]),
             detail=str(row["detail"]),
+            interpretation=str(
+                row["interpretation"]
+            ),
         )
         for _, row in breakdown_df.iterrows()
     ]
@@ -60,5 +78,24 @@ def calculate_score(payload: ScoreRequest):
         overall_score=float(trust_score_report["overall_score"]),
         risk_level=str(trust_score_report["risk_level"]),
         ai_readiness=str(trust_score_report["ai_readiness"]),
+        conclusion=str(
+            trust_score_report["conclusion"]
+        ),
         components=components,
+        anomaly_summary=dict(
+            anomaly_report.get(
+                "summary",
+                {},
+            )
+        ),
+        anomaly_summary_records=(
+            anomaly_summary_df.to_dict(
+                orient="records",
+            )
+        ),
+        anomaly_outlier_records=(
+            anomaly_outlier_rows_df.to_dict(
+                orient="records",
+            )
+        ),
     )

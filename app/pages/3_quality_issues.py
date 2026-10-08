@@ -11,8 +11,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 
+from app.services.dataset_quality_api import (
+    DatasetQualityApiError,
+    load_dataset_quality,
+)
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
-from src.validation.rule_engine import run_quality_checks
 
 st.set_page_config(
     page_title="Quality Issues",
@@ -39,7 +42,13 @@ if "current_df" not in st.session_state:
 
 df = st.session_state["current_df"]
 
-quality_report = run_quality_checks(df)
+try:
+    quality_report = load_dataset_quality(df)
+
+except DatasetQualityApiError as exc:
+    st.error(str(exc))
+    st.stop()
+
 st.session_state["current_quality_report"] = quality_report
 
 summary = quality_report["summary"]

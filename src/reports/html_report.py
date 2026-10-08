@@ -69,11 +69,17 @@ def build_data_quality_html_report(
     trust_score_report: Dict[str, Any] | None = None,
     privacy_report: Dict[str, Any] | None = None,
     drift_report: Dict[str, Any] | None = None,
+    total_rows: int | None = None,
+    total_columns: int | None = None,
 ) -> str:
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    total_rows = len(df)
-    total_columns = len(df.columns)
+    if total_rows is None:
+        total_rows = len(df)
+
+    if total_columns is None:
+        total_columns = len(df.columns)
+
     total_cells = total_rows * total_columns
 
     basic_info = _safe_get(profile, "basic_info", {})

@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import plotly.express as px
-import requests
 import streamlit as st
+
+from app.services.pipeline_operations_api import (
+    API_BASE_URL,
+    PipelineOperationsApiError,
+    load_operational_events,
+    load_pipeline_run,
+    load_pipeline_runs,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -23,82 +29,6 @@ from src.utils.ui import (
     render_metric_card,
     render_recommendation_box,
 )
-
-API_BASE_URL = os.getenv(
-    "API_BASE_URL",
-    "http://127.0.0.1:8000",
-)
-
-PIPELINE_RUNS_URL = (
-    f"{API_BASE_URL}/api/pipeline-runs"
-)
-
-OPERATIONAL_EVENTS_URL = (
-    f"{API_BASE_URL}/api/operational-events"
-)
-
-
-def load_pipeline_runs(
-    limit: int = 100,
-) -> list[dict[str, Any]]:
-    response = requests.get(
-        PIPELINE_RUNS_URL,
-        params={
-            "limit": limit,
-        },
-        timeout=10,
-    )
-
-    response.raise_for_status()
-
-    payload = response.json()
-
-    return list(
-        payload.get(
-            "items",
-            [],
-        )
-    )
-
-
-def load_pipeline_run(
-    pipeline_run_id: int,
-) -> dict[str, Any]:
-    response = requests.get(
-        (
-            f"{PIPELINE_RUNS_URL}/"
-            f"{pipeline_run_id}"
-        ),
-        timeout=10,
-    )
-
-    response.raise_for_status()
-
-    return dict(
-        response.json()
-    )
-
-
-def load_operational_events(
-    limit: int = 200,
-) -> list[dict[str, Any]]:
-    response = requests.get(
-        OPERATIONAL_EVENTS_URL,
-        params={
-            "limit": limit,
-        },
-        timeout=10,
-    )
-    response.raise_for_status()
-
-    payload = response.json()
-
-    return list(
-        payload.get(
-            "items",
-            [],
-        )
-    )
 
 
 def format_duration(
@@ -188,7 +118,7 @@ try:
         )
     )
 
-except requests.RequestException as exc:
+except PipelineOperationsApiError as exc:
     st.error(
         "Không thể kết nối Pipeline "
         "Operations API."
@@ -212,7 +142,7 @@ try:
             limit=200
         )
     )
-except requests.RequestException as exc:
+except PipelineOperationsApiError as exc:
     operational_events = []
 
     st.warning(
@@ -595,7 +525,7 @@ try:
         )
     )
 
-except requests.RequestException as exc:
+except PipelineOperationsApiError as exc:
     st.error(
         "Không thể tải pipeline "
         "run detail."

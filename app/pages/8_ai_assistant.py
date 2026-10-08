@@ -1,26 +1,20 @@
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-import requests
 import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-API_BASE_URL = os.getenv(
-    "API_BASE_URL",
-    "http://127.0.0.1:8000",
-)
-
 from app.services.assistant_api import (
     AssistantApiError,
     ask_catalog_copilot,
+    check_api_health,
 )
 from app.services.assistant_chat import (
     build_agent_evidence_answerability_items,
@@ -1526,13 +1520,7 @@ def main() -> None:
 
     st.subheader("1. Assistant grounding status")
 
-    api_connected = False
-
-    try:
-        health_response = requests.get(f"{API_BASE_URL}/health", timeout=3)
-        api_connected = health_response.status_code == 200
-    except Exception:
-        api_connected = False
+    api_connected = check_api_health()
 
     render_api_status_badge(api_connected)
 

@@ -14,41 +14,26 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from database.db import test_connection
-from database.repositories.catalog_repository import (
-    get_dataset_version_history,
-    get_ingestion_history,
+from app.services.dataset_lineage_api import (
+    DatasetLineageApiError,
+    load_catalog_lifecycle,
+    load_catalog_lineage,
+    load_dataset_lineage,
+    load_dataset_version_history,
+    load_governance_history,
+    load_ingestion_history,
+    load_lifecycle_history,
+    load_validation_history,
+    promote_dataset_version,
 )
-from database.repositories.governance_repository import (
-    get_governance_history,
-)
-from database.repositories.lineage_repository import (
-    get_catalog_lineage,
-    get_version_lineage,
-)
-from database.repositories.validation_repository import (
-    get_validation_history,
-)
-from database.repositories.version_repository import (
-    get_catalog_lifecycle,
-    get_lifecycle_history,
-    promote_version,
-)
-from src.ingestion.contracts import (
-    IngestionMetadata,
-    IngestionResult,
-)
-from src.ingestion.ingestion_service import (
+from app.services.dataset_workflow_api import (
+    DatasetWorkflowApiError,
     calculate_sha256,
+    continue_dataset_workflow,
     ingest_dataset,
 )
-from src.lifecycle.dataset_lifecycle import (
-    is_governed_promotion_eligible,
-)
-from src.workflows import (
-    DatasetWorkflowError,
-    DatasetWorkflowResult,
-    continue_dataset_workflow,
+from app.services.platform_status_api import (
+    check_database_connection,
 )
 
 WORKFLOW_STATE_KEYS = (
@@ -104,37 +89,8 @@ def get_cached_ingestion_metadata() -> dict[str, Any] | None:
     )
 
 
-def get_cached_ingestion_result(
-    *,
-    dataframe: pd.DataFrame,
-    metadata: dict[str, Any],
-) -> IngestionResult:
-    cached_result = st.session_state.get(
-        "current_ingestion_result"
-    )
-
-    if isinstance(
-        cached_result,
-        IngestionResult,
-    ):
-        return cached_result
-
-    rebuilt_result = IngestionResult(
-        dataframe=dataframe,
-        metadata=IngestionMetadata(
-            **metadata
-        ),
-    )
-
-    st.session_state[
-        "current_ingestion_result"
-    ] = rebuilt_result
-
-    return rebuilt_result
-
-
 def cache_workflow_result(
-    result: DatasetWorkflowResult,
+    result: dict[str, Any],
 ) -> None:
     st.session_state[
         "current_workflow_result"
@@ -142,43 +98,43 @@ def cache_workflow_result(
 
     st.session_state[
         "current_profile"
-    ] = result.profile
+    ] = result["profile"]
 
     st.session_state[
         "current_catalog_registration"
-    ] = result.catalog_registration
+    ] = result["catalog_registration"]
 
     st.session_state[
         "current_validation_result"
-    ] = result.validation_result
+    ] = result["validation_result"]
 
     st.session_state[
         "current_validation_registration"
-    ] = result.validation_registration
+    ] = result["validation_registration"]
 
     st.session_state[
         "current_governance_result"
-    ] = result.governance_result
+    ] = result["governance_result"]
 
     st.session_state[
         "current_governance_registration"
-    ] = result.governance_registration
+    ] = result["governance_registration"]
 
     st.session_state[
         "current_lifecycle_result"
-    ] = result.lifecycle_result
+    ] = result["lifecycle_result"]
 
     st.session_state[
         "current_quality_report"
-    ] = result.quality_report
+    ] = result["quality_report"]
 
     st.session_state[
         "current_trust_score_report"
-    ] = result.trust_score_report
+    ] = result["trust_score_report"]
 
     st.session_state[
         "current_privacy_report"
-    ] = result.privacy_report
+    ] = result["privacy_report"]
 
     st.session_state.pop(
         "current_workflow_error",
@@ -248,7 +204,7 @@ with st.expander("Database connection"):
         "Test SQL Server connection",
         key="test_sql_connection",
     ):
-        ok, message = test_connection()
+        ok, message = check_database_connection()
 
         if ok:
             st.success(message)
@@ -299,35 +255,25 @@ if uploaded_file is not None:
                 ]
             )
 
-            ingestion_result = (
-                get_cached_ingestion_result(
-                    dataframe=df,
-                    metadata=ingestion_metadata,
-                )
-            )
-
             is_new_ingestion = False
 
         else:
-            ingestion_result = ingest_dataset(
-                uploaded_file,
-                persist_raw=True,
+            ingestion_payload = ingest_dataset(
+                uploaded_file
             )
 
-            df = (
-                ingestion_result.dataframe
-            )
+            df = ingestion_payload[
+                "dataframe"
+            ]
 
-            ingestion_metadata = (
-                ingestion_result
-                .metadata
-                .to_dict()
-            )
+            ingestion_metadata = ingestion_payload[
+                "ingestion_metadata"
+            ]
 
-            file_type = (
-                ingestion_result
-                .metadata
-                .file_type
+            file_type = str(
+                ingestion_metadata[
+                    "file_type"
+                ]
             )
 
             clear_derived_dataset_state()
@@ -338,10 +284,10 @@ if uploaded_file is not None:
 
             st.session_state[
                 "current_file_name"
-            ] = (
-                ingestion_result
-                .metadata
-                .file_name
+            ] = str(
+                ingestion_metadata[
+                    "file_name"
+                ]
             )
 
             st.session_state[
@@ -351,10 +297,6 @@ if uploaded_file is not None:
             st.session_state[
                 "current_ingestion_metadata"
             ] = ingestion_metadata
-
-            st.session_state[
-                "current_ingestion_result"
-            ] = ingestion_result
 
             is_new_ingestion = True
 
@@ -478,14 +420,17 @@ if uploaded_file is not None:
         if (
             not isinstance(
                 workflow_result,
-                DatasetWorkflowResult,
+                dict,
             )
             and workflow_error is None
         ):
             try:
                 workflow_result = (
                     continue_dataset_workflow(
-                        ingestion_result
+                        dataframe=df,
+                        ingestion_metadata=(
+                            ingestion_metadata
+                        ),
                     )
                 )
 
@@ -493,13 +438,13 @@ if uploaded_file is not None:
                     workflow_result
                 )
 
-            except DatasetWorkflowError as exc:
+            except DatasetWorkflowApiError as exc:
                 workflow_error = str(
                     exc
                 )
 
                 workflow_stage = (
-                    exc.stage
+                    exc.stage or "UNKNOWN"
                 )
 
                 st.session_state[
@@ -510,26 +455,10 @@ if uploaded_file is not None:
                     "current_workflow_stage"
                 ] = workflow_stage
 
-            except Exception as exc:
-                workflow_error = str(
-                    exc
-                )
-
-                workflow_stage = (
-                    "UNKNOWN"
-                )
-
-                st.session_state[
-                    "current_workflow_error"
-                ] = workflow_error
-
-                st.session_state[
-                    "current_workflow_stage"
-                ] = workflow_stage
 
         if not isinstance(
             workflow_result,
-            DatasetWorkflowResult,
+            dict,
         ):
             st.subheader(
                 "2. Dataset Workflow"
@@ -567,35 +496,34 @@ if uploaded_file is not None:
 
             st.stop()
 
-        profile = workflow_result.profile
+        profile = workflow_result[
+            "profile"
+        ]
 
-        catalog_registration = (
-            workflow_result
-            .catalog_registration
-        )
+        catalog_registration = workflow_result[
+            "catalog_registration"
+        ]
 
-        validation_result = (
-            workflow_result
-            .validation_result
-        )
+        validation_result = workflow_result[
+            "validation_result"
+        ]
 
-        validation_registration = (
-            workflow_result
-            .validation_registration
-        )
+        validation_registration = workflow_result[
+            "validation_registration"
+        ]
 
-        governance_result = (
-            workflow_result
-            .governance_result
-        )
+        governance_result = workflow_result[
+            "governance_result"
+        ]
 
-        governance_registration = (
-            workflow_result
-            .governance_registration
-        )
+        governance_registration = workflow_result[
+            "governance_registration"
+        ]
 
 
         lifecycle_error = None
+        catalog_lineage = None
+        catalog_lineage_error = None
 
 
         st.subheader(
@@ -678,13 +606,20 @@ if uploaded_file is not None:
                 ]
             )
 
+            try:
+                catalog_lineage = load_catalog_lineage(
+                    catalog_id=catalog_id,
+                )
+            except DatasetLineageApiError as exc:
+                catalog_lineage_error = str(exc)
+
             with st.expander(
                 "Xem lịch sử dataset versions"
             ):
                 try:
                     version_history = (
-                        get_dataset_version_history(
-                            catalog_id
+                        load_dataset_version_history(
+                            catalog_id=catalog_id,
                         )
                     )
 
@@ -693,7 +628,7 @@ if uploaded_file is not None:
                         use_container_width=True,
                     )
 
-                except Exception as exc:
+                except DatasetLineageApiError as exc:
                     st.warning(
                         "Không đọc được version history: "
                         f"{exc}"
@@ -705,8 +640,8 @@ if uploaded_file is not None:
             ):
                 try:
                     ingestion_history = (
-                        get_ingestion_history(
-                            catalog_id,
+                        load_ingestion_history(
+                            catalog_id=catalog_id,
                             limit=50,
                         )
                     )
@@ -716,7 +651,7 @@ if uploaded_file is not None:
                         use_container_width=True,
                     )
 
-                except Exception as exc:
+                except DatasetLineageApiError as exc:
                     st.warning(
                         "Không đọc được ingestion history: "
                         f"{exc}"
@@ -730,7 +665,7 @@ if uploaded_file is not None:
 
 
         workflow_summary = (
-            workflow_result.summary()
+            workflow_result
         )
 
         st.subheader(
@@ -977,8 +912,8 @@ if uploaded_file is not None:
                 ):
                     try:
                         validation_history = (
-                            get_validation_history(
-                                int(
+                            load_validation_history(
+                                catalog_id=int(
                                     catalog_registration[
                                         "catalog_id"
                                     ]
@@ -992,7 +927,7 @@ if uploaded_file is not None:
                             use_container_width=True,
                         )
 
-                    except Exception as exc:
+                    except DatasetLineageApiError as exc:
                         st.warning(
                             "Không đọc được validation history: "
                             f"{exc}"
@@ -1053,8 +988,8 @@ if uploaded_file is not None:
                 ):
                     try:
                         governance_history = (
-                            get_governance_history(
-                                int(
+                            load_governance_history(
+                                catalog_id=int(
                                     catalog_registration[
                                         "catalog_id"
                                     ]
@@ -1068,7 +1003,7 @@ if uploaded_file is not None:
                             use_container_width=True,
                         )
 
-                    except Exception as exc:
+                    except DatasetLineageApiError as exc:
                         st.warning(
                             "Không đọc được governance history: "
                             f"{exc}"
@@ -1107,10 +1042,8 @@ if uploaded_file is not None:
             )
 
             try:
-                lifecycle_table = (
-                    get_catalog_lifecycle(
-                        catalog_id
-                    )
+                lifecycle_table = load_catalog_lifecycle(
+                    catalog_id=catalog_id,
                 )
 
                 current_version_rows = (
@@ -1152,12 +1085,20 @@ if uploaded_file is not None:
                 lifecycle_state,
             )
 
-            governed_promotion_eligible = (
-                is_governed_promotion_eligible(
-                    lifecycle_state,
-                    governance_registration,
-                )
-            )
+            governed_promotion_eligible = False
+
+            if catalog_lineage is not None:
+                current_lineage_rows = catalog_lineage[
+                    catalog_lineage["version_id"]
+                    == version_id
+                ]
+
+                if not current_lineage_rows.empty:
+                    governed_promotion_eligible = bool(
+                        current_lineage_rows.iloc[0][
+                            "promotion_eligible"
+                        ]
+                    )
 
             lifecycle_col3.metric(
                 "Promotion eligible",
@@ -1197,8 +1138,7 @@ if uploaded_file is not None:
                     ):
                         try:
                             promotion_result = (
-                                promote_version(
-                                    catalog_id=catalog_id,
+                                promote_dataset_version(
                                     version_id=version_id,
                                 )
                             )
@@ -1209,7 +1149,7 @@ if uploaded_file is not None:
 
                             st.rerun()
 
-                        except Exception as exc:
+                        except DatasetLineageApiError as exc:
                             st.error(
                                 "Không thể promote version: "
                                 f"{exc}"
@@ -1271,8 +1211,8 @@ if uploaded_file is not None:
             ):
                 try:
                     lifecycle_history = (
-                        get_lifecycle_history(
-                            version_id
+                        load_lifecycle_history(
+                            version_id=version_id,
                         )
                     )
 
@@ -1288,7 +1228,7 @@ if uploaded_file is not None:
                             use_container_width=True,
                         )
 
-                except Exception as exc:
+                except DatasetLineageApiError as exc:
                     st.warning(
                         "Không đọc được lifecycle history: "
                         f"{exc}"
@@ -1297,23 +1237,15 @@ if uploaded_file is not None:
             with st.expander(
                 "Xem lineage summary của tất cả versions"
             ):
-                try:
-                    catalog_lineage = (
-                        get_catalog_lineage(
-                            catalog_id
-                        )
+                if catalog_lineage_error:
+                    st.warning(
+                        "Không đọc được catalog lineage: "
+                        f"{catalog_lineage_error}"
                     )
-
+                elif catalog_lineage is not None:
                     st.dataframe(
                         catalog_lineage,
                         use_container_width=True,
-                    )
-
-                except Exception as exc:
-                    st.warning(
-                        "Không đọc được "
-                        "catalog lineage: "
-                        f"{exc}"
                     )
 
             with st.expander(
@@ -1321,8 +1253,8 @@ if uploaded_file is not None:
             ):
                 try:
                     version_lineage = (
-                        get_version_lineage(
-                            version_id
+                        load_dataset_lineage(
+                            version_id=version_id,
                         )
                     )
 
@@ -1537,7 +1469,7 @@ if uploaded_file is not None:
                             language=None,
                         )
 
-                except Exception as exc:
+                except DatasetLineageApiError as exc:
                     st.warning(
                         "Không đọc được "
                         "end-to-end lineage: "

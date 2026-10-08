@@ -15,12 +15,14 @@ from api.routes.data_contracts import (
     router as data_contracts_router,
 )
 from api.routes.datasets import router as datasets_router
+from api.routes.drift import router as drift_router
 from api.routes.freshness import router as freshness_router
 from api.routes.observability import router as observability_router
 from api.routes.operational_events import (
     router as operational_events_router,
 )
 from api.routes.pipeline_runs import router as pipeline_runs_router
+from api.routes.reports import router as reports_router
 from api.routes.scans import router as scans_router
 from api.routes.scores import router as scores_router
 from api.routes.volume import router as volume_router
@@ -323,4 +325,14 @@ app.include_router(
     observability_router,
     prefix="/api/observability",
     tags=["observability"],
+)
+app.include_router(
+    reports_router,
+    prefix="/api/reports",
+    tags=["reports"],
+)
+app.include_router(
+    drift_router,
+    prefix="/api/drift",
+    tags=["drift"],
 )

@@ -14,3 +14,7 @@ class DatasetLineageResponse(BaseModel):
     governance_decisions: list[dict[str, Any]]
     lifecycle_events: list[dict[str, Any]]
     timeline: list[dict[str, Any]]
+
+
+class CatalogLineageResponse(BaseModel):
+    records: list[dict[str, Any]]

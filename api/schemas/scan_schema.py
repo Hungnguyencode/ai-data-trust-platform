@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -57,3 +58,16 @@ class ScanDetailResponse(BaseModel):
     scan: ScanSummaryResponse
     quality_issue_count: int
     quality_issues: list[QualityIssueResponse]
+
+
+class FullScanRequest(BaseModel):
+    file_name: str
+    file_type: str
+    records: list[dict[str, Any]]
+
+
+class FullScanResponse(BaseModel):
+    dataset_id: int
+    scan_id: int
+    score_id: int
+    saved_issues: int
