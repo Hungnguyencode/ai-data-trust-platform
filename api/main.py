@@ -10,6 +10,9 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.routing import iter_route_contexts
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
+from api.routes.anomaly import (
+    router as anomaly_router,
+)
 from api.routes.assistant import router as assistant_router
 from api.routes.data_contracts import (
     router as data_contracts_router,
@@ -22,6 +25,9 @@ from api.routes.operational_events import (
     router as operational_events_router,
 )
 from api.routes.pipeline_runs import router as pipeline_runs_router
+from api.routes.privacy import (
+    router as privacy_router,
+)
 from api.routes.reports import router as reports_router
 from api.routes.scans import router as scans_router
 from api.routes.scores import router as scores_router
@@ -335,4 +341,14 @@ app.include_router(
     drift_router,
     prefix="/api/drift",
     tags=["drift"],
+)
+app.include_router(
+    anomaly_router,
+    prefix="/api/anomaly",
+    tags=["anomaly"],
+)
+app.include_router(
+    privacy_router,
+    prefix="/api/privacy",
+    tags=["privacy"],
 )
