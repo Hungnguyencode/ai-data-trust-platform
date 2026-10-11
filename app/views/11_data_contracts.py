@@ -80,11 +80,6 @@ def build_history_frame(
     )
 
 
-st.set_page_config(
-    page_title="Data Contracts",
-    page_icon="📜",
-    layout="wide",
-)
 
 inject_custom_css()
 

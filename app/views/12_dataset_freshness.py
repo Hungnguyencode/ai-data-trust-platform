@@ -15,12 +15,12 @@ if str(PROJECT_ROOT) not in sys.path:
         str(PROJECT_ROOT),
     )
 
-from app.services.volume_api import (
-    VolumeApiError,
-    load_volume_history,
-    load_volume_policy,
-    run_volume_check,
-    save_volume_policy,
+from app.services.freshness_api import (
+    FreshnessApiError,
+    load_freshness_history,
+    load_freshness_policy,
+    run_freshness_check,
+    save_freshness_policy,
 )
 from src.utils.ui import (
     inject_custom_css,
@@ -29,32 +29,28 @@ from src.utils.ui import (
 )
 
 
-def format_percentage(
+def format_minutes(
     value: Any,
 ) -> str:
     if value is None:
         return "N/A"
 
     try:
-        percentage = float(value)
+        minutes = int(value)
     except (TypeError, ValueError):
         return "N/A"
 
-    return f"{percentage:+.2f}%"
+    if minutes < 60:
+        return f"{minutes} min"
 
+    hours = minutes / 60
 
-def format_row_count(
-    value: Any,
-) -> str:
-    if value is None:
-        return "N/A"
+    if hours < 24:
+        return f"{hours:.1f} h"
 
-    try:
-        row_count = int(value)
-    except (TypeError, ValueError):
-        return "N/A"
+    days = hours / 24
 
-    return f"{row_count:,}"
+    return f"{days:.1f} days"
 
 
 def build_history_frame(
@@ -69,43 +65,38 @@ def build_history_frame(
         records.append(
             {
                 "check_id": item[
-                    "volume_check_id"
+                    "freshness_check_id"
                 ],
                 "status": item[
-                    "volume_status"
+                    "freshness_status"
                 ],
-                "baseline_rows": item.get(
-                    "baseline_row_count"
-                ),
-                "current_rows": item[
-                    "current_row_count"
-                ],
-                "change": format_percentage(
+                "age": format_minutes(
                     item.get(
-                        "row_change_pct"
+                        "age_minutes"
                     )
                 ),
-                "row_change_pct": item.get(
-                    "row_change_pct"
+                "age_minutes": item.get(
+                    "age_minutes"
                 ),
-                "drop_threshold": (
-                    f"{float(item['drop_threshold_pct']):.2f}%"
+                "sla": format_minutes(
+                    item[
+                        "max_age_minutes"
+                    ]
                 ),
-                "spike_threshold": (
-                    f"{float(item['spike_threshold_pct']):.2f}%"
-                ),
-                "version_id": item[
+                "max_age_minutes": item[
+                    "max_age_minutes"
+                ],
+                "version_id": item.get(
                     "version_id"
-                ],
-                "ingestion_event_id": item[
-                    "ingestion_event_id"
-                ],
-                "baseline_version_id": item.get(
-                    "baseline_version_id"
                 ),
-                "baseline_ingestion_event_id": (
+                "ingestion_event_id": (
                     item.get(
-                        "baseline_ingestion_event_id"
+                        "ingestion_event_id"
+                    )
+                ),
+                "latest_ingested_at": (
+                    item.get(
+                        "latest_ingested_at"
                     )
                 ),
                 "checked_at": item[
@@ -119,30 +110,24 @@ def build_history_frame(
     )
 
 
-st.set_page_config(
-    page_title="Dataset Volume",
-    page_icon="📦",
-    layout="wide",
-)
 
 inject_custom_css()
 
 st.markdown(
     """
     <div class="main-title">
-        📦 Dataset Volume Monitoring
+        ⏱️ Dataset Freshness Monitoring
     </div>
     <div class="subtitle">
-        Theo dõi số lượng dòng giữa các ingestion,
-        phát hiện volume drop hoặc spike
-        và quản lý monitoring policy.
+        Quản lý freshness SLA, theo dõi tuổi dữ liệu
+        và lịch sử kiểm tra tự động bởi Airflow.
     </div>
     """,
     unsafe_allow_html=True,
 )
 
 flash_message = st.session_state.pop(
-    "volume_flash",
+    "freshness_flash",
     None,
 )
 
@@ -150,6 +135,7 @@ if flash_message:
     st.success(
         flash_message
     )
+
 
 header_col1, header_col2 = st.columns(
     [4, 1]
@@ -174,22 +160,23 @@ with header_col2:
     ):
         st.rerun()
 
+
 try:
-    policy = load_volume_policy(
+    policy = load_freshness_policy(
         catalog_id
     )
 
     history_payload = (
-        load_volume_history(
+        load_freshness_history(
             catalog_id,
             limit=100,
         )
     )
 
-except VolumeApiError as exc:
+except FreshnessApiError as exc:
     st.error(
         "Không thể kết nối "
-        "Dataset Volume API."
+        "Dataset Freshness API."
     )
 
     st.code(
@@ -199,10 +186,11 @@ except VolumeApiError as exc:
 
     st.info(
         "Hãy kiểm tra FastAPI service "
-        "và cấu hình API_BASE_URL."
+        "và cấu hình endpoint API."
     )
 
     st.stop()
+
 
 history_items = list(
     history_payload.get(
@@ -217,9 +205,10 @@ latest_check = (
     else None
 )
 
+
 st.markdown(
     '<div class="section-title">'
-    "1. Current Volume Status"
+    "1. Current Freshness Status"
     "</div>",
     unsafe_allow_html=True,
 )
@@ -227,40 +216,30 @@ st.markdown(
 status_value = (
     str(
         latest_check[
-            "volume_status"
+            "freshness_status"
         ]
     )
     if latest_check
     else "NO CHECK"
 )
 
-baseline_value = (
-    format_row_count(
+age_value = (
+    format_minutes(
         latest_check.get(
-            "baseline_row_count"
+            "age_minutes"
         )
     )
     if latest_check
     else "N/A"
 )
 
-current_value = (
-    format_row_count(
-        latest_check.get(
-            "current_row_count"
-        )
+sla_value = (
+    format_minutes(
+        policy[
+            "max_age_minutes"
+        ]
     )
-    if latest_check
-    else "N/A"
-)
-
-change_value = (
-    format_percentage(
-        latest_check.get(
-            "row_change_pct"
-        )
-    )
-    if latest_check
+    if policy
     else "N/A"
 )
 
@@ -279,24 +258,20 @@ monitoring_value = (
     metric_col2,
     metric_col3,
     metric_col4,
-    metric_col5,
-) = st.columns(5)
+) = st.columns(4)
 
 with metric_col1:
     render_metric_card(
-        "Volume Status",
+        "Freshness Status",
         status_value,
         "Latest persisted check",
         status=(
             "low"
-            if status_value == "NORMAL"
+            if status_value == "FRESH"
             else (
                 "high"
                 if status_value
-                in {
-                    "DROP",
-                    "SPIKE",
-                }
+                == "STALE"
                 else "medium"
             )
         ),
@@ -304,35 +279,19 @@ with metric_col1:
 
 with metric_col2:
     render_metric_card(
-        "Baseline Rows",
-        baseline_value,
-        "Previous ingestion",
+        "Current Age",
+        age_value,
+        "Age of latest ingestion",
     )
 
 with metric_col3:
     render_metric_card(
-        "Current Rows",
-        current_value,
-        "Latest ingestion",
+        "Freshness SLA",
+        sla_value,
+        "Maximum allowed age",
     )
 
 with metric_col4:
-    render_metric_card(
-        "Row Change",
-        change_value,
-        "Current vs baseline",
-        status=(
-            "high"
-            if status_value
-            in {
-                "DROP",
-                "SPIKE",
-            }
-            else "low"
-        ),
-    )
-
-with metric_col5:
     render_metric_card(
         "Monitoring",
         monitoring_value,
@@ -353,11 +312,12 @@ with metric_col5:
         ),
     )
 
+
 if policy is None:
     render_recommendation_box(
         (
             "Catalog này chưa có "
-            "<b>Volume Policy</b>. "
+            "<b>Freshness Policy</b>. "
             "Tạo policy bên dưới để "
             "bắt đầu monitoring."
         ),
@@ -367,7 +327,7 @@ if policy is None:
 elif not policy["is_enabled"]:
     render_recommendation_box(
         (
-            "Volume monitoring hiện "
+            "Freshness monitoring hiện "
             "<b>DISABLED</b> cho catalog này."
         ),
         level="warning",
@@ -377,40 +337,27 @@ elif latest_check is None:
     render_recommendation_box(
         (
             "Policy đã bật nhưng chưa có "
-            "Volume Check nào."
+            "freshness check nào."
         ),
         level="warning",
     )
 
-elif status_value == "NORMAL":
+elif status_value == "FRESH":
     render_recommendation_box(
         (
-            "Dataset volume hiện "
-            "<b>NORMAL</b>. "
-            "Biến động row count vẫn nằm "
-            "trong threshold đã cấu hình."
+            "Dataset hiện đang "
+            "<b>FRESH</b>: tuổi dữ liệu "
+            "chưa vượt quá Freshness SLA."
         ),
         level="success",
     )
 
-elif status_value == "DROP":
+elif status_value == "STALE":
     render_recommendation_box(
         (
-            "Dataset đang có "
-            "<b>VOLUME DROP</b>. "
-            "Số lượng row giảm vượt "
-            "ngưỡng policy."
-        ),
-        level="danger",
-    )
-
-elif status_value == "SPIKE":
-    render_recommendation_box(
-        (
-            "Dataset đang có "
-            "<b>VOLUME SPIKE</b>. "
-            "Số lượng row tăng vượt "
-            "ngưỡng policy."
+            "Dataset đang <b>STALE</b>. "
+            "Operational Alert sẽ được "
+            "phát cho stale incident này."
         ),
         level="danger",
     )
@@ -418,11 +365,12 @@ elif status_value == "SPIKE":
 else:
     render_recommendation_box(
         (
-            "Chưa có baseline ingestion "
-            "để so sánh volume."
+            "Không tìm thấy ingestion "
+            "để đánh giá freshness."
         ),
         level="warning",
     )
+
 
 if latest_check:
     detail_col1, detail_col2 = (
@@ -431,13 +379,13 @@ if latest_check:
 
     with detail_col1:
         st.write(
-            "**Current ingestion event:**"
+            "**Latest ingestion:**"
         )
 
         st.code(
             str(
                 latest_check.get(
-                    "ingestion_event_id",
+                    "latest_ingested_at",
                     "N/A",
                 )
             ),
@@ -459,37 +407,27 @@ if latest_check:
             language=None,
         )
 
+
 st.markdown(
     '<div class="section-title">'
-    "2. Volume Policy"
+    "2. Freshness Policy"
     "</div>",
     unsafe_allow_html=True,
 )
 
 st.caption(
-    "Drop threshold là phần trăm giảm row count "
-    "tối đa cho phép. Spike threshold là phần trăm "
-    "tăng row count tối đa cho phép."
+    "max_age_minutes là thời gian tối đa "
+    "dataset được phép không có ingestion mới."
 )
 
-default_drop_threshold = (
-    float(
+default_max_age = (
+    int(
         policy[
-            "drop_threshold_pct"
+            "max_age_minutes"
         ]
     )
     if policy
-    else 20.0
-)
-
-default_spike_threshold = (
-    float(
-        policy[
-            "spike_threshold_pct"
-        ]
-    )
-    if policy
-    else 20.0
+    else 1440
 )
 
 default_enabled = (
@@ -503,58 +441,50 @@ default_enabled = (
 )
 
 with st.form(
-    "volume_policy_form"
+    "freshness_policy_form"
 ):
-    drop_threshold_pct = float(
+    max_age_minutes = int(
         st.number_input(
-            "Drop threshold (%)",
-            min_value=0.1,
-            max_value=100.0,
-            value=default_drop_threshold,
-            step=0.5,
-        )
-    )
-
-    spike_threshold_pct = float(
-        st.number_input(
-            "Spike threshold (%)",
-            min_value=0.1,
-            value=default_spike_threshold,
-            step=0.5,
+            "Maximum age (minutes)",
+            min_value=1,
+            value=default_max_age,
+            step=1,
+            help=(
+                "Ví dụ: 60 = 1 giờ, "
+                "1440 = 24 giờ."
+            ),
         )
     )
 
     is_enabled = st.checkbox(
-        "Enable scheduled volume monitoring",
+        "Enable scheduled freshness monitoring",
         value=default_enabled,
     )
 
     save_policy_button = (
         st.form_submit_button(
-            "Save Volume Policy",
+            "Save Freshness Policy",
             type="primary",
         )
     )
 
+
 if save_policy_button:
     try:
         saved_policy = (
-            save_volume_policy(
+            save_freshness_policy(
                 catalog_id=catalog_id,
-                drop_threshold_pct=(
-                    drop_threshold_pct
-                ),
-                spike_threshold_pct=(
-                    spike_threshold_pct
+                max_age_minutes=(
+                    max_age_minutes
                 ),
                 is_enabled=is_enabled,
             )
         )
 
-    except VolumeApiError as exc:
+    except FreshnessApiError as exc:
         st.error(
             "Không thể lưu "
-            "Volume Policy."
+            "Freshness Policy."
         )
 
         st.code(
@@ -564,12 +494,11 @@ if save_policy_button:
 
     else:
         st.session_state[
-            "volume_flash"
+            "freshness_flash"
         ] = (
-            "Đã lưu Volume Policy: "
-            f"drop={saved_policy['drop_threshold_pct']}%, "
-            f"spike={saved_policy['spike_threshold_pct']}%, "
-            "monitoring "
+            "Đã lưu Freshness Policy: "
+            f"{saved_policy['max_age_minutes']} "
+            "phút, monitoring "
             + (
                 "ENABLED."
                 if saved_policy[
@@ -581,9 +510,10 @@ if save_policy_button:
 
         st.rerun()
 
+
 st.markdown(
     '<div class="section-title">'
-    "3. Run Volume Check"
+    "3. Run Freshness Check"
     "</div>",
     unsafe_allow_html=True,
 )
@@ -609,14 +539,14 @@ if st.button(
     disabled=check_disabled,
 ):
     try:
-        result = run_volume_check(
+        result = run_freshness_check(
             catalog_id
         )
 
-    except VolumeApiError as exc:
+    except FreshnessApiError as exc:
         st.error(
             "Không thể chạy "
-            "Volume Check."
+            "Freshness Check."
         )
 
         st.code(
@@ -626,27 +556,28 @@ if st.button(
 
     else:
         st.session_state[
-            "volume_last_manual_check"
+            "freshness_last_manual_check"
         ] = result
 
         status = result[
             "check"
         ][
-            "volume_status"
+            "freshness_status"
         ]
 
         st.session_state[
-            "volume_flash"
+            "freshness_flash"
         ] = (
-            "Volume Check hoàn tất: "
+            "Freshness Check hoàn tất: "
             f"{status}."
         )
 
         st.rerun()
 
+
 last_manual_check = (
     st.session_state.get(
-        "volume_last_manual_check"
+        "freshness_last_manual_check"
     )
 )
 
@@ -658,9 +589,10 @@ if last_manual_check:
             last_manual_check
         )
 
+
 st.markdown(
     '<div class="section-title">'
-    "4. Volume History"
+    "4. Freshness History"
     "</div>",
     unsafe_allow_html=True,
 )
@@ -671,7 +603,7 @@ history_df = build_history_frame(
 
 if history_df.empty:
     st.info(
-        "Chưa có Volume Check history."
+        "Chưa có Freshness Check history."
     )
 
 else:
@@ -689,7 +621,7 @@ else:
     ]
 
     selected_status = st.selectbox(
-        "Volume status",
+        "Freshness status",
         status_filter_options,
     )
 
@@ -710,13 +642,11 @@ else:
     display_columns = [
         "check_id",
         "status",
-        "baseline_rows",
-        "current_rows",
-        "change",
-        "drop_threshold",
-        "spike_threshold",
+        "age",
+        "sla",
         "version_id",
         "ingestion_event_id",
+        "latest_ingested_at",
         "checked_at",
     ]
 
@@ -728,31 +658,24 @@ else:
         hide_index=True,
     )
 
-    normal_count = int(
+    fresh_count = int(
         (
             history_df["status"]
-            == "NORMAL"
+            == "FRESH"
         ).sum()
     )
 
-    drop_count = int(
+    stale_count = int(
         (
             history_df["status"]
-            == "DROP"
+            == "STALE"
         ).sum()
     )
 
-    spike_count = int(
+    no_data_count = int(
         (
             history_df["status"]
-            == "SPIKE"
-        ).sum()
-    )
-
-    no_baseline_count = int(
-        (
-            history_df["status"]
-            == "NO_BASELINE"
+            == "NO_DATA"
         ).sum()
     )
 
@@ -761,8 +684,7 @@ else:
         history_col2,
         history_col3,
         history_col4,
-        history_col5,
-    ) = st.columns(5)
+    ) = st.columns(4)
 
     with history_col1:
         render_metric_card(
@@ -775,40 +697,49 @@ else:
 
     with history_col2:
         render_metric_card(
-            "Normal",
-            str(normal_count),
-            "Within thresholds",
+            "Fresh",
+            str(fresh_count),
+            "Within SLA",
             status="low",
         )
 
     with history_col3:
         render_metric_card(
-            "Drop",
-            str(drop_count),
-            "Volume drops",
+            "Stale",
+            str(stale_count),
+            "SLA breaches",
             status=(
                 "high"
-                if drop_count
+                if stale_count
                 else "low"
             ),
         )
 
     with history_col4:
         render_metric_card(
-            "Spike",
-            str(spike_count),
-            "Volume spikes",
+            "No Data",
+            str(no_data_count),
+            "No ingestion available",
             status=(
-                "high"
-                if spike_count
+                "medium"
+                if no_data_count
                 else "low"
             ),
         )
 
-    with history_col5:
-        render_metric_card(
-            "No Baseline",
-            str(no_baseline_count),
-            "First ingestion",
-            status="medium",
-        )
+
+st.markdown(
+    '<div class="section-title">'
+    "5. Monitoring Behavior"
+    "</div>",
+    unsafe_allow_html=True,
+)
+
+st.info(
+    "Airflow DAG `data_freshness_monitor` "
+    "được cấu hình kiểm tra các enabled "
+    "Freshness Policies mỗi 5 phút. "
+    "Nếu cùng một ingestion vẫn STALE, "
+    "history vẫn được ghi lại nhưng "
+    "Operational Alert không bị spam."
+)

@@ -185,11 +185,6 @@ def format_bytes(byte_size: int) -> str:
     return f"{byte_size:,} B"
 
 
-st.set_page_config(
-    page_title="Upload Dataset",
-    page_icon="📤",
-    layout="wide",
-)
 
 st.title("📤 Upload Dataset")
 
