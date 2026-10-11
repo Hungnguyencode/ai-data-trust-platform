@@ -24,23 +24,17 @@ from app.services.trust_score_api import (
     TrustScoreApiError,
     load_trust_score,
 )
+from app.ui.layout import render_page_header
+from app.ui.theme import inject_theme_css
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
 
-st.set_page_config(
-    page_title="Trust Score",
-    page_icon="⭐",
-    layout="wide",
-)
-
 inject_custom_css()
+inject_theme_css()
 
 
-st.markdown(
-    """
-    <div class="main-title">⭐ Data Trust Score</div>
-    <div class="subtitle">Chấm điểm mức độ tin cậy và mức độ sẵn sàng của dataset cho phân tích/AI.</div>
-    """,
-    unsafe_allow_html=True,
+render_page_header(
+    '⭐ Data Trust Score',
+    'Chấm điểm mức độ tin cậy và mức độ sẵn sàng của dataset cho phân tích/AI.',
 )
 
 

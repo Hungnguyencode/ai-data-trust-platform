@@ -76,11 +76,6 @@ def display_value(
     )
 
 
-st.set_page_config(
-    page_title="Pipeline Operations",
-    page_icon="🛠️",
-    layout="wide",
-)
 
 inject_custom_css()
 

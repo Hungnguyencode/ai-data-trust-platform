@@ -26,12 +26,6 @@ from app.services.scan_api import (
 )
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
 
-st.set_page_config(
-    page_title="Reports",
-    page_icon="📄",
-    layout="wide",
-)
-
 inject_custom_css()
 
 st.markdown(

@@ -4,49 +4,49 @@ import ast
 from pathlib import Path
 
 PIPELINE_OPERATIONS_PAGE = Path(
-    "app/pages/10_pipeline_operations.py"
+    "app/views/10_pipeline_operations.py"
 )
 
 DATA_CONTRACTS_PAGE = Path(
-    "app/pages/11_data_contracts.py"
+    "app/views/11_data_contracts.py"
 )
 
 AI_ASSISTANT_PAGE = Path(
-    "app/pages/8_ai_assistant.py"
+    "app/views/8_ai_assistant.py"
 )
 
 QUALITY_ISSUES_PAGE = Path(
-    "app/pages/3_quality_issues.py"
+    "app/views/3_quality_issues.py"
 )
 
 TRUST_SCORE_PAGE = Path(
-    "app/pages/4_trust_score.py"
+    "app/views/4_trust_score.py"
 )
 
 REPORTS_PAGE = Path(
-    "app/pages/9_reports.py"
+    "app/views/9_reports.py"
 )
 
 DRIFT_ANALYSIS_PAGE = (
     Path(__file__).resolve().parents[1]
     / "app"
-    / "pages"
+    / "views"
     / "6_drift_analysis.py"
 )
 
 UPLOAD_DATASET_PAGE = (
     Path(__file__).resolve().parents[1]
     / "app"
-    / "pages"
+    / "views"
     / "1_upload_dataset.py"
 )
 
 ANOMALY_DETECTION_PAGE = Path(
-    "app/pages/5_anomaly_detection.py"
+    "app/views/5_anomaly_detection.py"
 )
 
 PRIVACY_RISK_PAGE = Path(
-    "app/pages/7_privacy_risk.py"
+    "app/views/7_privacy_risk.py"
 )
 
 

@@ -33,12 +33,6 @@ from src.assistant.prompt_builder import (
     build_missing_result_names,
 )
 
-st.set_page_config(
-    page_title="Data Trust Copilot",
-    page_icon="🤖",
-    layout="wide",
-)
-
 
 def inject_chat_css() -> None:
     st.markdown(
