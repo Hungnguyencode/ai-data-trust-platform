@@ -35,6 +35,7 @@ from app.services.dataset_workflow_api import (
 from app.services.platform_status_api import (
     check_database_connection,
 )
+from app.ui.layout import build_journey_html, render_page_header
 
 WORKFLOW_STATE_KEYS = (
     "current_workflow_result",
@@ -186,11 +187,15 @@ def format_bytes(byte_size: int) -> str:
 
 
 
-st.title("📤 Upload Dataset")
-
-st.caption(
+render_page_header(
+    "Upload Dataset",
     "Ingest dataset, lưu bản raw gốc, tạo metadata truy vết "
     "và đăng ký version vào SQL Server Dataset Catalog."
+)
+
+st.markdown(
+    build_journey_html(active_step="Upload Dataset"),
+    unsafe_allow_html=True,
 )
 
 
@@ -207,15 +212,16 @@ with st.expander("Database connection"):
             st.error(message)
 
 
-uploaded_file = st.file_uploader(
-    "Chọn file dữ liệu",
-    type=[
-        "csv",
-        "xlsx",
-        "xls",
-        "json",
-    ],
-)
+with st.container(border=True):
+    uploaded_file = st.file_uploader(
+        "Chọn file dữ liệu",
+        type=[
+            "csv",
+            "xlsx",
+            "xls",
+            "json",
+        ],
+    )
 
 
 if uploaded_file is not None:

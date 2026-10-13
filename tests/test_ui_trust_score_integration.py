@@ -78,7 +78,7 @@ def test_trust_score_uses_shared_page_header():
 
     assert len(header_call.args) == 2
     assert isinstance(header_call.args[0], ast.Constant)
-    assert header_call.args[0].value == "\u2b50 Data Trust Score"
+    assert header_call.args[0].value == "Data Trust Score"
 
     assert isinstance(header_call.args[1], ast.Constant)
     assert "dataset" in header_call.args[1].value
