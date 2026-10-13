@@ -13,8 +13,17 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 
-st.title("📊 Data Profile")
-st.caption("Xem chi tiết kết quả phân tích dataset đã upload.")
+from app.ui.layout import build_journey_html, render_page_header
+
+render_page_header(
+    "Data Profile",
+    'Xem chi tiết kết quả phân tích dataset đã upload.',
+)
+
+st.markdown(
+    build_journey_html(active_step="Data Profile"),
+    unsafe_allow_html=True,
+)
 
 
 if "current_df" not in st.session_state or "current_profile" not in st.session_state:
@@ -31,9 +40,13 @@ file_type = st.session_state.get("current_file_type", "Unknown type")
 st.subheader("Thông tin file")
 
 col1, col2, col3 = st.columns(3)
-col1.metric("Tên file", file_name)
-col2.metric("Loại file", file_type)
-col3.metric("Kích thước DataFrame", f"{df.shape[0]:,} x {df.shape[1]:,}")
+with col1.container(border=True):
+    st.caption("T\u00ean file")
+    st.write(file_name)
+with col2.container(border=True):
+    st.metric("Loại file", file_type)
+with col3.container(border=True):
+    st.metric("Kích thước DataFrame", f"{df.shape[0]:,} x {df.shape[1]:,}")
 
 
 st.subheader("1. Basic information")
@@ -41,10 +54,14 @@ st.subheader("1. Basic information")
 basic_info = profile["basic_info"]
 
 info_col1, info_col2, info_col3, info_col4 = st.columns(4)
-info_col1.metric("Total rows", f"{basic_info['total_rows']:,}")
-info_col2.metric("Total columns", f"{basic_info['total_columns']:,}")
-info_col3.metric("Missing cells", f"{basic_info['missing_cells']:,}")
-info_col4.metric("Duplicate rows", f"{basic_info['duplicate_rows']:,}")
+with info_col1.container(border=True):
+    st.metric("Total rows", f"{basic_info['total_rows']:,}")
+with info_col2.container(border=True):
+    st.metric("Total columns", f"{basic_info['total_columns']:,}")
+with info_col3.container(border=True):
+    st.metric("Missing cells", f"{basic_info['missing_cells']:,}")
+with info_col4.container(border=True):
+    st.metric("Duplicate rows", f"{basic_info['duplicate_rows']:,}")
 
 
 st.subheader("2. Schema summary")

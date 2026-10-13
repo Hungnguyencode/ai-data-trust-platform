@@ -24,7 +24,8 @@ from app.services.trust_score_api import (
     TrustScoreApiError,
     load_trust_score,
 )
-from app.ui.layout import render_page_header
+from app.ui.governance import build_governance_summary
+from app.ui.layout import build_journey_html, render_page_header
 from app.ui.theme import inject_theme_css
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
 
@@ -33,8 +34,13 @@ inject_theme_css()
 
 
 render_page_header(
-    '⭐ Data Trust Score',
+    "Data Trust Score",
     'Chấm điểm mức độ tin cậy và mức độ sẵn sàng của dataset cho phân tích/AI.',
+)
+
+st.markdown(
+    build_journey_html(active_step="Trust Score"),
+    unsafe_allow_html=True,
 )
 
 
@@ -140,6 +146,52 @@ elif risk_level == "Medium":
 else:
     render_recommendation_box(conclusion, level="danger")
 
+
+governance_summary = build_governance_summary(
+    st.session_state.get("current_governance_result")
+)
+
+st.markdown(
+    '<div class="section-title">Governance Status</div>',
+    unsafe_allow_html=True,
+)
+
+with st.container(border=True):
+    if governance_summary["decision"] == "Not evaluated":
+        st.info("Governance has not been evaluated for this dataset.")
+    else:
+        decision_col, privacy_col, eligible_col = st.columns(3)
+
+        with decision_col:
+            st.caption("Decision")
+            decision = governance_summary["decision"]
+            if decision == "REJECTED":
+                st.error(decision)
+            elif decision == "APPROVED":
+                st.success(decision)
+            else:
+                st.write(decision)
+
+        with privacy_col:
+            st.metric(
+                "Privacy Risk",
+                governance_summary["privacy_status"],
+            )
+
+        with eligible_col:
+            st.metric(
+                "Promotion Eligible",
+                governance_summary["promotion_eligible"],
+            )
+
+        if governance_summary["reason"]:
+            st.caption("Governance reason")
+            st.write(governance_summary["reason"])
+
+        st.caption(
+            "A high Data Trust Score does not override "
+            "the Governance decision or authorize promotion."
+        )
 
 st.markdown('<div class="section-title">2. Save scan result</div>', unsafe_allow_html=True)
 

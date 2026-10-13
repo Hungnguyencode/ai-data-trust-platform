@@ -15,16 +15,19 @@ from app.services.dataset_quality_api import (
     DatasetQualityApiError,
     load_dataset_quality,
 )
+from app.ui.layout import build_journey_html, render_page_header
 from src.utils.ui import inject_custom_css, render_metric_card, render_recommendation_box
 
 inject_custom_css()
 
 
+render_page_header(
+    "Quality Issues",
+    'Phát hiện, phân loại và diễn giải các lỗi dữ liệu cơ bản trong dataset.',
+)
+
 st.markdown(
-    """
-    <div class="main-title">⚠️ Quality Issues</div>
-    <div class="subtitle">Phát hiện, phân loại và diễn giải các lỗi dữ liệu cơ bản trong dataset.</div>
-    """,
+    build_journey_html(active_step="Quality Issues"),
     unsafe_allow_html=True,
 )
 

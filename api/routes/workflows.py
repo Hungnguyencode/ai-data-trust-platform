@@ -234,6 +234,18 @@ def continue_governed_dataset_workflow(
     )
 
 
+def _serialize_nested_dataframe(value):
+    if isinstance(value, pd.DataFrame):
+        return _dataframe_records(value)
+    if isinstance(value, dict):
+        return {
+            key: _serialize_nested_dataframe(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_serialize_nested_dataframe(item) for item in value]
+    return value
+
 def _build_workflow_response(
     result,
 ) -> DatasetWorkflowResponse:
@@ -332,18 +344,42 @@ def _build_workflow_response(
         profile=_serialize_profile(
             result.profile
         ),
-        ingestion_metadata=result.ingestion_metadata,
-        catalog_registration=result.catalog_registration,
-        validation_result=result.validation_result,
-        validation_registration=result.validation_registration,
-        governance_result=result.governance_result,
-        governance_registration=result.governance_registration,
-        lifecycle_result=result.lifecycle_result,
-        quality_report=result.quality_report,
-        trust_score_report=result.trust_score_report,
-        privacy_report=result.privacy_report,
-        data_contract=result.data_contract,
-        contract_validation=result.contract_validation,
+        ingestion_metadata=_serialize_nested_dataframe(
+            result.ingestion_metadata
+        ),
+        catalog_registration=_serialize_nested_dataframe(
+            result.catalog_registration
+        ),
+        validation_result=_serialize_nested_dataframe(
+            result.validation_result
+        ),
+        validation_registration=_serialize_nested_dataframe(
+            result.validation_registration
+        ),
+        governance_result=_serialize_nested_dataframe(
+            result.governance_result
+        ),
+        governance_registration=_serialize_nested_dataframe(
+            result.governance_registration
+        ),
+        lifecycle_result=_serialize_nested_dataframe(
+            result.lifecycle_result
+        ),
+        quality_report=_serialize_nested_dataframe(
+            result.quality_report
+        ),
+        trust_score_report=_serialize_nested_dataframe(
+            result.trust_score_report
+        ),
+        privacy_report=_serialize_nested_dataframe(
+            result.privacy_report
+        ),
+        data_contract=_serialize_nested_dataframe(
+            result.data_contract
+        ),
+        contract_validation=_serialize_nested_dataframe(
+            result.contract_validation
+        ),
         lineage_url=(
             f"/api/datasets/{version_id}/lineage"
         ),

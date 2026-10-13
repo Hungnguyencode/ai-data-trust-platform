@@ -85,6 +85,35 @@ def build_theme_css() -> str:
     color: #D8E5F5 !important;
 }}
 
+/* Enterprise dataset upload dropzone */
+[data-testid="stFileUploaderDropzone"] {{
+    border: 2px dashed #93C5FD !important;
+    background-color: #F0F6FF !important;
+    min-height: 160px;
+    border-radius: 14px !important;
+    padding: 24px !important;
+    transition: border-color 150ms ease;
+}}
+
+[data-testid="stFileUploaderDropzone"]:hover {{
+    border-color: #2563EB !important;
+}}
+
+/* Enterprise upload browse button */
+[data-testid="stFileUploaderDropzone"] button {{
+    background-color: #2563EB !important;
+    color: #FFFFFF !important;
+    border: 1px solid #2563EB !important;
+    border-radius: 9px !important;
+    font-weight: 600;
+}}
+
+[data-testid="stFileUploaderDropzone"] button:hover {{
+    background-color: #1D4ED8 !important;
+    color: #FFFFFF !important;
+    border-color: #1D4ED8 !important;
+}}
+
 /* Enterprise Material Symbols */
 [data-testid="stSidebar"] [data-testid="stSidebarNavLink"] [data-testid="stIconMaterial"] {{
     color: #93C5FD !important;
@@ -109,6 +138,50 @@ def build_theme_css() -> str:
     color: #93C5FD;
     font-weight: 700;
     letter-spacing: 0.06em;
+}}
+
+/* Core Dataset Journey */
+.adt-journey {{
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 14px;
+}}
+
+.adt-journey-step {{
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: #64748B;
+    font-size: 14px;
+    font-weight: 500;
+}}
+
+.adt-journey-number {{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #E8EFF9;
+    color: #475569;
+    font-weight: 700;
+}}
+
+.adt-journey-step.is-active {{
+    color: #1D4ED8;
+    font-weight: 700;
+}}
+
+.adt-journey-step.is-active .adt-journey-number {{
+    background: #2563EB;
+    color: #FFFFFF;
 }}
 
 .adt-page-header {{
